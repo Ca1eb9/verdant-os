@@ -1,80 +1,71 @@
-# Vertical Farm Control PWA
+# VerdantOS
 
-A production-oriented Next.js App Router Progressive Web App for monitoring and operating a vertical farm environment. The UI is designed as a premium dark industrial dashboard with offline-capable shell caching, and a code structure prepared for Arduino Uno R3 serial ingestion and persistent history.
+This is the monorepo for VerdantOS, a capstone project developing an autonomous vertical farming system.   
 
-## Stack
+---
 
-- Next.js App Router
-- TypeScript
-- Recharts for interactive analytics
-- Supabase for live sensor event reads
-- Custom service worker for installability and offline shell behavior
+## Repo Structure
 
-## Local Development
-
-1. Install dependencies:
-
-```bash
-npm ci
+```
+verdant-os/
+├── web/          # Web app — deployed via Vercel
+├── firmware/
+│   ├── arduino/  # Arduino sketches
+│   └── esp32/    # ESP32 code
+├── services/     # Raspberry Pi services
+├── docs/         # Architecture diagrams, wiring guides, notes, etc
+├── scripts/      # Shared build, deploy, or flash helper scripts
+└── README.md
 ```
 
-2. Configure environment:
+**Vercel** only sees the `web/` directory — the rest of the repo is ignored by it.  
+**Arduino IDE / ESP-IDF** point at their respective subdirectory in `firmware/`.  
+**Pi services** each live in their own folder under `services/` with their own requirements or package file.
+
+---
+
+## Branching & Merging
+
+The golden rule: **never commit directly to `main`.** Always work on a branch, then merge via PR.
+
+### Starting work
 
 ```bash
-cp .env.example .env.local
+git checkout main
+git pull                        # make sure you're up to date
+git checkout -b feature-name
 ```
 
-Fill in Supabase and serial values in `.env.local`.
-
-3. Start the development server:
+### Doing your work
 
 ```bash
-npm run dev
+git add .
+git commit -m "short description of what you did"
+git push -u origin feature-name
 ```
 
-4. Build for production:
+### Merging back to main
+
+Open a pull request on GitHub — don't merge locally unless the team has agreed that's okay for a specific case.
+
+Once the PR is merged on GitHub:
 
 ```bash
-npm run build
-npm run start
+git checkout main
+git pull                     # pull the merged changes down
+git branch -d feature-name   # delete your local branch
 ```
 
-## Verification
-
-Run the full handoff check before opening a pull request or handing off the repo:
+### If main moved while you were working
 
 ```bash
-npm run check
+git fetch origin
+git rebase origin/main
+git push --force-with-lease # if you pushed before the rebase
 ```
 
-That runs lint, TypeScript, and production build validation.
+---
 
-## App Routes
+## Branch Naming
 
-- `/` - live dashboard
-- `/history` - deterministic historical charts
-- `/alerts` - current and stored alert review
-- `/config` - deployment and ingestion readiness
-- `/api/sensor-events/latest` - latest Supabase sensor event
-- `/api/config/status` - server-side environment and ingestion status
-
-## Arduino Live Ingestion
-
-For the Arduino Uno R3 USB serial to Supabase live ingestion flow, see [`docs/live-ingestion.md`](./docs/live-ingestion.md).
-
-## Deploy To Vercel
-
-- Import the repository into Vercel as a Next.js project.
-- Use Node.js 20 or newer.
-- Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` in the project environment.
-- The included [`vercel.json`](./vercel.json) sets cache behavior for the service worker, manifest, and `/images` assets so the PWA works cleanly in deployment.
-- No custom server is required. Vercel can build and deploy the app directly with the default `next build` flow.
-
-## Project Notes
-
-- Runtime visuals are served from [`public/images`](./public/images), which maps to the `/images` URL path used throughout the app.
-- Supabase reads require explicit environment values. The app does not fall back to a bundled project key.
-- The dashboard simulates live telemetry and persists the latest snapshot locally so the last known state still renders when offline.
-- Mock telemetry is generated in a TypeScript `MockSensorGenerator` using the same top-level payload shape as the live sensor pipeline: `type`, `ts`, `device`, `seq`, `air`, `water`, `light`, and `level`.
-- The history page uses deterministic time-series data for the selected farm context.
-- The config page surfaces deployment readiness, recent ingestion, and device health.
+Use `short-description` — e.g. `esp32-wifi-fix` or `pi-api-auth`.

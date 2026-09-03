@@ -1,11 +1,63 @@
-node_modules
-.next
-out
-dist
-coverage
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+# ──────────────────────────────────────────
+# Node / Web
+# ──────────────────────────────────────────
+node_modules/
+.next/
+.nuxt/
+dist/
+build/
+.cache/
+.parcel-cache/
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+
+# ──────────────────────────────────────────
+# Python (Pi services)
+# ──────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+.Python
+
+# ──────────────────────────────────────────
+# Arduino / ESP32
+# ──────────────────────────────────────────
+# Arduino IDE build output
+/firmware/**/.cache/
+/firmware/**/build/
+# Common compiled artifacts
+*.elf
+*.bin
+*.hex
+*.map
+
+# ──────────────────────────────────────────
+# OS junk
+# ──────────────────────────────────────────
 .DS_Store
+Thumbs.db
+Desktop.ini
+
+# ──────────────────────────────────────────
+# Editors
+# ──────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ──────────────────────────────────────────
+# Logs & misc
+# ──────────────────────────────────────────
+*.log
+*.pid
+*.seed
+coverage/
+.nyc_output/
