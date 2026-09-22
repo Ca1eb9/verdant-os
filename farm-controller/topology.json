@@ -1,0 +1,37 @@
+{
+  "version": "1.0.0",
+  "name": "Capstone Farm v1",
+  "nodes": [
+    { "id": "dock-1",    "tag_id": "0x1D5E", "x": 0, "y": 0, "z": 0, "type": "dock" },
+    { "id": "cp-01",   "tag_id": "0x2A01", "x": 1, "y": 0, "z": 0, "type": "checkpoint" },
+    { "id": "water-01", "tag_id": "0x3C10", "x": 2, "y": 0, "z": 0, "type": "water" },
+    { "id": "cp-02",   "tag_id": "0x2A02", "x": 3, "y": 0, "z": 0, "type": "checkpoint" },
+    { "id": "elev-1-L0", "tag_id": "0x8F00", "x": 4, "y": 0, "z": 0, "type": "elevator" },
+
+    { "id": "elev-1-L1", "tag_id": "0x8F01", "x": 4, "y": 0, "z": 1, "type": "elevator" },
+    { "id": "cp-11",   "tag_id": "0x2B01", "x": 3, "y": 0, "z": 1, "type": "checkpoint" },
+    { "id": "water-11", "tag_id": "0x3C10", "x": 2, "y": 0, "z": 0, "type": "water" },
+    { "id": "cp-12",   "tag_id": "0x2B02", "x": 2, "y": 0, "z": 1, "type": "checkpoint" },
+    { "id": "cp-13",   "tag_id": "0x2B03", "x": 1, "y": 0, "z": 1, "type": "checkpoint" },
+
+    { "id": "elev-1-L2", "tag_id": "0x8F02", "x": 4, "y": 0, "z": 2, "type": "elevator" },
+    { "id": "cp-21",   "tag_id": "0x2C01", "x": 3, "y": 0, "z": 2, "type": "checkpoint" },
+    { "id": "cp-22",   "tag_id": "0x2C02", "x": 2, "y": 0, "z": 2, "type": "checkpoint" }
+  ],
+  "edges": [
+    { "from": "dock-1",    "to": "cp-01",   "cost": 1 },
+    { "from": "cp-01",   "to": "water-01", "cost": 1 },
+    { "from": "water-01", "to": "cp-02",   "cost": 1 },
+    { "from": "cp-02",   "to": "elev-1-L0", "cost": 1 },
+
+    { "from": "elev-1-L1", "to": "cp-11",   "cost": 1 },
+    { "from": "cp-11",   "to": "cp-12",   "cost": 1 },
+    { "from": "cp-12",   "to": "cp-13",   "cost": 1 },
+
+    { "from": "elev-1-L2", "to": "cp-21",   "cost": 1 },
+    { "from": "cp-21",   "to": "cp-22",   "cost": 1 },
+
+    { "from": "elev-1-L0", "to": "elev-1-L1", "cost": 3 },
+    { "from": "elev-1-L1", "to": "elev-1-L2", "cost": 3 }
+  ]
+}

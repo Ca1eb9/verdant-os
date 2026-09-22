@@ -1,0 +1,18 @@
+{
+  "watchdog_interval_ms": 5000,
+  "heartbeat_timeout_ms": 30000,
+  "battery_low_pct": 20,
+  "battery_critical_pct": 15,
+  "charge_complete_pct": 95,
+  "max_task_retries": 2,
+  "task_retry_delay_ms": 60000,
+  "plant_schedules": [
+    {
+      "plant_type": "basil",
+      "light_duration_ms": 57600000,
+      "light_interval_ms": 86400000,
+      "water_duration_ms": 900000,
+      "water_interval_ms": 14400000
+    }
+  ]
+}

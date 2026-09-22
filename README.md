@@ -12,7 +12,7 @@ verdant-os/
 ├── firmware/
 │   ├── arduino/  # Arduino sketches
 │   └── esp32/    # ESP32 code
-├── services/     # Raspberry Pi services
+├── farm-controller/     # Raspberry Pi services
 ├── docs/         # Architecture diagrams, wiring guides, notes, etc
 ├── scripts/      # Shared build, deploy, or flash helper scripts
 └── README.md
@@ -20,7 +20,7 @@ verdant-os/
 
 **Vercel** only sees the `web/` directory — the rest of the repo is ignored by it.  
 **Arduino IDE / ESP-IDF** point at their respective subdirectory in `firmware/`.  
-**Pi services** each live in their own folder under `services/` with their own requirements or package file.
+**Pi services** each live in their own folder under `farm-controller/` with their own requirements or package file.
 
 ---
 

@@ -1,0 +1,14 @@
+{
+  "name": "farm-controller",
+  "private": true,
+  "workspaces": [
+    "farm-controller/*"
+  ],
+  "scripts": {
+    "build:shared": "npm -w @farm/shared run build",
+    "sim": "npm -w @farm/simulator run start",
+    "sim:dev": "npm -w @farm/simulator run dev",
+    "ingest": "npm -w @farm/ingester run start",
+    "ingest:dev": "npm -w @farm/ingester run dev"
+  }
+}
