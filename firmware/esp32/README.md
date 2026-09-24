@@ -10,6 +10,8 @@
 
 ## Building & flashing
 
+Two environments: `esp32` (full firmware, `main.cpp`) and `bench` (comms + sensor tasks with a stand-in nav task — see [COMMS-SENSOR.md](COMMS-SENSOR.md)). Pick one with `pio run -e bench` or the env switcher in the bottom toolbar.
+
 - **Build:** Click the checkmark (✓) in the bottom toolbar, or `Cmd+Shift+B`
 - **Upload:** Click the arrow (→) in the bottom toolbar, or run `pio run -t upload`
 - **Serial monitor:** Click the plug icon in the bottom toolbar, or run `pio device monitor`
@@ -41,6 +43,14 @@ firmware/
 │                               # Command, TelemetryMsg, RobotEvent
 │   ├── graph.cpp               # Farm topology stored in flash
 │   ├── graph.h
+│   ├── globals.cpp             # Queue handles + shared flags, create_queues()
+│   ├── log.h                   # LOG(tag, fmt, ...) serial logger
+│   ├── secrets.example.h       # Copy to secrets.h (gitignored) for WiFi creds
+│   ├── comms/comms_json.*      # JSON <-> struct, matches @farm/shared types
+│   ├── drivers/                # RFID reader, VL53L4CX ToF, battery ADC
+│   └── bench/bench_main.cpp    # `bench` env: test comms + sensor tasks alone
+├── test_host/                  # Laptop tests; checks JSON against types.ts
+├── COMMS-SENSOR.md             # Comms + sensor task design, wiring, testing
 └── README.md
 ```
 
@@ -57,5 +67,7 @@ Managed by PlatformIO in `platformio.ini`. Core libraries:
 
 - **PubSubClient** — MQTT client
 - **ArduinoJson** (v7) — JSON serialization for telemetry/commands
+- **Adafruit PN532** / **MFRC522** — RFID reader (pick one in `config.h`)
+- **STM32duino VL53L4CX** — time-of-flight obstacle sensor
 
 PlatformIO downloads these automatically on first build.
