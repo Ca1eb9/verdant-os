@@ -72,6 +72,8 @@ For the Arduino Uno R3 USB serial to Supabase live ingestion flow, see [`docs/li
 
 ## Project Notes
 
+- Fonts (IBM Plex Sans/Mono) are stored in [`src/app/fonts`](./src/app/fonts) and loaded with `next/font/local`, so `npm run build` and the running app need no internet access. This lets the dashboard be built and served on the farm's Raspberry Pi offline.
+
 - Runtime visuals are served from [`public/images`](./public/images), which maps to the `/images` URL path used throughout the app.
 - Supabase reads require explicit environment values. The app does not fall back to a bundled project key.
 - The dashboard simulates live telemetry and persists the latest snapshot locally so the last known state still renders when offline.
