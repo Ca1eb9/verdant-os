@@ -1,6 +1,6 @@
 import type { NavGraph } from "@/lib/farm/navigation";
 import { resolveNode } from "@/lib/farm/navigation";
-import type { PlantHealth, RobotDraw } from "@/lib/farm/map/renderer";
+import type { RobotDraw } from "@/lib/farm/map/renderer";
 import type { GraphNode, GrowthStage, Heading, PlantRecord, RobotStatus } from "@/lib/farm/types";
 
 /** Robot state as the dashboard sees it (telemetry + orchestrator extras) */
@@ -64,13 +64,11 @@ export function toRobotDraw(robot: RobotView, graph: NavGraph, now: number): Rob
   const node = resolveNode(graph, robot.currentNode);
   const stale = isStale(robot, now);
   const lost = robot.status === "lost";
-  const health: PlantHealth = "good";
   return {
     id: robot.id,
     nodeId: lost ? null : node?.id ?? null,
     action: actionLabel(robot, node, stale),
     battery: robot.batteryPct,
-    health,
     growth: robot.plant ? GROWTH[robot.plant.growth_stage] ?? 0.55 : 0.55,
     lit: robot.status === "working" && node?.type === "checkpoint",
   };

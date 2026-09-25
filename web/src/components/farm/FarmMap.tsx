@@ -179,7 +179,6 @@ export function FarmMap({
                 ? `${selectedNode.id} (${selectedAisle ? `Aisle ${selectedAisle}, ` : ""}L${selectedLevel})`
                 : "Position unknown"}
             </span>
-            <span>Canopy {selectedDraw?.health ?? "good"}</span>
             <span>{selectedDraw?.action}</span>
             <span>Battery {Math.round(selected.batteryPct)}%</span>
           </>

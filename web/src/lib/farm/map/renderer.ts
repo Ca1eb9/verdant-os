@@ -88,13 +88,8 @@ export const PAL = {
   routeLive: "#7FC8B8",
 };
 
-const HC = {
-  good: { stem: "#3A6B18", leaf: "#5E9224", mid: "#8CBB4E", tip: "#B7D68C" },
-  warn: { stem: "#6B4210", leaf: "#AE7318", mid: "#DC9A2A", tip: "#EFC474" },
-  bad: { stem: "#6E3115", leaf: "#94401F", mid: "#C85C31", tip: "#E1977B" },
-};
-
-export type PlantHealth = keyof typeof HC;
+// plant colours
+const PLANT = { stem: "#3A6B18", leaf: "#5E9224", mid: "#8CBB4E", tip: "#B7D68C" };
 export type RouteStyle = "trail" | "checkpoint";
 
 export interface RobotDraw {
@@ -103,7 +98,6 @@ export interface RobotDraw {
   /** Badge text, e.g. "Moving", "Watering" */
   action: string;
   battery: number;
-  health: PlantHealth;
   growth: number;
   /** Under the grow lights (draw the lit canopy) */
   lit: boolean;
@@ -381,11 +375,10 @@ export class FarmRenderer {
     p: Element,
     x: number,
     baseY: number,
-    health: PlantHealth,
     growth: number,
     opts: { scale?: number; idx?: number; lean?: number; dim?: number; stemParent?: Element; thinLow?: boolean; thinLow2?: boolean },
   ) {
-    const c = HC[health] || HC.good;
+    const c = PLANT;
     const sc = opts.scale == null ? 1 : opts.scale;
     const V = PLANT_VAR[(opts.idx == null ? 0 : opts.idx) % PLANT_VAR.length];
     const h = growth * 28 * V.h * sc;
@@ -446,7 +439,7 @@ export class FarmRenderer {
   }
 
   // every rover grows the same canopy graphic: table-driven variation, two rows fanning outward
-  private drawCanopy(p: Element, cx: number, baseY: number, w: number, health: PlantHealth, stemLayer: Element) {
+  private drawCanopy(p: Element, cx: number, baseY: number, w: number, stemLayer: Element) {
     const inner = w - 15;
     const nB = 6;
     const nF = 7;
@@ -460,7 +453,7 @@ export class FarmRenderer {
       const bx = row(nB, i);
       const t = (bx - cx) / (inner / 2);
       const V = PLANT_VAR[i % PLANT_VAR.length];
-      this.drawPlant(p, bx + V.jx, baseY + 0.5 + V.jy, health, 0.62, {
+      this.drawPlant(p, bx + V.jx, baseY + 0.5 + V.jy, 0.62, {
         idx: i, scale: 0.8, dim: 0.76, lean: t * 11 + V.lean, stemParent: stemLayer,
         thinLow: thinBack.includes(i), thinLow2: thinBack2.includes(i),
       });
@@ -469,7 +462,7 @@ export class FarmRenderer {
       const fx = row(nF, k);
       const tf = (fx - cx) / (inner / 2);
       const V = PLANT_VAR[(k + nB) % PLANT_VAR.length];
-      this.drawPlant(p, fx + V.jx, baseY + 3 + V.jy, health, 0.82, {
+      this.drawPlant(p, fx + V.jx, baseY + 3 + V.jy, 0.82, {
         idx: k + nB, scale: 1, lean: tf * 9 + V.lean, stemParent: stemLayer,
         thinLow: thinFront.includes(k), thinLow2: thinFront2.includes(k),
       });
@@ -604,7 +597,7 @@ export class FarmRenderer {
     this.mk("path", { d: "M" + (w - 5) + " -5 L" + (w - 5) + " -17 l3 -3", fill: "none", stroke: body, "stroke-width": 1.4, "stroke-linecap": "round" }, g);
     this.mk("circle", { cx: w - 2, cy: -20, r: opts.active ? 2.6 : 2, fill: body, ...(opts.active ? { style: "animation:activePulse 1.2s infinite" } : {}) }, g);
 
-    this.drawCanopy(g, trayW / 2 + 1, -5, trayW, data.health, stemLayer);
+    this.drawCanopy(g, trayW / 2 + 1, -5, trayW, stemLayer);
 
     // selection: dashed outline around the rover
     if (opts.selected) {
