@@ -47,23 +47,12 @@
 }
 
 .brandText {
-  display: grid;
-  gap: 0.05rem;
   min-width: 0;
-  white-space: nowrap;
-}
-
-.brandEyebrow {
-  color: var(--muted);
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.brandTitle {
-  font-size: 1rem;
+  overflow: hidden;
+  font-size: 1.02rem;
   letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nav {

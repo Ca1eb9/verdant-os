@@ -38,10 +38,7 @@ export function SideNav() {
             className={styles.logo}
             fallbackClassName={`${styles.logo} assetFallback`}
           />
-          <span className={styles.brandText}>
-            <span className={styles.brandEyebrow}>Vertical Farm Control</span>
-            <strong className={styles.brandTitle}>VerdantOS</strong>
-          </span>
+          <strong className={styles.brandText}>VerdantOS</strong>
         </Link>
 
         <button
