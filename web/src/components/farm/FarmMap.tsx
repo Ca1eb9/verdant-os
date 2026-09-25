@@ -145,6 +145,7 @@ export function FarmMap({
       </div>
 
       <div className={styles.canvas}>
+        {emptyMessage ? <div className={styles.overlay}>{emptyMessage}</div> : null}
         <svg
           ref={svgRef}
           viewBox={`0 0 660 ${scene.viewH}`}
@@ -152,7 +153,6 @@ export function FarmMap({
           role="img"
           aria-label="Side-view cross-section of the farm showing robots on each shelf level, the charging dock and the elevator"
         />
-        {emptyMessage ? <div className={styles.overlay}>{emptyMessage}</div> : null}
       </div>
 
       <div className={styles.legend}>

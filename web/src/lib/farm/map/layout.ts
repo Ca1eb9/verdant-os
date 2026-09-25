@@ -149,7 +149,8 @@ function placeZone(
   const cell = (rail[1] - rail[0]) / n;
   ids.forEach((node, j) => {
     const cx = rail[0] + cell * (j + 0.5);
-    out(node, Math.round(cx - W / 2), Math.max(18, Math.floor(cell - 4)));
+    const x = Math.min(Math.max(cx - W / 2, FX + 2), EX - 2 - W); // keep the rover inside the frame
+    out(node, Math.round(x), Math.max(18, Math.floor(cell - 4)));
   });
 }
 

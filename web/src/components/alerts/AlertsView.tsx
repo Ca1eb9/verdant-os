@@ -2,22 +2,18 @@
 
 import { useMemo, useState } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
-import { AssetImage } from "@/components/ui/AssetImage";
 import { evaluateTelemetryAlerts, readTelemetryAlerts } from "@/lib/alerts";
-import { FARMS } from "@/lib/mock-data";
 import { formatTimestamp } from "@/lib/format";
 import { useFarmTelemetry } from "@/hooks/useFarmTelemetry";
 import type { TelemetryAlert } from "@/lib/types";
 import styles from "@/components/alerts/AlertsView.module.css";
-
-const ALERT_FALLBACK = "\u26A0\uFE0F";
 
 function alertSignature(alert: Pick<TelemetryAlert, "farmId" | "metric" | "severity" | "title" | "threshold">) {
   return [alert.farmId, alert.metric, alert.severity, alert.title, alert.threshold ?? ""].join("|");
 }
 
 export function AlertsView() {
-  const { activeFarmId, farm, setActiveFarmId } = useSelectedFarm();
+  const { activeFarmId, farm } = useSelectedFarm();
   const [limit, setLimit] = useState<10 | 20>(20);
   const { snapshot, lastUpdate } = useFarmTelemetry(activeFarmId);
 
@@ -58,7 +54,7 @@ export function AlertsView() {
 
   return (
     <section className="pageSection">
-      <div className={`glassPanel ${styles.hero}`}>
+      <header className={styles.hero}>
         <div className={styles.heroContent}>
           <span className="eyebrow">System alerts</span>
           <h1 className="pageTitle">Alerts</h1>
@@ -66,35 +62,9 @@ export function AlertsView() {
             Review the latest ingestion and sensor warnings for {farm.name}.
           </p>
         </div>
-
-        <div className={styles.heroIconWrap}>
-          <AssetImage
-            src="/images/alert-danger.webp"
-            alt="Alert icon"
-            fallback={ALERT_FALLBACK}
-            className={styles.heroIcon}
-            fallbackClassName={`${styles.heroIcon} assetFallback`}
-          />
-        </div>
-      </div>
+      </header>
 
       <div className={styles.toolbar}>
-        <div className={styles.selectorGroup}>
-          <span className={styles.metaLabel}>Farm</span>
-          <select
-            className="controlSelect"
-            value={activeFarmId}
-            onChange={(event) => setActiveFarmId(event.target.value)}
-            aria-label="Alert farm selector"
-          >
-            {FARMS.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
         <div className={styles.selectorGroup}>
           <span className={styles.metaLabel}>Window</span>
           <div className={styles.rangeRow}>

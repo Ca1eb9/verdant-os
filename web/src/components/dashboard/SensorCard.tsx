@@ -8,19 +8,16 @@ type MetricTone = "stable" | "watch" | "focus";
 interface SensorCardMetric {
   label: string;
   value: string;
-  hint: string;
   tone: MetricTone;
 }
 
 interface SensorCardProps {
   title: string;
-  subtitle: string;
   icon: string;
   fallback: string;
   accent: CardAccent;
   heroLabel: string;
   heroValue: string;
-  trend: string;
   metrics: SensorCardMetric[];
   visual?: ReactNode;
 }
@@ -38,9 +35,7 @@ export function SensorCard({
   heroValue,
   icon,
   metrics,
-  subtitle,
   title,
-  trend,
   visual,
 }: SensorCardProps) {
   return (
@@ -58,17 +53,12 @@ export function SensorCard({
             fallbackClassName={`${styles.sensorIcon} assetFallback`}
           />
         </div>
-        <div className={styles.sensorHead}>
-          <span className="eyebrow">{title}</span>
-          <h2 className={styles.sensorTitle}>{title}</h2>
-          <p className={styles.sensorSubtitle}>{subtitle}</p>
-        </div>
+        <h2 className={styles.sensorTitle}>{title}</h2>
       </div>
 
       <div className={styles.heroValueBlock}>
         <span className={styles.heroValueLabel}>{heroLabel}</span>
         <strong className={styles.heroValue}>{heroValue}</strong>
-        <span className={styles.heroTrend}>{trend}</span>
       </div>
 
       {visual ? <div className={styles.sensorVisual}>{visual}</div> : null}
@@ -81,7 +71,6 @@ export function SensorCard({
               <span className={`${styles.metricTone} ${styles[`tone${metric.tone}`]}`} />
             </div>
             <strong className={styles.metricValue}>{metric.value}</strong>
-            <span className={styles.metricHint}>{metric.hint}</span>
           </div>
         ))}
       </div>

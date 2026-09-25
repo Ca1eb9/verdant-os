@@ -149,7 +149,13 @@ export function ControlPanel({
     setMessage(null);
     try {
       await source.sendCommand(request, operatorKey);
-      setMessage({ tone: "ok", text: `${COMMAND_LABEL[request.command.command]} sent to ${robot.id}.` });
+      const target = request.command.target_node;
+      setMessage({
+        tone: "ok",
+        text: target
+          ? `Sent ${robot.id} to ${target}.`
+          : `${COMMAND_LABEL[request.command.command]} sent to ${robot.id}.`,
+      });
       after?.();
       void refreshRecent();
     } catch (err) {

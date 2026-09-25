@@ -1,8 +1,9 @@
-const SHELL_CACHE = "verdantos-shell-v2";
-const RUNTIME_CACHE = "verdantos-runtime-v2";
+const SHELL_CACHE = "verdantos-shell-v3";
+const RUNTIME_CACHE = "verdantos-runtime-v3";
 
 const PRECACHE_URLS = [
   "/",
+  "/farm",
   "/history",
   "/alerts",
   "/config",
@@ -15,6 +16,7 @@ const PRECACHE_URLS = [
   "/images/water-icon.svg",
   "/images/light-icon.svg",
   "/images/dashboard-icon.svg",
+  "/images/farm-icon.svg",
   "/images/history-icon.svg",
   "/images/config-icon.svg",
   "/images/icon-192.png",

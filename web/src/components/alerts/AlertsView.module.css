@@ -1,5 +1,5 @@
 .hero {
-  padding: 1rem;
+  padding: 0 0.25rem;
   display: grid;
   gap: 1rem;
 }
@@ -7,18 +7,6 @@
 .heroContent {
   display: grid;
   gap: 0.55rem;
-}
-
-.heroIconWrap {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-}
-
-.heroIcon {
-  width: 4rem;
-  height: 4rem;
-  border-radius: 1.25rem;
 }
 
 .toolbar {
@@ -49,7 +37,7 @@
 .rangeButton {
   min-height: 2.9rem;
   padding: 0.7rem 1rem;
-  border-radius: 999px;
+  border-radius: var(--radius-control);
   border: 1px solid rgba(129, 181, 255, 0.12);
   background: rgba(4, 17, 28, 0.72);
   color: var(--muted);
@@ -74,7 +62,7 @@
   padding: 1rem 1.05rem;
   display: grid;
   gap: 0.45rem;
-  border-radius: 22px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(129, 181, 255, 0.12);
   background: rgba(4, 17, 28, 0.58);
 }
@@ -140,10 +128,6 @@
 }
 
 @media (min-width: 760px) {
-  .hero {
-    padding: 1.4rem;
-  }
-
   .summaryGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

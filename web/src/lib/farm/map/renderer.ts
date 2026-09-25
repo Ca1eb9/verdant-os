@@ -168,7 +168,6 @@ export class FarmRenderer {
   private labelLayer: SVGGElement | null = null;
   private routeProgress = new Map<string, number>();
   private destroyed = false;
-  private hoverNode: string | null = null;
 
   constructor(svg: SVGSVGElement, opts: RendererOptions = {}) {
     this.svg = svg;
@@ -360,6 +359,8 @@ export class FarmRenderer {
       "@keyframes fwTrail{from{opacity:.5}to{opacity:0}}" +
       "@keyframes fwSegFade{from{opacity:.9}to{opacity:0}}" +
       "@keyframes fwSegBlink{0%,100%{opacity:.95}50%{opacity:.25}}" +
+      ".fw-hidden{opacity:0}" +
+      ".fw-slot:hover .fw-outline{opacity:1;stroke:" + this.accent() + ";fill:" + this.accent() + ";fill-opacity:.06}" +
       "@media (prefers-reduced-motion:reduce){[style*=animation]{animation:none!important}}";
     const wg = this.mk("linearGradient", { id: "fw-water", x1: 0, y1: 0, x2: 0, y2: 1 }, d);
     this.mk("stop", { offset: "0%", "stop-color": P.waterTop, "stop-opacity": 0.45 }, wg);
@@ -722,33 +723,25 @@ export class FarmRenderer {
       if (input.scene.nodeAisle.get(slot.nodeId) !== input.aisleY) continue;
       const pickable = input.targetable.has(slot.nodeId);
       const isTarget = input.targetNodeId === slot.nodeId;
-      const isHover = this.hoverNode === slot.nodeId && pickable;
       const sink = sinkAt(this.levels, slot.x, slot.lv);
       const ox = slot.x + (W - slot.slotW) / 2;
-      const g = this.mk("g", { "data-node": slot.nodeId, style: pickable ? "cursor:pointer" : "" }, layer);
+      const g = this.mk("g", { "data-node": slot.nodeId, class: pickable ? "fw-slot" : "", style: pickable ? "cursor:pointer" : "" }, layer);
       const title = this.mk("title", {}, g);
       title.textContent = slot.nodeId;
 
-      const showOutline = slot.type !== "elevator" && (!occupied.has(slot.nodeId) || isTarget || isHover);
-      if (showOutline) {
-        const hot = isTarget || isHover;
+      if (slot.type !== "elevator") {
+        // occupied slots keep an invisible outline that still lights up on hover
+        const hidden = occupied.has(slot.nodeId) && !isTarget;
         this.mk("rect", {
+          class: "fw-outline" + (hidden ? " fw-hidden" : ""),
           x: ox, y: slot.y - 5 + sink, width: slot.slotW, height: 22, rx: 2,
-          fill: hot ? this.accent() : "none", "fill-opacity": isTarget ? 0.12 : 0.06,
-          stroke: hot ? this.accent() : PAL.faint, "stroke-width": hot ? 1.2 : 1,
-          "stroke-dasharray": "3 3", opacity: hot ? 1 : 0.8,
+          fill: isTarget ? this.accent() : "none", "fill-opacity": isTarget ? 0.12 : 0,
+          stroke: isTarget ? this.accent() : PAL.faint, "stroke-width": isTarget ? 1.2 : 1,
+          "stroke-dasharray": "3 3", opacity: isTarget ? 1 : 0.8,
         }, g);
       }
       if (pickable) {
-        const hit = this.mk("rect", { x: ox - 2, y: slot.y - 26 + sink, width: slot.slotW + 4, height: 46, fill: "transparent" }, g);
-        hit.addEventListener("mouseenter", () => {
-          this.hoverNode = slot.nodeId;
-          this.drawSlots();
-        });
-        hit.addEventListener("mouseleave", () => {
-          if (this.hoverNode === slot.nodeId) this.hoverNode = null;
-          this.drawSlots();
-        });
+        const hit = this.mk("rect", { class: "fw-hit", x: ox - 2, y: slot.y - 26 + sink, width: slot.slotW + 4, height: 46, fill: "transparent" }, g);
         hit.addEventListener("click", () => this.opts.onNodeClick?.(slot.nodeId));
       }
     }

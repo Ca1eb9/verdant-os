@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { MetricChartPanel } from "@/components/history/MetricChartPanel";
 import {
-  FARMS,
   HISTORY_RANGE_HOURS,
   buildHistoricalSeries,
 } from "@/lib/mock-data";
@@ -24,7 +23,7 @@ const RANGE_ARROW = "\u2192";
 const MID_DOT = "\u00B7";
 
 export function HistoryView() {
-  const { activeFarmId, farm, setActiveFarmId } = useSelectedFarm();
+  const { activeFarmId, farm } = useSelectedFarm();
   const [range, setRange] = useState<HistoryRange>("72h");
 
   const data = useMemo(
@@ -179,22 +178,6 @@ export function HistoryView() {
           </div>
 
           <div className={styles.controlStack}>
-            <label className={styles.controlGroup}>
-              <span className={styles.metaLabel}>Farm</span>
-              <select
-                className="controlSelect"
-                value={activeFarmId}
-                onChange={(event) => setActiveFarmId(event.target.value)}
-                aria-label="History farm selector"
-              >
-                {FARMS.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
             <div className={styles.controlGroup}>
               <span className={styles.metaLabel}>Window</span>
               <div className={styles.rangeRow}>

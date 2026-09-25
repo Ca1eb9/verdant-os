@@ -13,9 +13,11 @@
   --amber: #ffc45f;
   --danger: #ff6a8b;
   --shadow: 0 24px 60px rgba(1, 10, 18, 0.45);
-  --radius-lg: 28px;
-  --radius-md: 20px;
-  --radius-sm: 14px;
+  /* phones keep some of the original roundness; larger screens go flatter */
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+  --radius-control: 12px;
   --font-display: "Bahnschrift", "Segoe UI Variable Display", "Arial Narrow", sans-serif;
   --font-body: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
   --max-width: 1440px;
@@ -27,6 +29,7 @@
 
 html {
   color-scheme: dark;
+  background: var(--bg);
   scroll-behavior: smooth;
 }
 
@@ -37,32 +40,10 @@ body {
   font-family: var(--font-body);
   overflow-x: hidden;
   background:
-    radial-gradient(circle at top left, rgba(64, 147, 255, 0.22), transparent 32%),
-    radial-gradient(circle at top right, rgba(111, 247, 195, 0.12), transparent 28%),
+    radial-gradient(circle at top left, rgba(64, 147, 255, 0.12), transparent 32%),
+    radial-gradient(circle at top right, rgba(111, 247, 195, 0.06), transparent 28%),
     linear-gradient(160deg, #03101a 0%, #071823 55%, #041019 100%);
-}
-
-body::before,
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-}
-
-body::before {
-  background-image:
-    linear-gradient(rgba(103, 223, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(103, 223, 255, 0.03) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: radial-gradient(circle at center, black 35%, transparent 88%);
-}
-
-body::after {
-  background:
-    radial-gradient(circle at 20% 20%, rgba(111, 247, 195, 0.08), transparent 26%),
-    radial-gradient(circle at 80% 15%, rgba(216, 255, 114, 0.06), transparent 20%),
-    radial-gradient(circle at 50% 100%, rgba(103, 223, 255, 0.08), transparent 28%);
+  background-attachment: fixed;
 }
 
 a {
@@ -94,7 +75,7 @@ img {
 .pageTitle {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(2rem, 3vw, 3rem);
+  font-size: clamp(1.6rem, 2.4vw, 2.2rem);
   font-weight: 700;
   letter-spacing: 0.02em;
 }
@@ -108,36 +89,19 @@ img {
 
 .glassPanel {
   position: relative;
-  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01)),
-    var(--bg-panel);
-  backdrop-filter: blur(24px);
-  box-shadow: var(--shadow);
-}
-
-.glassPanel::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 40%, rgba(103, 223, 255, 0.16));
-  mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
+  background: var(--bg-panel);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 30px rgba(1, 10, 18, 0.32);
 }
 
 .controlSelect {
   width: 100%;
   min-width: 0;
-  padding: 0.9rem 1rem;
+  padding: 0.7rem 0.9rem;
   border: 1px solid rgba(129, 181, 255, 0.18);
-  border-radius: 999px;
+  border-radius: var(--radius-control);
   color: var(--text);
   background: rgba(4, 17, 26, 0.78);
   transition: border-color 180ms ease, transform 180ms ease, background 180ms ease;
@@ -155,7 +119,7 @@ img {
   height: 0.7rem;
   border-radius: 999px;
   background: currentColor;
-  box-shadow: 0 0 16px currentColor;
+  box-shadow: 0 0 6px currentColor;
 }
 
 .eyebrow {
@@ -173,7 +137,7 @@ img {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 20px;
+  border-radius: var(--radius-md);
   background: linear-gradient(145deg, rgba(103, 223, 255, 0.16), rgba(111, 247, 195, 0.1));
 }
 
@@ -221,6 +185,15 @@ img {
 @media (max-width: 980px) {
   .loadingGrid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 760px) {
+  :root {
+    --radius-lg: 12px;
+    --radius-md: 10px;
+    --radius-sm: 8px;
+    --radius-control: 8px;
   }
 }
 

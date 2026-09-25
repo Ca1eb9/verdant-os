@@ -101,8 +101,9 @@
   border-radius: var(--radius-sm);
   background: rgba(6, 19, 29, 0.92);
   color: var(--muted);
+  max-width: calc(100% - 1rem);
   font-size: 0.8rem;
-  white-space: nowrap;
+  text-align: center;
   pointer-events: none;
 }
 
@@ -153,5 +154,23 @@
 @media (max-width: 560px) {
   .caption {
     display: none;
+  }
+
+  /* keep rovers legible on phones: the drawing scrolls sideways instead of shrinking */
+  .canvas {
+    overflow-x: auto;
+  }
+
+  .canvas svg {
+    min-width: 540px;
+  }
+
+  .overlay {
+    position: sticky;
+    left: 0;
+    display: block;
+    width: fit-content;
+    margin: 0 auto 0.4rem;
+    transform: none;
   }
 }
