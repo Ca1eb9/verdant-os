@@ -20,8 +20,17 @@
   }
 }
 
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+  min-height: 2.6rem;
+}
+
 .brand {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 0.7rem;
   min-height: 2.6rem;
@@ -64,8 +73,7 @@
   flex: 1;
 }
 
-.item,
-.toggle {
+.item {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -80,14 +88,14 @@
   transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
 }
 
-.item:hover,
-.toggle:hover {
+.item:hover {
   color: var(--text);
   background: rgba(255, 255, 255, 0.03);
 }
 
 .item:focus-visible,
-.toggle:focus-visible {
+.iconButton:focus-visible,
+.expand:focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: -2px;
 }
@@ -104,10 +112,67 @@
   height: 1.15rem;
 }
 
-.chevron {
+/* collapse arrow: icon only, top right of the sidebar */
+.iconButton {
   flex: none;
-  width: 1.15rem;
-  transition: transform 180ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--muted);
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.iconButton:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* expand: logo that swaps to an arrow on hover (collapsed only) */
+.expand {
+  position: relative;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  margin: 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--text);
+}
+
+.expandArrow {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.06);
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.expandLogo {
+  transition: opacity 140ms ease;
+}
+
+.expand:hover .expandArrow,
+.expand:focus-visible .expandArrow {
+  opacity: 1;
+}
+
+.expand:hover .expandLogo,
+.expand:focus-visible .expandLogo {
+  opacity: 0;
 }
 
 .label {
@@ -116,18 +181,17 @@
 }
 
 /* collapsed: icon rail */
-:global(html[data-sidebar="collapsed"]) .brandText,
+:global(html[data-sidebar="collapsed"]) .brand,
+:global(html[data-sidebar="collapsed"]) .collapse,
 :global(html[data-sidebar="collapsed"]) .label {
   display: none;
 }
 
-:global(html[data-sidebar="collapsed"]) .item,
-:global(html[data-sidebar="collapsed"]) .toggle,
-:global(html[data-sidebar="collapsed"]) .brand {
-  justify-content: center;
-  padding: 0;
+:global(html[data-sidebar="collapsed"]) .expand {
+  display: inline-flex;
 }
 
-:global(html[data-sidebar="collapsed"]) .chevron {
-  transform: rotate(180deg);
+:global(html[data-sidebar="collapsed"]) .item {
+  justify-content: center;
+  padding: 0;
 }

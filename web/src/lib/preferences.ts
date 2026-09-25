@@ -48,10 +48,10 @@ export function normalizePreferences(raw: unknown): Preferences {
 }
 
 function zoneOptions(prefs: Preferences): Intl.DateTimeFormatOptions {
-  return prefs.timeZone === "local" ? {} : { timeZone: prefs.timeZone, timeZoneName: "short" };
+  return prefs.timeZone === "local" ? {} : { timeZone: prefs.timeZone };
 }
 
-/** Date + time, e.g. "Sep 25, 8:05:21 PM" (adds "EDT" when a fixed zone is chosen) */
+/** Date + time in the chosen zone, e.g. "Sep 25, 8:05:21 PM" */
 export function formatTime(value: string | number | Date, prefs: Preferences, options: { date?: boolean } = {}) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";

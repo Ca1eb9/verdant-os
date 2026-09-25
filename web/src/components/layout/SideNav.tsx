@@ -7,27 +7,75 @@ import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { AssetImage } from "@/components/ui/AssetImage";
 import styles from "@/components/layout/SideNav.module.css";
 
+function Arrow({ direction }: { direction: "left" | "right" }) {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+      <path
+        d={direction === "left" ? "M10 3 5 8l5 5" : "M6 3l5 5-5 5"}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 /** Desktop navigation (980px and up); collapses to an icon rail */
 export function SideNav() {
   const pathname = usePathname();
-  const { prefs, setPref } = usePreferences();
-  const collapsed = prefs.sidebarCollapsed;
+  const { setPref } = usePreferences();
 
   return (
     <aside className={styles.side} aria-label="Main navigation">
-      <Link href="/" className={styles.brand} title="VerdantOS">
-        <AssetImage
-          src="/images/sprout-logo.webp"
-          alt="VerdantOS logo"
-          fallback={"🌿"}
-          className={styles.logo}
-          fallbackClassName={`${styles.logo} assetFallback`}
-        />
-        <span className={styles.brandText}>
-          <span className={styles.brandEyebrow}>Vertical Farm Control</span>
-          <strong className={styles.brandTitle}>VerdantOS</strong>
-        </span>
-      </Link>
+      <div className={styles.header}>
+        <Link href="/" className={styles.brand} title="VerdantOS">
+          <AssetImage
+            src="/images/sprout-logo.webp"
+            alt="VerdantOS logo"
+            fallback={"\uD83C\uDF3F"}
+            className={styles.logo}
+            fallbackClassName={`${styles.logo} assetFallback`}
+          />
+          <span className={styles.brandText}>
+            <span className={styles.brandEyebrow}>Vertical Farm Control</span>
+            <strong className={styles.brandTitle}>VerdantOS</strong>
+          </span>
+        </Link>
+
+        <button
+          type="button"
+          className={`${styles.iconButton} ${styles.collapse}`}
+          onClick={() => setPref("sidebarCollapsed", true)}
+          aria-label="Collapse sidebar"
+          aria-expanded="true"
+          title="Collapse sidebar"
+        >
+          <Arrow direction="left" />
+        </button>
+
+        {/* collapsed: the logo turns into an expand arrow on hover or focus */}
+        <button
+          type="button"
+          className={styles.expand}
+          onClick={() => setPref("sidebarCollapsed", false)}
+          aria-label="Expand sidebar"
+          aria-expanded="false"
+          title="Expand sidebar"
+        >
+          <AssetImage
+            src="/images/sprout-logo.webp"
+            alt=""
+            fallback={"\uD83C\uDF3F"}
+            className={`${styles.logo} ${styles.expandLogo}`}
+            fallbackClassName={`${styles.logo} ${styles.expandLogo} assetFallback`}
+          />
+          <span className={styles.expandArrow}>
+            <Arrow direction="right" />
+          </span>
+        </button>
+      </div>
 
       <nav className={styles.nav}>
         {NAV_ITEMS.map((item) => {
@@ -53,19 +101,6 @@ export function SideNav() {
           );
         })}
       </nav>
-
-      <button
-        type="button"
-        className={styles.toggle}
-        onClick={() => setPref("sidebarCollapsed", !collapsed)}
-        aria-expanded={!collapsed}
-        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-      >
-        <svg className={styles.chevron} viewBox="0 0 16 16" width="16" height="16" aria-hidden>
-          <path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        <span className={styles.label}>Collapse</span>
-      </button>
     </aside>
   );
 }
