@@ -10,7 +10,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatChartTick, formatMetric, formatTimestamp } from "@/lib/format";
+import { usePreferences } from "@/components/preferences/PreferencesProvider";
+import { formatMetric } from "@/lib/format";
 import type { HistoryPoint, HistoryRange } from "@/lib/types";
 import styles from "@/components/history/HistoryView.module.css";
 
@@ -42,13 +43,14 @@ function ChartTooltip({
   payload?: Array<{ color: string; dataKey: string; value: number }>;
   series: SeriesConfig[];
 }) {
+  const { fmt } = usePreferences();
   if (!active || !payload?.length || !label) {
     return null;
   }
 
   return (
     <div className={styles.tooltip}>
-      <strong className={styles.tooltipHeader}>{formatTimestamp(label)}</strong>
+      <strong className={styles.tooltipHeader}>{fmt.time(label)}</strong>
       {payload.map((item) => {
         const config = series.find((entry) => entry.key === item.dataKey);
 
@@ -80,20 +82,18 @@ export function MetricChartPanel({
   title,
 }: MetricChartPanelProps) {
   const hasRightAxis = series.some((item) => item.axisId === "right");
+  const { fmt } = usePreferences();
 
   return (
     <article className={`glassPanel ${styles.chartPanel}`}>
       <div className={styles.chartHeader}>
-        <div>
-          <span className="eyebrow">Time-series analysis</span>
-          <h2 className={styles.chartTitle}>{title}</h2>
-        </div>
+        <h2 className={styles.chartTitle}>{title}</h2>
         <p className={styles.chartDescription}>{description}</p>
       </div>
 
       <div className={styles.chartBody}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
+          <LineChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
             <XAxis
               dataKey="timestamp"
@@ -101,7 +101,7 @@ export function MetricChartPanel({
               tickLine={false}
               minTickGap={24}
               tick={{ fill: "#8aa3bc", fontSize: 12 }}
-              tickFormatter={(value) => formatChartTick(value, range !== "7d")}
+              tickFormatter={(value) => fmt.tick(value, range !== "7d")}
             />
             <YAxis
               yAxisId="left"
@@ -125,6 +125,8 @@ export function MetricChartPanel({
               verticalAlign="top"
               align="right"
               iconType="circle"
+              iconSize={8}
+              wrapperStyle={{ paddingBottom: 12, fontSize: 13 }}
               formatter={(value) => (
                 <span className={styles.legendLabel}>
                   {series.find((item) => item.key === value)?.label ?? value}
@@ -142,6 +144,7 @@ export function MetricChartPanel({
                 stroke={item.color}
                 strokeWidth={2.5}
                 dot={false}
+                isAnimationActive={false}
                 activeDot={{ r: 5, strokeWidth: 0, fill: item.color }}
               />
             ))}

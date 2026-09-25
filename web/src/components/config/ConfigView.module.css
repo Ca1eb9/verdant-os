@@ -206,3 +206,12 @@
     grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.6fr);
   }
 }
+
+/* long env values and paths wrap instead of widening the page on narrow phones */
+.hero,
+.grid,
+.moduleCard,
+.runbook {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

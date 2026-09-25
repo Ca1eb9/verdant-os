@@ -19,41 +19,6 @@
   text-transform: uppercase;
 }
 
-.segmented {
-  display: inline-flex;
-  gap: 0.25rem;
-  padding: 0.2rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: rgba(3, 15, 24, 0.6);
-}
-
-.segment {
-  position: relative;
-  min-width: 2.4rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: calc(var(--radius-sm) - 3px);
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.82rem;
-  transition: background 160ms ease, color 160ms ease;
-}
-
-.segment:hover {
-  color: var(--text);
-}
-
-.segment:focus-visible {
-  outline: 2px solid var(--cyan);
-  outline-offset: 1px;
-}
-
-.segmentOn {
-  color: var(--text);
-  background: rgba(103, 223, 255, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(103, 223, 255, 0.28);
-}
-
 .tabDot {
   position: absolute;
   top: 0.25rem;

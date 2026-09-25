@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatTimestamp } from "@/lib/format";
+import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import styles from "@/components/config/ConfigView.module.css";
 
 type StatusTone = "good" | "watch" | "bad";
@@ -90,6 +90,7 @@ function getLiveTone(status: ConfigStatus | null): StatusTone {
 }
 
 export function ConfigView() {
+  const { fmt } = usePreferences();
   const [status, setStatus] = useState<ConfigStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
 
@@ -243,7 +244,7 @@ export function ConfigView() {
             </div>
             <div className={styles.checkRow}>
               <span>Inserted</span>
-              <strong>{latestEvent?.created_at ? formatTimestamp(latestEvent.created_at) : "No row"}</strong>
+              <strong>{latestEvent?.created_at ? fmt.time(latestEvent.created_at) : "No row"}</strong>
             </div>
             <div className={styles.checkRow}>
               <span>Light</span>

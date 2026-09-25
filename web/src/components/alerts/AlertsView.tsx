@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { evaluateTelemetryAlerts, readTelemetryAlerts } from "@/lib/alerts";
-import { formatTimestamp } from "@/lib/format";
+import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { useFarmTelemetry } from "@/hooks/useFarmTelemetry";
 import type { TelemetryAlert } from "@/lib/types";
 import styles from "@/components/alerts/AlertsView.module.css";
@@ -14,6 +14,7 @@ function alertSignature(alert: Pick<TelemetryAlert, "farmId" | "metric" | "sever
 
 export function AlertsView() {
   const { activeFarmId, farm } = useSelectedFarm();
+  const { fmt } = usePreferences();
   const [limit, setLimit] = useState<10 | 20>(20);
   const { snapshot, lastUpdate } = useFarmTelemetry(activeFarmId);
   // stored alerts live in the browser, so build the list after mount to match the server render
@@ -105,7 +106,7 @@ export function AlertsView() {
         <article className={`glassPanel ${styles.summaryCard}`}>
           <span className={styles.summaryLabel}>Heartbeat</span>
           <strong className={styles.summaryValue} suppressHydrationWarning>
-            {formatTimestamp(lastUpdate)}
+            {fmt.time(lastUpdate)}
           </strong>
           <span className={styles.summaryDetail}>Last sensor heartbeat seen</span>
         </article>
@@ -130,11 +131,12 @@ export function AlertsView() {
                 </span>
               </div>
 
+              {/* message text is stored when the alert fires, in the units it was recorded with */}
               <p className={styles.alertMessage}>{alert.message}</p>
 
               <div className={styles.alertMeta}>
                 <span>
-                  <strong>Detected:</strong> {formatTimestamp(alert.detectedAt)}
+                  <strong>Detected:</strong> {fmt.time(alert.detectedAt)}
                 </span>
                 {alert.value ? (
                   <span>

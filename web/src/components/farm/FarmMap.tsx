@@ -105,14 +105,14 @@ export function FarmMap({
     <div className={styles.map}>
       <div className={styles.toolbar}>
         <span className={styles.toolLabel}>Aisle</span>
-        <div className={styles.segmented} role="tablist" aria-label="Aisle">
+        <div className="segmented" role="tablist" aria-label="Aisle">
           {scene.aisles.map((aisle) => (
             <button
               key={aisle.y}
               type="button"
               role="tab"
               aria-selected={aisle.y === aisleY}
-              className={`${styles.segment} ${aisle.y === aisleY ? styles.segmentOn : ""}`}
+              className="segment"
               onClick={() => onAisleChange(aisle.y)}
             >
               {aisle.name}
@@ -124,14 +124,14 @@ export function FarmMap({
         {onRouteStyleChange ? (
           <div className={styles.routeStyle}>
             <span className={styles.toolLabel}>Route</span>
-            <div className={styles.segmented} role="radiogroup" aria-label="Route display">
+            <div className="segmented" role="radiogroup" aria-label="Route display">
               {(["trail", "checkpoint"] as RouteStyle[]).map((style) => (
                 <button
                   key={style}
                   type="button"
                   role="radio"
                   aria-checked={routeStyle === style}
-                  className={`${styles.segment} ${routeStyle === style ? styles.segmentOn : ""}`}
+                  className="segment"
                   onClick={() => onRouteStyleChange(style)}
                 >
                   {style === "trail" ? "Trail" : "Checkpoint"}

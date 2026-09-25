@@ -6,7 +6,7 @@ import type { Scene } from "@/lib/farm/map/layout";
 import { resolveNode, type NavGraph } from "@/lib/farm/navigation";
 import { isStale, statusLabel, type RobotView } from "@/lib/farm/robots";
 import type { ActionAtTarget, FarmTopology, GraphNode, NodeType, RobotCommand } from "@/lib/farm/types";
-import { formatTimestamp } from "@/lib/format";
+import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import styles from "@/components/farm/ControlPanel.module.css";
 
 const KEY_STORAGE = "verdantos:operator-key";
@@ -81,6 +81,7 @@ export function ControlPanel({
   onRouteStart,
   onRouteClear,
 }: ControlPanelProps) {
+  const { fmt } = usePreferences();
   const robot = robots.find((r) => r.id === selectedRobotId);
   const online = Boolean(robot && !isStale(robot, now));
   const node = robot ? resolveNode(graph, robot.currentNode) : undefined;
@@ -268,7 +269,7 @@ export function ControlPanel({
           </div>
           <div>
             <dt>Last seen</dt>
-            <dd>{robot ? formatTimestamp(new Date(robot.lastSeen)) : "—"}</dd>
+            <dd>{robot ? fmt.time(robot.lastSeen) : "—"}</dd>
           </div>
           {robot?.taskLabel ? (
             <div className={styles.wide}>
@@ -418,7 +419,7 @@ export function ControlPanel({
                   {cmd.command.target_node ? ` ${cmd.command.target_node}` : ""}
                   {cmd.command.immediate ? " · immediate" : ""}
                 </span>
-                <time>{formatTimestamp(new Date(cmd.issued_at))}</time>
+                <time>{fmt.time(cmd.issued_at, { date: false })}</time>
               </li>
             ))}
           </ol>

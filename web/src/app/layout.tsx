@@ -3,10 +3,14 @@ import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "@/app/globals.css";
 import { Analytics } from "@vercel/analytics/next";
 import { FarmProvider } from "@/components/farms/FarmContext";
+import { PreferencesProvider } from "@/components/preferences/PreferencesProvider";
 import { AppShell } from "@/components/layout/AppShell";
 import { PwaRegistrar } from "@/components/pwa/PwaRegistrar";
 
 // one typeface on every OS instead of whatever Bahnschrift/Aptos falls back to
+// applies the saved sidebar state before first paint so it doesn't flash open
+const SIDEBAR_SCRIPT = `try{var p=JSON.parse(localStorage.getItem("verdantos:preferences")||"{}");document.documentElement.dataset.sidebar=p.sidebarCollapsed===true?"collapsed":"expanded"}catch(e){}`;
+
 const plexSans = IBM_Plex_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
@@ -89,12 +93,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${plexSans.variable} ${plexMono.variable}`}>
+    <html lang="en" className={`${plexSans.variable} ${plexMono.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: SIDEBAR_SCRIPT }} />
+      </head>
       <body>
         <PwaRegistrar />
-        <FarmProvider>
-          <AppShell>{children}</AppShell>
-        </FarmProvider>
+        <PreferencesProvider>
+          <FarmProvider>
+            <AppShell>{children}</AppShell>
+          </FarmProvider>
+        </PreferencesProvider>
         <Analytics />
       </body>
     </html>

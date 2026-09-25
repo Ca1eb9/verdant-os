@@ -1,18 +1,18 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RobotsCard } from "@/components/dashboard/RobotsCard";
 import { SensorCard } from "@/components/dashboard/SensorCard";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { useFarmTelemetry } from "@/hooks/useFarmTelemetry";
-import { formatMetric, formatTimestamp } from "@/lib/format";
+import { usePreferences } from "@/components/preferences/PreferencesProvider";
+import { formatMetric } from "@/lib/format";
 import styles from "@/components/dashboard/DashboardView.module.css";
 
 const AIR_FALLBACK = "\uD83C\uDF2C\uFE0F";
 const WATER_FALLBACK = "\uD83D\uDCA7";
 const LIGHT_FALLBACK = "\uD83D\uDCA1";
-const DEGREE_C = "\u00B0C";
 
 function formatOptionalMetric(value: number | null, unit: string, precision = 1) {
   return value === null ? "No reading" : formatMetric(value, unit, precision);
@@ -20,6 +20,10 @@ function formatOptionalMetric(value: number | null, unit: string, precision = 1)
 
 export function DashboardView() {
   const { activeFarmId, farm } = useSelectedFarm();
+  const { fmt } = usePreferences();
+  // readings are generated in the browser; the prerendered page shows placeholders instead
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const { snapshot, lastUpdate, liveStatus, latestEvent } = useFarmTelemetry(
     activeFarmId,
   );
@@ -44,7 +48,7 @@ export function DashboardView() {
         fallback: AIR_FALLBACK,
         accent: "cyan" as const,
         heroLabel: "Air Temperature",
-        heroValue: formatOptionalMetric(airTemperature, DEGREE_C, 1),
+        heroValue: fmt.temp(airTemperature, 1),
         metrics: [
           {
             label: "Humidity",
@@ -64,7 +68,7 @@ export function DashboardView() {
         fallback: WATER_FALLBACK,
         accent: "teal" as const,
         heroLabel: "Water Temperature",
-        heroValue: formatOptionalMetric(waterTemperature, DEGREE_C, 1),
+        heroValue: fmt.temp(waterTemperature, 1),
         visual: (
           <div
             className={styles.waterChamber}
@@ -140,6 +144,7 @@ export function DashboardView() {
     ],
     [
       airTemperature,
+      fmt,
       humidity,
       lightPpfd,
       reservoirHealthy,
@@ -161,23 +166,23 @@ export function DashboardView() {
 
         <div className={styles.chips}>
           <span
-            className={`${styles.chip} ${styles[liveStatus]}`}
+            className={`${styles.chip} ${mounted ? styles[liveStatus] : ""}`}
             title={latestEvent ? `Reading the latest sensor event for ${farm.name}` : "Waiting for the first sensor event"}
           >
             <span className="statusDot" />
-            {liveStatus === "live" ? "Live feed" : "Stale snapshot"}
+            {!mounted ? "Connecting" : liveStatus === "live" ? "Live feed" : "Stale snapshot"}
           </span>
           <span className={styles.chip}>
             <span className={styles.chipLabel}>Updated</span>
-            <time suppressHydrationWarning>{formatTimestamp(lastUpdate)}</time>
+            <time suppressHydrationWarning>{fmt.time(lastUpdate)}</time>
           </span>
         </div>
       </header>
 
       <div className={styles.sensorGrid}>
-        {sensorCards.map((card) => (
-          <SensorCard key={card.title} {...card} />
-        ))}
+        {mounted
+          ? sensorCards.map((card) => <SensorCard key={card.title} {...card} />)
+          : sensorCards.map((card) => <div key={card.title} className="loadingCard" aria-hidden />)}
         <RobotsCard />
       </div>
     </section>
