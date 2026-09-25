@@ -1,9 +1,25 @@
 import type { Metadata, Viewport } from "next";
+import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import "@/app/globals.css";
 import { Analytics } from "@vercel/analytics/next";
 import { FarmProvider } from "@/components/farms/FarmContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { PwaRegistrar } from "@/components/pwa/PwaRegistrar";
+
+// one typeface on every OS instead of whatever Bahnschrift/Aptos falls back to
+const plexSans = IBM_Plex_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: {
@@ -73,7 +89,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${plexSans.variable} ${plexMono.variable}`}>
       <body>
         <PwaRegistrar />
         <FarmProvider>

@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { AssetImage } from "@/components/ui/AssetImage";
+import { MetricValue } from "@/components/ui/MetricValue";
 import styles from "@/components/dashboard/DashboardView.module.css";
 
 type CardAccent = "cyan" | "teal" | "lime";
@@ -59,7 +60,7 @@ export function SensorCard({
       <div className={styles.heroValueBlock}>
         <span className={styles.heroValueLabel}>{heroLabel}</span>
         <strong className={styles.heroValue} suppressHydrationWarning>
-          {heroValue}
+          <MetricValue value={heroValue} />
         </strong>
       </div>
 
@@ -73,7 +74,7 @@ export function SensorCard({
               <span className={`${styles.metricTone} ${styles[`tone${metric.tone}`]}`} />
             </div>
             <strong className={styles.metricValue} suppressHydrationWarning>
-              {metric.value}
+              <MetricValue value={metric.value} />
             </strong>
           </div>
         ))}

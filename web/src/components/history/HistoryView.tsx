@@ -169,7 +169,7 @@ export function HistoryView() {
 
   return (
     <section className="pageSection">
-      <div className={`glassPanel ${styles.hero}`}>
+      <header className={styles.hero}>
         <div className={styles.toolbar}>
           <div className={styles.heading}>
             <span className="eyebrow">Historical analytics</span>
@@ -205,7 +205,7 @@ export function HistoryView() {
             </article>
           ))}
         </div>
-      </div>
+      </header>
 
       <div className={styles.chartGrid}>
         {charts.map((chart) => (

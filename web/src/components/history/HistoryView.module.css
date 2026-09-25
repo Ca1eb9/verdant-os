@@ -1,5 +1,5 @@
 .hero {
-  padding: 1rem;
+  padding: 0 0.25rem;
   display: grid;
   gap: 1rem;
 }
@@ -153,10 +153,6 @@
 }
 
 @media (min-width: 760px) {
-  .hero {
-    padding: 1.45rem;
-  }
-
   .summaryGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

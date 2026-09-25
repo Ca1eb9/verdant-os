@@ -12,12 +12,14 @@ export function formatInteger(value: number) {
 }
 
 export function formatTimestamp(value: string | Date) {
+  // 24-hour clock: easier to scan in an operations view
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
-    hour: "numeric",
+    hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
+    hourCycle: "h23",
   }).format(new Date(value));
 }
 

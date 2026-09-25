@@ -18,8 +18,9 @@
   --radius-md: 14px;
   --radius-sm: 10px;
   --radius-control: 12px;
-  --font-display: "Bahnschrift", "Segoe UI Variable Display", "Arial Narrow", sans-serif;
-  --font-body: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-display: var(--font-sans), "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-body: var(--font-sans), "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-data: var(--font-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
   --max-width: 1440px;
 }
 
@@ -38,6 +39,8 @@ body {
   min-height: 100vh;
   color: var(--text);
   font-family: var(--font-body);
+  font-feature-settings: "tnum" 1;
+  -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
   background:
     radial-gradient(circle at top left, rgba(64, 147, 255, 0.12), transparent 32%),
@@ -75,9 +78,9 @@ img {
 .pageTitle {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(1.6rem, 2.4vw, 2.2rem);
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: clamp(1.6rem, 2.4vw, 2.1rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .pageLead {
@@ -119,7 +122,7 @@ img {
   height: 0.7rem;
   border-radius: 999px;
   background: currentColor;
-  box-shadow: 0 0 6px currentColor;
+  box-shadow: none;
 }
 
 .eyebrow {
@@ -128,9 +131,9 @@ img {
   gap: 0.55rem;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.18em;
-  font-size: 0.72rem;
-  font-weight: 700;
+  letter-spacing: 0.1em;
+  font-size: 0.7rem;
+  font-weight: 600;
 }
 
 .assetFallback {
@@ -217,4 +220,18 @@ img {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* value + unit: the number reads first, the unit steps back */
+.unit {
+  margin-left: 0.2em;
+  color: var(--muted);
+  font-size: 0.6em;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.dataText {
+  font-family: var(--font-data);
+  font-size: 0.92em;
 }
