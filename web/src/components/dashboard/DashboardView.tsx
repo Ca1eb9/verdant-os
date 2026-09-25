@@ -68,6 +68,7 @@ export function DashboardView() {
         visual: (
           <div
             className={styles.waterChamber}
+            suppressHydrationWarning
             style={{ "--reservoir-level": `${reservoirLevel}%` } as CSSProperties}
           >
             <div className={styles.chamberHeader}>
@@ -104,7 +105,7 @@ export function DashboardView() {
               </div>
             </div>
             <div className={styles.chamberStats}>
-              <span>{formatMetric(snapshot.water.level, "%", 0)} volume</span>
+              <span suppressHydrationWarning>{formatMetric(snapshot.water.level, "%", 0)} volume</span>
               <span>{waterLevelText}</span>
             </div>
           </div>

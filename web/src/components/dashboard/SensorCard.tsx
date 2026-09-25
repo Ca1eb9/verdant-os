@@ -58,7 +58,9 @@ export function SensorCard({
 
       <div className={styles.heroValueBlock}>
         <span className={styles.heroValueLabel}>{heroLabel}</span>
-        <strong className={styles.heroValue}>{heroValue}</strong>
+        <strong className={styles.heroValue} suppressHydrationWarning>
+          {heroValue}
+        </strong>
       </div>
 
       {visual ? <div className={styles.sensorVisual}>{visual}</div> : null}
@@ -70,7 +72,9 @@ export function SensorCard({
               <span className={styles.metricLabel}>{metric.label}</span>
               <span className={`${styles.metricTone} ${styles[`tone${metric.tone}`]}`} />
             </div>
-            <strong className={styles.metricValue}>{metric.value}</strong>
+            <strong className={styles.metricValue} suppressHydrationWarning>
+              {metric.value}
+            </strong>
           </div>
         ))}
       </div>

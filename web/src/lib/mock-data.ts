@@ -178,7 +178,9 @@ function mapEventToTelemetrySnapshot(
 }
 
 export function buildHistoricalSeries(farmId: string, hours = 168): HistoryPoint[] {
-  const now = Date.now();
+  // anchored to the hour so the server render and the browser build the same series
+  const hourMs = 60 * 60 * 1000;
+  const now = Math.floor(Date.now() / hourMs) * hourMs;
   const rawEvents = buildHistoricalSensorEvents(farmId, hours, now);
 
   return rawEvents.map((event, index) => ({

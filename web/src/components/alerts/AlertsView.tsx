@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { evaluateTelemetryAlerts, readTelemetryAlerts } from "@/lib/alerts";
 import { formatTimestamp } from "@/lib/format";
@@ -16,6 +16,9 @@ export function AlertsView() {
   const { activeFarmId, farm } = useSelectedFarm();
   const [limit, setLimit] = useState<10 | 20>(20);
   const { snapshot, lastUpdate } = useFarmTelemetry(activeFarmId);
+  // stored alerts live in the browser, so build the list after mount to match the server render
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const currentAlerts = useMemo(
     () => evaluateTelemetryAlerts(farm, snapshot, lastUpdate, Date.now()),
@@ -23,6 +26,7 @@ export function AlertsView() {
   );
 
   const alerts = useMemo(() => {
+    if (!mounted) return [];
     const combined = [...currentAlerts, ...readTelemetryAlerts(activeFarmId)];
     const seen = new Set<string>();
     const deduped: TelemetryAlert[] = [];
@@ -42,7 +46,7 @@ export function AlertsView() {
     }
 
     return deduped.slice(0, limit);
-  }, [activeFarmId, currentAlerts, limit]);
+  }, [activeFarmId, currentAlerts, limit, mounted]);
 
   const counts = useMemo(
     () => ({
@@ -100,7 +104,9 @@ export function AlertsView() {
         </article>
         <article className={`glassPanel ${styles.summaryCard}`}>
           <span className={styles.summaryLabel}>Heartbeat</span>
-          <strong className={styles.summaryValue}>{formatTimestamp(lastUpdate)}</strong>
+          <strong className={styles.summaryValue} suppressHydrationWarning>
+            {formatTimestamp(lastUpdate)}
+          </strong>
           <span className={styles.summaryDetail}>Last sensor heartbeat seen</span>
         </article>
       </div>
