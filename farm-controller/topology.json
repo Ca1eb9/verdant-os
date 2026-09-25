@@ -10,9 +10,9 @@
 
     { "id": "elev-1-L1", "tag_id": "0x8F01", "x": 4, "y": 0, "z": 1, "type": "elevator" },
     { "id": "cp-11",   "tag_id": "0x2B01", "x": 3, "y": 0, "z": 1, "type": "checkpoint" },
-    { "id": "water-11", "tag_id": "0x3C10", "x": 2, "y": 0, "z": 0, "type": "water" },
-    { "id": "cp-12",   "tag_id": "0x2B02", "x": 2, "y": 0, "z": 1, "type": "checkpoint" },
-    { "id": "cp-13",   "tag_id": "0x2B03", "x": 1, "y": 0, "z": 1, "type": "checkpoint" },
+    { "id": "water-11", "tag_id": "0x3C11", "x": 2, "y": 0, "z": 1, "type": "water" },
+    { "id": "cp-12",   "tag_id": "0x2B02", "x": 1, "y": 0, "z": 1, "type": "checkpoint" },
+    { "id": "cp-13",   "tag_id": "0x2B03", "x": 0, "y": 0, "z": 1, "type": "checkpoint" },
 
     { "id": "elev-1-L2", "tag_id": "0x8F02", "x": 4, "y": 0, "z": 2, "type": "elevator" },
     { "id": "cp-21",   "tag_id": "0x2C01", "x": 3, "y": 0, "z": 2, "type": "checkpoint" },
@@ -25,7 +25,8 @@
     { "from": "cp-02",   "to": "elev-1-L0", "cost": 1 },
 
     { "from": "elev-1-L1", "to": "cp-11",   "cost": 1 },
-    { "from": "cp-11",   "to": "cp-12",   "cost": 1 },
+    { "from": "cp-11",   "to": "water-11", "cost": 1 },
+    { "from": "water-11", "to": "cp-12",   "cost": 1 },
     { "from": "cp-12",   "to": "cp-13",   "cost": 1 },
 
     { "from": "elev-1-L2", "to": "cp-21",   "cost": 1 },
