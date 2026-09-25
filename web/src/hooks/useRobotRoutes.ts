@@ -6,14 +6,9 @@ import { dijkstra, resolveNode, type NavGraph } from "@/lib/farm/navigation";
 import { isMoving, type RobotView } from "@/lib/farm/robots";
 
 interface PlannedRoute {
-  key: string;
   target: string;
   nodes: string[];
-  /** Target reached; kept briefly so the last leg can fade out */
-  done?: boolean;
 }
-
-const DONE_LINGER_MS = 3_500;
 
 const ENDED = new Set(["error", "lost", "manual"]);
 
@@ -34,7 +29,7 @@ export function useRobotRoutes(graph: NavGraph, robots: RobotView[]) {
         ? planned
         : from ? dijkstra(graph, from, target) : null;
       if (!nodes || nodes.length < 2) return;
-      setRoutes((prev) => ({ ...prev, [robot.id]: { key: `${robot.id}:${Date.now()}`, target, nodes } }));
+      setRoutes((prev) => ({ ...prev, [robot.id]: { target, nodes } }));
     },
     [graph],
   );
@@ -56,23 +51,14 @@ export function useRobotRoutes(graph: NavGraph, robots: RobotView[]) {
       for (const [id, route] of Object.entries(prev)) {
         const robot = robots.find((r) => r.id === id);
         const at = robot ? resolveNode(graph, robot.currentNode)?.id : undefined;
-        if (!robot || !at || ENDED.has(robot.status)) {
+        if (!robot || !at || ENDED.has(robot.status) || (at === route.target && !isMoving(robot.status))) {
           changed = true;
-          continue;
-        }
-        if (route.done) {
-          next[id] = route;
-          continue;
-        }
-        if (at === route.target && !isMoving(robot.status)) {
-          changed = true;
-          next[id] = { ...route, done: true };
           continue;
         }
         if (!route.nodes.includes(at)) {
           const replanned = dijkstra(graph, at, route.target);
           changed = true;
-          if (replanned && replanned.length > 1) next[id] = { key: `${id}:${Date.now()}`, target: route.target, nodes: replanned };
+          if (replanned && replanned.length > 1) next[id] = { target: route.target, nodes: replanned };
           continue;
         }
         next[id] = route;
@@ -81,20 +67,6 @@ export function useRobotRoutes(graph: NavGraph, robots: RobotView[]) {
     });
   }, [graph, robots]);
 
-  // drop finished routes once their last leg has faded
-  useEffect(() => {
-    const finished = Object.entries(routes).filter(([, route]) => route.done);
-    if (!finished.length) return undefined;
-    const timer = window.setTimeout(() => {
-      setRoutes((prev) => {
-        const next = { ...prev };
-        for (const [id, route] of finished) if (next[id] === route) delete next[id];
-        return next;
-      });
-    }, DONE_LINGER_MS);
-    return () => window.clearTimeout(timer);
-  }, [routes]);
-
   const routeFor = useCallback(
     (robot: RobotView | undefined): RouteDraw | null => {
       if (!robot) return null;
@@ -102,11 +74,9 @@ export function useRobotRoutes(graph: NavGraph, robots: RobotView[]) {
       if (!route) return null;
       const at = resolveNode(graph, robot.currentNode)?.id;
       return {
-        key: route.key,
         nodes: route.nodes,
-        progress: route.done ? route.nodes.length - 1 : at ? Math.max(0, route.nodes.indexOf(at)) : 0,
+        progress: at ? Math.max(0, route.nodes.indexOf(at)) : 0,
         mode: "active",
-        moving: isMoving(robot.status),
       };
     },
     [graph, routes],

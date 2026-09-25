@@ -29,12 +29,6 @@
   background: #d9722e;
 }
 
-.routeStyle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
 .caption {
   margin-left: auto;
   color: var(--muted);

@@ -1,15 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ControlPanel } from "@/components/farm/ControlPanel";
 import { FarmMap } from "@/components/farm/FarmMap";
 import { useFarmLive } from "@/hooks/useFarmLive";
 import { useRobotRoutes } from "@/hooks/useRobotRoutes";
-import type { RouteDraw, RouteStyle } from "@/lib/farm/map/renderer";
+import type { RouteDraw } from "@/lib/farm/map/renderer";
 import { dijkstra, resolveNode } from "@/lib/farm/navigation";
 import styles from "@/components/farm/FarmView.module.css";
-
-const ROUTE_STYLE_KEY = "verdantos:route-style";
 
 export function FarmView() {
   const { source, topology, usingDefaultTopology, graph, scene, robots, now } = useFarmLive();
@@ -18,25 +16,6 @@ export function FarmView() {
   const [pickedRobotId, setPickedRobotId] = useState<string | null>(null);
   const [manualAisle, setManualAisle] = useState<number | null>(null);
   const [targetNodeId, setTargetNodeId] = useState<string | null>(null);
-  const [routeStyle, setRouteStyle] = useState<RouteStyle>("trail");
-
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(ROUTE_STYLE_KEY);
-      if (stored === "trail" || stored === "checkpoint") setRouteStyle(stored);
-    } catch {
-      // storage blocked: keep the default
-    }
-  }, []);
-
-  const changeRouteStyle = (style: RouteStyle) => {
-    setRouteStyle(style);
-    try {
-      window.localStorage.setItem(ROUTE_STYLE_KEY, style);
-    } catch {
-      // storage blocked: the choice lasts for this page view
-    }
-  };
 
   // never null while any robot exists: fall back to the first one
   const selectedRobotId = robots.some((r) => r.id === pickedRobotId) ? pickedRobotId : robots[0]?.id ?? null;
@@ -62,7 +41,7 @@ export function FarmView() {
     const from = selectedNode?.id;
     if (targetNodeId && from && targetNodeId !== from) {
       const nodes = dijkstra(graph, from, targetNodeId);
-      if (nodes && nodes.length > 1) return { key: `preview:${targetNodeId}`, nodes, progress: 0, mode: "preview", moving: false };
+      if (nodes && nodes.length > 1) return { nodes, progress: 0, mode: "preview" };
     }
     return routes.routeFor(selected);
   }, [graph, routes, selected, selectedNode, targetNodeId]);
@@ -102,8 +81,6 @@ export function FarmView() {
             onNodeClick={(id) => setTargetNodeId((current) => (current === id ? null : id))}
             onRobotClick={selectRobot}
             route={route}
-            routeStyle={routeStyle}
-            onRouteStyleChange={changeRouteStyle}
             emptyMessage={emptyMessage}
           />
         </div>

@@ -84,13 +84,10 @@ export const PAL = {
   bay: "#C9A227",
   backdrop: "rgba(135, 191, 255, 0.035)",
   badgeFill: "#0B1F2E",
-  routeGray: "#7D8791",
-  routeLive: "#7FC8B8",
 };
 
 // plant colours
 const PLANT = { stem: "#3A6B18", leaf: "#5E9224", mid: "#8CBB4E", tip: "#B7D68C" };
-export type RouteStyle = "trail" | "checkpoint";
 
 export interface RobotDraw {
   id: string;
@@ -104,15 +101,11 @@ export interface RobotDraw {
 }
 
 export interface RouteDraw {
-  /** Key that identifies one planned route (changes when a new command is sent) */
-  key: string;
   nodes: string[];
   /** Index into nodes of the robot's last confirmed node */
   progress: number;
   /** "preview" = not yet sent (target picked in the form) */
   mode: "preview" | "active";
-  /** Robot is actively driving the next segment */
-  moving: boolean;
 }
 
 export interface RenderInput {
@@ -125,7 +118,6 @@ export interface RenderInput {
   /** Nodes the operator may pick as a target */
   targetable: Set<string>;
   route: RouteDraw | null;
-  routeStyle: RouteStyle;
 }
 
 export interface RendererOptions {
@@ -156,11 +148,9 @@ export class FarmRenderer {
   private robotState = new Map<string, RobotAnim>();
   private slotLayer: SVGGElement | null = null;
   private routeLayer: SVGGElement | null = null;
-  private fadeLayer: SVGGElement | null = null;
   private trailLayer: SVGGElement | null = null;
   private robotLayer: SVGGElement | null = null;
   private labelLayer: SVGGElement | null = null;
-  private routeProgress = new Map<string, number>();
   private destroyed = false;
 
   constructor(svg: SVGSVGElement, opts: RendererOptions = {}) {
@@ -351,8 +341,6 @@ export class FarmRenderer {
     style.textContent =
       "@keyframes activePulse{0%,100%{opacity:1}50%{opacity:.5}}" +
       "@keyframes fwTrail{from{opacity:.5}to{opacity:0}}" +
-      "@keyframes fwSegFade{from{opacity:.9}to{opacity:0}}" +
-      "@keyframes fwSegBlink{0%,100%{opacity:.95}50%{opacity:.25}}" +
       ".fw-hidden{opacity:0}" +
       ".fw-slot:hover .fw-outline{opacity:1;stroke:" + this.accent() + ";fill:" + this.accent() + ";fill-opacity:.06}" +
       "@media (prefers-reduced-motion:reduce){[style*=animation]{animation:none!important}}";
@@ -686,7 +674,6 @@ export class FarmRenderer {
 
     this.slotLayer = this.mk("g", {}, svg);
     this.routeLayer = this.mk("g", { "pointer-events": "none" }, svg);
-    this.fadeLayer = this.mk("g", { "pointer-events": "none" }, svg);
     this.trailLayer = this.mk("g", { "pointer-events": "none" }, svg); // path trail sits under the rovers
     this.robotLayer = this.mk("g", {}, svg);
 
@@ -701,7 +688,6 @@ export class FarmRenderer {
     this.mk("rect", { x: DOCK0, y: gnd, width: ELEV1 - DOCK0, height: 4, fill: P.frame, rx: 1 }, frame);
     this.drawDock(svg);
     this.drawElevator(svg);
-    this.routeProgress.clear();
   }
 
   // ---------- slots: empty-slot outlines + click targets ----------
@@ -772,41 +758,13 @@ export class FarmRenderer {
       return;
     }
 
+    // remaining route as a faint dashed line; travelled hops leave the design's fading trail
     const progress = Math.max(0, Math.min(route.progress, nodes.length - 1));
-
-    if (input.routeStyle === "trail") {
-      // remaining route as a faint dashed line; travelled hops leave the design's fading trail
-      for (let i = progress; i < nodes.length - 1; i++) {
-        this.segment(layer, nodes[i], nodes[i + 1], { stroke: accent, "stroke-width": 1.2, "stroke-dasharray": "2 5", opacity: 0.45 });
-      }
-      const end = this.point(nodes[nodes.length - 1]);
-      if (end) this.mk("circle", { cx: end.x, cy: end.y, r: 2.8, fill: accent, opacity: 0.55 }, layer);
-      this.routeProgress.set(route.key, progress);
-      return;
-    }
-
-    // checkpoint style: whole estimate grayed out, the segment being driven
-    // blinks, and a confirmed segment fades out once the robot reports the node
-    const last = this.routeProgress.get(route.key);
-    if (last !== undefined && progress > last && this.fadeLayer) {
-      const fade = this.mk("g", { style: "animation:fwSegFade 3s linear forwards" }, this.fadeLayer);
-      for (let i = last; i < progress; i++) {
-        this.segment(fade, nodes[i], nodes[i + 1], { stroke: PAL.routeLive, "stroke-width": 2.2 });
-      }
-      window.setTimeout(() => fade.remove(), 3200);
-    }
-    this.routeProgress.set(route.key, progress);
-
     for (let i = progress; i < nodes.length - 1; i++) {
-      const live = i === progress && route.moving;
-      this.segment(layer, nodes[i], nodes[i + 1], live
-        ? { stroke: PAL.routeLive, "stroke-width": 2.2, style: "animation:fwSegBlink 1.1s ease-in-out infinite" }
-        : { stroke: PAL.routeGray, "stroke-width": 2, opacity: 0.5 });
+      this.segment(layer, nodes[i], nodes[i + 1], { stroke: accent, "stroke-width": 1.2, "stroke-dasharray": "2 5", opacity: 0.45 });
     }
-    for (let i = progress + 1; i < nodes.length; i++) {
-      const pt = this.point(nodes[i]);
-      if (pt) this.mk("circle", { cx: pt.x, cy: pt.y, r: i === nodes.length - 1 ? 3 : 2.2, fill: PAL.routeGray, opacity: 0.7 }, layer);
-    }
+    const end = this.point(nodes[nodes.length - 1]);
+    if (end) this.mk("circle", { cx: end.x, cy: end.y, r: 2.8, fill: accent, opacity: 0.55 }, layer);
   }
 
   // ---------- robots ----------
