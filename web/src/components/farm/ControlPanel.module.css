@@ -74,26 +74,26 @@
 .st_docking,
 .cmd_sent {
   color: var(--cyan);
-  border-color: rgba(103, 223, 255, 0.35);
+  border-color: rgb(var(--cyan-rgb) / 0.35);
 }
 
 .st_working,
 .st_charging,
 .st_idle {
   color: var(--teal);
-  border-color: rgba(111, 247, 195, 0.35);
+  border-color: rgb(var(--teal-rgb) / 0.35);
 }
 
 .st_manual,
 .cmd_pending {
   color: var(--amber);
-  border-color: rgba(255, 196, 95, 0.4);
+  border-color: rgb(var(--amber-rgb) / 0.4);
 }
 
 .st_error,
 .cmd_failed {
   color: var(--danger);
-  border-color: rgba(255, 106, 139, 0.45);
+  border-color: rgb(var(--danger-rgb) / 0.45);
 }
 
 .btn {
@@ -101,15 +101,15 @@
   padding: 0.6rem 0.9rem;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  background: rgba(3, 15, 24, 0.7);
+  background: rgb(var(--surface-rgb) / 0.7);
   color: var(--text);
   font-weight: 600;
   transition: background 160ms ease, border-color 160ms ease;
 }
 
 .btn:hover:not(:disabled) {
-  border-color: rgba(103, 223, 255, 0.4);
-  background: rgba(103, 223, 255, 0.08);
+  border-color: rgb(var(--cyan-rgb) / 0.4);
+  background: rgb(var(--cyan-rgb) / 0.08);
 }
 
 .btn:focus-visible,
@@ -125,32 +125,32 @@
 
 .stop {
   min-height: 3rem;
-  border-color: rgba(255, 106, 139, 0.55);
-  background: rgba(255, 106, 139, 0.16);
-  color: #ffd6df;
+  border-color: rgb(var(--danger-rgb) / 0.55);
+  background: rgb(var(--danger-rgb) / 0.16);
+  color: var(--danger-ink);
   font-size: 1rem;
   letter-spacing: 0.04em;
 }
 
 .stop:hover:not(:disabled) {
   border-color: var(--danger);
-  background: rgba(255, 106, 139, 0.26);
+  background: rgb(var(--danger-rgb) / 0.26);
 }
 
 .primary {
-  border-color: rgba(111, 247, 195, 0.45);
-  background: rgba(111, 247, 195, 0.12);
+  border-color: rgb(var(--teal-rgb) / 0.45);
+  background: rgb(var(--teal-rgb) / 0.12);
 }
 
 .primary:hover:not(:disabled) {
   border-color: var(--teal);
-  background: rgba(111, 247, 195, 0.2);
+  background: rgb(var(--teal-rgb) / 0.2);
 }
 
 .confirm {
   border-color: var(--amber);
-  background: rgba(255, 196, 95, 0.16);
-  color: #ffe6b8;
+  background: rgb(var(--amber-rgb) / 0.16);
+  color: var(--amber-ink);
 }
 
 .pair {
@@ -210,15 +210,15 @@
 .message {
   margin: 0;
   padding: 0.55rem 0.75rem;
-  border: 1px solid rgba(111, 247, 195, 0.3);
+  border: 1px solid rgb(var(--teal-rgb) / 0.3);
   border-radius: var(--radius-sm);
-  background: rgba(111, 247, 195, 0.08);
+  background: rgb(var(--teal-rgb) / 0.08);
   font-size: 0.85rem;
 }
 
 .messageError {
-  border-color: rgba(255, 106, 139, 0.4);
-  background: rgba(255, 106, 139, 0.08);
+  border-color: rgb(var(--danger-rgb) / 0.4);
+  background: rgb(var(--danger-rgb) / 0.08);
 }
 
 .log {

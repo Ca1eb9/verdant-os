@@ -82,7 +82,8 @@ export function MetricChartPanel({
   title,
 }: MetricChartPanelProps) {
   const hasRightAxis = series.some((item) => item.axisId === "right");
-  const { fmt } = usePreferences();
+  const { fmt, theme } = usePreferences();
+  const axis = theme === "light" ? { grid: "rgba(15,23,42,0.08)", tick: "#56667a" } : { grid: "rgba(255,255,255,0.06)", tick: "#8aa3bc" };
 
   return (
     <article className={`glassPanel ${styles.chartPanel}`}>
@@ -94,13 +95,13 @@ export function MetricChartPanel({
       <div className={styles.chartBody}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
-            <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+            <CartesianGrid stroke={axis.grid} vertical={false} />
             <XAxis
               dataKey="timestamp"
               axisLine={false}
               tickLine={false}
               minTickGap={24}
-              tick={{ fill: "#8aa3bc", fontSize: 12 }}
+              tick={{ fill: axis.tick, fontSize: 12 }}
               tickFormatter={(value) => fmt.tick(value, range !== "7d")}
             />
             <YAxis
@@ -108,7 +109,7 @@ export function MetricChartPanel({
               axisLine={false}
               tickLine={false}
               width={44}
-              tick={{ fill: "#8aa3bc", fontSize: 12 }}
+              tick={{ fill: axis.tick, fontSize: 12 }}
             />
             {hasRightAxis ? (
               <YAxis
@@ -117,7 +118,7 @@ export function MetricChartPanel({
                 axisLine={false}
                 tickLine={false}
                 width={44}
-                tick={{ fill: "#8aa3bc", fontSize: 12 }}
+                tick={{ fill: axis.tick, fontSize: 12 }}
               />
             ) : null}
             <Tooltip content={<ChartTooltip series={series} />} />

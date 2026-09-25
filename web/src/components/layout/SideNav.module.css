@@ -13,7 +13,7 @@
     height: 100vh;
     padding: 0.85rem 0.6rem;
     border-right: 1px solid var(--line);
-    background: rgba(6, 19, 29, 0.78);
+    background: rgb(var(--surface-rgb) / 0.78);
     backdrop-filter: blur(12px);
     overflow: hidden;
     transition: width 180ms ease;
@@ -43,7 +43,7 @@
   height: 2.3rem;
   border-radius: var(--radius-md);
   object-fit: cover;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgb(var(--highlight-rgb) / 0.08);
 }
 
 .brandText {
@@ -79,7 +79,7 @@
 
 .item:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgb(var(--highlight-rgb) / 0.03);
 }
 
 .item:focus-visible,
@@ -91,8 +91,8 @@
 
 .active {
   color: var(--text);
-  background: rgba(103, 223, 255, 0.08);
-  border-color: rgba(103, 223, 255, 0.22);
+  background: rgb(var(--cyan-rgb) / 0.08);
+  border-color: rgb(var(--cyan-rgb) / 0.22);
 }
 
 .icon {
@@ -119,7 +119,7 @@
 
 .iconButton:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgb(var(--highlight-rgb) / 0.05);
 }
 
 /* expand: logo that swaps to an arrow on hover (collapsed only) */
@@ -145,7 +145,7 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.06);
+  background: rgb(var(--highlight-rgb) / 0.06);
   opacity: 0;
   transition: opacity 140ms ease;
 }

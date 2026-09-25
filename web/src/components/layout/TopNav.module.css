@@ -12,7 +12,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  background: rgba(7, 22, 34, 0.9);
+  background: rgb(var(--surface-rgb) / 0.9);
 }
 
 .brand {
@@ -29,7 +29,7 @@
   height: 2.4rem;
   border-radius: var(--radius-md);
   object-fit: cover;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgb(var(--highlight-rgb) / 0.08);
 }
 
 .brandMeta {
@@ -67,8 +67,8 @@
   min-height: 2.35rem;
   padding: 0.45rem 0.8rem;
   border-radius: var(--radius-control);
-  border: 1px solid rgba(129, 181, 255, 0.14);
-  background: rgba(3, 15, 24, 0.74);
+  border: 1px solid rgb(var(--line-rgb) / 0.14);
+  background: rgb(var(--surface-rgb) / 0.74);
   color: var(--text);
   font-size: 0.85rem;
   white-space: nowrap;
@@ -89,8 +89,8 @@
 }
 
 .installButton:hover {
-  border-color: rgba(111, 247, 195, 0.32);
-  background: rgba(111, 247, 195, 0.12);
+  border-color: rgb(var(--teal-rgb) / 0.32);
+  background: rgb(var(--teal-rgb) / 0.12);
 }
 
 /* phones and tablets: floating dock, low and tight */
@@ -106,12 +106,12 @@
   gap: 0.15rem;
   padding: 0.3rem;
   border-radius: 1.25rem;
-  border: 1px solid rgba(129, 181, 255, 0.14);
-  background: rgba(6, 19, 29, 0.88);
+  border: 1px solid rgb(var(--line-rgb) / 0.14);
+  background: rgb(var(--surface-rgb) / 0.88);
   backdrop-filter: blur(20px) saturate(140%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 12px 28px rgba(1, 10, 18, 0.55);
+    inset 0 1px 0 rgb(var(--highlight-rgb) / 0.06),
+    0 12px 28px rgb(var(--shadow-rgb) / 0.55);
 }
 
 .navItem {
@@ -149,8 +149,8 @@
 
 .active {
   color: var(--text);
-  background: rgba(103, 223, 255, 0.1);
-  border-color: rgba(103, 223, 255, 0.22);
+  background: rgb(var(--cyan-rgb) / 0.1);
+  border-color: rgb(var(--cyan-rgb) / 0.22);
 }
 
 .navIcon {

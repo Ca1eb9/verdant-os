@@ -24,9 +24,9 @@ interface SensorCardProps {
 }
 
 const accentMap: Record<CardAccent, string> = {
-  cyan: "103, 223, 255",
-  teal: "111, 247, 195",
-  lime: "216, 255, 114",
+  cyan: "var(--cyan-rgb)",
+  teal: "var(--teal-rgb)",
+  lime: "var(--lime-rgb)",
 };
 
 export function SensorCard({

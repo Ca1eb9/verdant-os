@@ -44,21 +44,21 @@
   min-height: 2.9rem;
   padding: 0.7rem 1rem;
   border-radius: var(--radius-control);
-  border: 1px solid rgba(129, 181, 255, 0.12);
-  background: rgba(4, 17, 28, 0.72);
+  border: 1px solid rgb(var(--line-rgb) / 0.12);
+  background: rgb(var(--surface-rgb) / 0.72);
   color: var(--muted);
   transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
 }
 
 .rangeButton:hover {
   transform: translateY(-1px);
-  border-color: rgba(103, 223, 255, 0.24);
+  border-color: rgb(var(--cyan-rgb) / 0.24);
 }
 
 .rangeActive {
   color: var(--text);
-  background: rgba(103, 223, 255, 0.14);
-  border-color: rgba(103, 223, 255, 0.3);
+  background: rgb(var(--cyan-rgb) / 0.14);
+  border-color: rgb(var(--cyan-rgb) / 0.3);
 }
 
 .summaryGrid {
@@ -72,8 +72,8 @@
   display: grid;
   gap: 0.45rem;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(129, 181, 255, 0.12);
-  background: rgba(4, 17, 28, 0.58);
+  border: 1px solid rgb(var(--line-rgb) / 0.12);
+  background: rgb(var(--surface-rgb) / 0.58);
 }
 
 .summaryValue {
@@ -122,8 +122,8 @@
   min-width: 12rem;
   padding: 0.9rem;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(129, 181, 255, 0.18);
-  background: rgba(2, 13, 22, 0.94);
+  border: 1px solid rgb(var(--line-rgb) / 0.18);
+  background: rgb(var(--surface-rgb) / 0.94);
   box-shadow: var(--shadow);
 }
 

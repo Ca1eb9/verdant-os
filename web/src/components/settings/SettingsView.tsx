@@ -2,10 +2,47 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
-import { TIME_ZONES, type TimeZoneSetting } from "@/lib/preferences";
+import { TIME_ZONES, type ThemePreference, type TimeZoneSetting } from "@/lib/preferences";
 import styles from "@/components/settings/SettingsView.module.css";
 
 const SAMPLE_C = 23.8;
+
+const THEMES: { value: ThemePreference; label: string; icon: ReactNode }[] = [
+  {
+    value: "system",
+    label: "System",
+    icon: (
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+        <rect x="1.5" y="2.5" width="13" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+        <path d="M5.5 14h5M8 11.5V14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    value: "light",
+    label: "Light",
+    icon: (
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+        <circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" strokeWidth="1.4" />
+        <path
+          d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
+  },
+  {
+    value: "dark",
+    label: "Dark",
+    icon: (
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+        <path d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5a5.8 5.8 0 1 0 7.1 7.1Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+];
 
 function Row({ id, label, hint, children }: { id: string; label: string; hint: string; children: ReactNode }) {
   return (
@@ -22,7 +59,7 @@ function Row({ id, label, hint, children }: { id: string; label: string; hint: s
 }
 
 export function SettingsView() {
-  const { prefs, setPref, reset, fmt } = usePreferences();
+  const { prefs, setPref, reset, fmt, theme } = usePreferences();
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -39,6 +76,29 @@ export function SettingsView() {
       </header>
 
       <div className={`glassPanel ${styles.panel}`}>
+        <h2 className={styles.groupTitle}>Appearance</h2>
+
+        <Row
+          id="theme"
+          label="Theme"
+          hint={prefs.theme === "system" ? `Follows your device (currently ${theme}).` : "Overrides your device setting."}
+        >
+          <div className="segmented" role="group" id="theme" aria-label="Theme">
+            {THEMES.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`segment ${styles.iconSegment}`}
+                aria-pressed={prefs.theme === option.value}
+                onClick={() => setPref("theme", option.value)}
+              >
+                {option.icon}
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </Row>
+
         <h2 className={styles.groupTitle}>Display</h2>
 
         <Row id="temperature-unit" label="Temperature" hint="Sensor readings and history charts.">

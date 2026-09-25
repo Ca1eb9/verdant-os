@@ -8,8 +8,9 @@ import { AppShell } from "@/components/layout/AppShell";
 import { PwaRegistrar } from "@/components/pwa/PwaRegistrar";
 
 // one typeface on every OS instead of whatever Bahnschrift/Aptos falls back to
-// applies the saved sidebar state before first paint so it doesn't flash open
-const SIDEBAR_SCRIPT = `try{var p=JSON.parse(localStorage.getItem("verdantos:preferences")||"{}");document.documentElement.dataset.sidebar=p.sidebarCollapsed===true?"collapsed":"expanded"}catch(e){}`;
+// applies the saved theme and sidebar state before first paint so neither flashes.
+// Theme: saved choice, else the browser's preference, else dark.
+const PREPAINT_SCRIPT = `(function(){var d=document.documentElement,p={};try{p=JSON.parse(localStorage.getItem("verdantos:preferences")||"{}")||{}}catch(e){}var t=p.theme==="light"||p.theme==="dark"?p.theme:(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");d.dataset.theme=t;d.dataset.sidebar=p.sidebarCollapsed===true?"collapsed":"expanded"})()`;
 
 const plexSans = IBM_Plex_Sans({
   subsets: ["latin"],
@@ -82,9 +83,9 @@ export const viewport: Viewport = {
   viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: dark)", color: "#07131d" },
-    { media: "(prefers-color-scheme: light)", color: "#07131d" },
+    { media: "(prefers-color-scheme: light)", color: "#eef2f6" },
   ],
-  colorScheme: "dark",
+  colorScheme: "dark light",
 };
 
 export default function RootLayout({
@@ -93,9 +94,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${plexSans.variable} ${plexMono.variable}`} suppressHydrationWarning>
+    <html lang="en" data-theme="dark" className={`${plexSans.variable} ${plexMono.variable}`} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: SIDEBAR_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: PREPAINT_SCRIPT }} />
       </head>
       <body>
         <PwaRegistrar />

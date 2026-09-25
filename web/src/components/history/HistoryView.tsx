@@ -18,13 +18,20 @@ import type { HistoryRange } from "@/lib/types";
 import styles from "@/components/history/HistoryView.module.css";
 
 const rangeOptions: HistoryRange[] = ["24h", "72h", "7d"];
+
+// series colours per theme (light uses deeper tones so lines read on white)
+const SERIES_COLORS = {
+  dark: { cyan: "#67dfff", teal: "#6ff7c3", amber: "#ffc45f", lime: "#d8ff72" },
+  light: { cyan: "#0891b2", teal: "#059669", amber: "#d97706", lime: "#65a30d" },
+} as const;
 const RANGE_ARROW = "\u2192";
 const MID_DOT = "\u00B7";
 
 export function HistoryView() {
   const { activeFarmId, farm } = useSelectedFarm();
   const [range, setRange] = useState<HistoryRange>("72h");
-  const { fmt, prefs } = usePreferences();
+  const { fmt, prefs, theme } = usePreferences();
+  const color = SERIES_COLORS[theme];
   const DEGREE = fmt.tempUnit;
 
   // temperatures are stored in °C; convert once for display
@@ -79,7 +86,7 @@ export function HistoryView() {
         {
           key: "air.temperature",
           label: "Air Temp",
-          color: "#67dfff",
+          color: color.cyan,
           unit: DEGREE,
           precision: 1,
           axisId: "left" as const,
@@ -87,7 +94,7 @@ export function HistoryView() {
         {
           key: "air.humidity",
           label: "Humidity",
-          color: "#6ff7c3",
+          color: color.teal,
           unit: "%",
           precision: 0,
           axisId: "right" as const,
@@ -101,7 +108,7 @@ export function HistoryView() {
         {
           key: "air.pressure",
           label: "Pressure",
-          color: "#ffc45f",
+          color: color.amber,
           unit: "hPa",
           precision: 1,
           axisId: "left" as const,
@@ -115,7 +122,7 @@ export function HistoryView() {
         {
           key: "water.temperature",
           label: "Water Temp",
-          color: "#67dfff",
+          color: color.cyan,
           unit: DEGREE,
           precision: 1,
           axisId: "left" as const,
@@ -123,7 +130,7 @@ export function HistoryView() {
         {
           key: "water.level",
           label: "Water Level",
-          color: "#6ff7c3",
+          color: color.teal,
           unit: "%",
           precision: 0,
           axisId: "right" as const,
@@ -137,7 +144,7 @@ export function HistoryView() {
         {
           key: "water.ph",
           label: "pH",
-          color: "#d8ff72",
+          color: color.lime,
           unit: "",
           precision: 2,
           axisId: "left" as const,
@@ -145,7 +152,7 @@ export function HistoryView() {
         {
           key: "water.ec",
           label: "EC",
-          color: "#67dfff",
+          color: color.cyan,
           unit: "mS/cm",
           precision: 2,
           axisId: "right" as const,
@@ -159,7 +166,7 @@ export function HistoryView() {
         {
           key: "light.ppfd",
           label: "PPFD",
-          color: "#d8ff72",
+          color: color.lime,
           unit: "PPFD",
           precision: 0,
           axisId: "left" as const,

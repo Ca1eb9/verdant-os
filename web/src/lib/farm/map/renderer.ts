@@ -61,7 +61,7 @@ const PLANT_VAR = [
 // ---- palette: muted structure, accents only on robots/status ----
 // Text and badge colours are retuned for the dashboard's dark theme; the
 // structure, plant, water and light colours are the design's own.
-export const PAL = {
+export const PAL_DARK = {
   frame: "#6E6A66",
   shelf: "#8A8178",
   shelfLit: "#A79D93",
@@ -84,6 +84,15 @@ export const PAL = {
   bay: "#C9A227",
   backdrop: "rgba(135, 191, 255, 0.035)",
   badgeFill: "#0B1F2E",
+};
+
+// light theme: the side-view design's original colours for backdrop, text and badge
+export const PAL_LIGHT: typeof PAL_DARK = {
+  ...PAL_DARK,
+  ink: "#2E2A26",
+  muted: "#6A645E",
+  backdrop: "#FBFAF8",
+  badgeFill: "#FFFFFF",
 };
 
 // plant colours
@@ -121,6 +130,7 @@ export interface RenderInput {
 }
 
 export interface RendererOptions {
+  theme?: "light" | "dark";
   accent?: string;
   beamOpacity?: number;
   showBeams?: boolean;
@@ -152,18 +162,22 @@ export class FarmRenderer {
   private robotLayer: SVGGElement | null = null;
   private labelLayer: SVGGElement | null = null;
   private destroyed = false;
+  private PAL = PAL_DARK;
 
   constructor(svg: SVGSVGElement, opts: RendererOptions = {}) {
     this.svg = svg;
     this.opts = opts;
+    this.PAL = opts.theme === "light" ? PAL_LIGHT : PAL_DARK;
   }
 
   setOptions(opts: RendererOptions) {
     const redraw =
       opts.accent !== this.opts.accent ||
       opts.beamOpacity !== this.opts.beamOpacity ||
-      opts.showBeams !== this.opts.showBeams;
+      opts.showBeams !== this.opts.showBeams ||
+      opts.theme !== this.opts.theme;
     this.opts = opts;
+    this.PAL = opts.theme === "light" ? PAL_LIGHT : PAL_DARK;
     if (redraw && this.input) {
       this.staticKey = "";
       this.render(this.input);
@@ -335,7 +349,7 @@ export class FarmRenderer {
 
   // ---------- defs ----------
   private defs(svg: SVGSVGElement) {
-    const P = PAL;
+    const P = this.PAL;
     const d = this.mk("defs", {}, svg);
     const style = this.mk("style", {}, d);
     style.textContent =
@@ -459,7 +473,7 @@ export class FarmRenderer {
 
   // ---------- drawShelf: C-channel rail with a central \__/ water basin ----------
   private drawShelf(p: Element, lv: Level) {
-    const P = PAL;
+    const P = this.PAL;
     const t = 6;
     const dp = dip(lv);
     const R = dp.ramp;
@@ -485,7 +499,7 @@ export class FarmRenderer {
 
   // ---------- drawWater: basin body (before rovers) + surface (after) ----------
   private drawWater(p: Element, lv: Level) {
-    const P = PAL;
+    const P = this.PAL;
     const dp = dip(lv);
     const R = dp.ramp;
     const sy = dp.y + 3;
@@ -505,7 +519,7 @@ export class FarmRenderer {
   }
 
   private drawWaterSurface(p: Element, lv: Level, li: number, phase: number) {
-    const P = PAL;
+    const P = this.PAL;
     const dp = dip(lv);
     const x0 = dp.l - dp.ramp;
     const x1 = dp.r + dp.ramp;
@@ -528,7 +542,7 @@ export class FarmRenderer {
 
   // ---------- drawLights: bar + soft fanning beams ----------
   private drawLights(p: Element, lightY: number, shelfY: number) {
-    const P = PAL;
+    const P = this.PAL;
     const x0 = FX + 6;
     const x1 = EX - 6;
     const g = this.mk("g", {}, p);
@@ -554,7 +568,7 @@ export class FarmRenderer {
     data: RobotDraw,
     opts: { active: boolean; selected: boolean; labelLayer: Element; labelY: number },
   ) {
-    const P = PAL;
+    const P = this.PAL;
     const w = W;
     const body = opts.active ? this.accent() : P.parked;
     const trayW = Math.round(w * 0.75);
@@ -624,7 +638,7 @@ export class FarmRenderer {
 
   // ---------- drawDock: wall + pogo contacts at the far left, rover pad to their right ----------
   private drawDock(p: Element) {
-    const P = PAL;
+    const P = this.PAL;
     const x0 = DOCK0;
     const x1 = DOCK1;
     const y = this.levels[0].shelfY;
@@ -641,7 +655,7 @@ export class FarmRenderer {
   }
 
   private drawElevator(p: Element) {
-    const P = PAL;
+    const P = this.PAL;
     const x0 = ELEV0;
     const x1 = ELEV1;
     const gnd = this.input!.scene.gnd;
@@ -657,7 +671,7 @@ export class FarmRenderer {
   private drawFarm() {
     const svg = this.svg;
     const input = this.input!;
-    const P = PAL;
+    const P = this.PAL;
     const gnd = input.scene.gnd;
     svg.innerHTML = "";
     svg.setAttribute("viewBox", `0 0 ${VIEW_W} ${input.scene.viewH}`);
@@ -715,7 +729,7 @@ export class FarmRenderer {
           class: "fw-outline" + (hidden ? " fw-hidden" : ""),
           x: ox, y: slot.y - 5 + sink, width: slot.slotW, height: 22, rx: 2,
           fill: isTarget ? this.accent() : "none", "fill-opacity": isTarget ? 0.12 : 0,
-          stroke: isTarget ? this.accent() : PAL.faint, "stroke-width": isTarget ? 1.2 : 1,
+          stroke: isTarget ? this.accent() : this.PAL.faint, "stroke-width": isTarget ? 1.2 : 1,
           "stroke-dasharray": "3 3", opacity: isTarget ? 1 : 0.8,
         }, g);
       }

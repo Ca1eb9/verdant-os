@@ -1,5 +1,5 @@
-const SHELL_CACHE = "verdantos-shell-v4";
-const RUNTIME_CACHE = "verdantos-runtime-v4";
+const SHELL_CACHE = "verdantos-shell-v5";
+const RUNTIME_CACHE = "verdantos-runtime-v5";
 
 const PRECACHE_URLS = [
   "/",

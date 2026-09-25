@@ -40,7 +40,7 @@
   padding: 0.5rem 0.25rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: rgba(4, 16, 25, 0.55);
+  background: rgb(var(--surface-rgb) / 0.55);
 }
 
 .canvas svg {
@@ -58,7 +58,7 @@
   padding: 0.35rem 0.75rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: rgba(6, 19, 29, 0.92);
+  background: rgb(var(--surface-rgb) / 0.92);
   color: var(--muted);
   max-width: calc(100% - 1rem);
   font-size: 0.8rem;
@@ -99,7 +99,7 @@
   padding: 0.6rem 0.85rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: rgba(3, 15, 24, 0.55);
+  background: rgb(var(--surface-rgb) / 0.55);
   color: var(--muted);
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;

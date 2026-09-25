@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { FarmRenderer, type RouteDraw } from "@/lib/farm/map/renderer";
+import { usePreferences } from "@/components/preferences/PreferencesProvider";
+import { FarmRenderer, type RendererOptions, type RouteDraw } from "@/lib/farm/map/renderer";
 import type { Scene } from "@/lib/farm/map/layout";
 import { resolveNode, type NavGraph } from "@/lib/farm/navigation";
 import { toRobotDraw, type RobotView } from "@/lib/farm/robots";
@@ -49,19 +50,31 @@ export function FarmMap({
   const handlers = useRef({ onNodeClick, onRobotClick });
   handlers.current = { onNodeClick, onRobotClick };
 
+  const { theme } = usePreferences();
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
+
+  const rendererOptions = (current: "light" | "dark"): RendererOptions => ({
+    accent: ACCENT,
+    theme: current,
+    onNodeClick: (id) => handlers.current.onNodeClick?.(id),
+    onRobotClick: (id) => handlers.current.onRobotClick?.(id),
+  });
+
   useEffect(() => {
     if (!svgRef.current) return undefined;
-    const renderer = new FarmRenderer(svgRef.current, {
-      accent: ACCENT,
-      onNodeClick: (id) => handlers.current.onNodeClick?.(id),
-      onRobotClick: (id) => handlers.current.onRobotClick?.(id),
-    });
+    const renderer = new FarmRenderer(svgRef.current, rendererOptions(themeRef.current));
     rendererRef.current = renderer;
     return () => {
       renderer.destroy();
       rendererRef.current = null;
     };
   }, []);
+
+  // switching theme redraws the scene with that theme's palette
+  useEffect(() => {
+    rendererRef.current?.setOptions(rendererOptions(theme));
+  }, [theme]);
 
   const draws = useMemo(() => robots.map((robot) => toRobotDraw(robot, graph, now)), [graph, now, robots]);
 

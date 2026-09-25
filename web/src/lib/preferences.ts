@@ -1,6 +1,8 @@
 // Display preferences: how times and temperatures are shown.
 // Stored per device (see PreferencesProvider); these helpers are pure.
 
+export type ThemePreference = "system" | "light" | "dark";
+export type ResolvedTheme = "light" | "dark";
 export type TemperatureUnit = "C" | "F";
 export type TimeFormat = "12h" | "24h";
 
@@ -16,6 +18,8 @@ export const TIME_ZONES = [
 export type TimeZoneSetting = (typeof TIME_ZONES)[number]["value"];
 
 export interface Preferences {
+  /** "system" follows the browser; dark whenever the browser doesn't ask for light */
+  theme: ThemePreference;
   temperatureUnit: TemperatureUnit;
   timeFormat: TimeFormat;
   timeZone: TimeZoneSetting;
@@ -25,6 +29,7 @@ export interface Preferences {
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
+  theme: "system",
   temperatureUnit: "C",
   timeFormat: "12h",
   timeZone: "local",
@@ -39,6 +44,7 @@ export function normalizePreferences(raw: unknown): Preferences {
     valid(value[key]) ? (value[key] as Preferences[K]) : DEFAULT_PREFERENCES[key];
 
   return {
+    theme: pick("theme", (v) => v === "system" || v === "light" || v === "dark"),
     temperatureUnit: pick("temperatureUnit", (v) => v === "C" || v === "F"),
     timeFormat: pick("timeFormat", (v) => v === "12h" || v === "24h"),
     timeZone: pick("timeZone", (v) => TIME_ZONES.some((zone) => zone.value === v)),
@@ -90,4 +96,10 @@ export function formatTemperature(celsius: number | null, prefs: Preferences, pr
   if (celsius === null || !Number.isFinite(celsius)) return "No reading";
   const value = toDisplayTemp(celsius, prefs.temperatureUnit);
   return `${value.toFixed(precision)} ${temperatureLabel(prefs.temperatureUnit)}`;
+}
+
+/** Light only when chosen, or when the browser explicitly prefers light; dark otherwise */
+export function resolveTheme(pref: ThemePreference, systemPrefersLight: boolean): ResolvedTheme {
+  if (pref === "system") return systemPrefersLight ? "light" : "dark";
+  return pref;
 }
