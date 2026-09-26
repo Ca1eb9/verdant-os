@@ -31,7 +31,7 @@ export interface FarmDataSource {
   getTopology(): Promise<FarmTopology | null>;
   /** Streams the full robot list whenever any robot changes. Returns unsubscribe. */
   subscribeRobots(onRobots: (robots: RobotView[]) => void): () => void;
-  sendCommand(request: CommandRequest, operatorKey: string): Promise<CommandRecord>;
+  sendCommand(request: CommandRequest): Promise<CommandRecord>;
   listRecentCommands(robotId?: string): Promise<CommandRecord[]>;
 }
 
@@ -64,10 +64,10 @@ export const dashboardApiSource: FarmDataSource = {
     onRobots([]);
     return () => undefined;
   },
-  async sendCommand(request, operatorKey) {
+  async sendCommand(request) {
     const response = await fetch("/api/commands", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-operator-key": operatorKey },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify(request),
     });
     const payload = await readJson<{ command: CommandRecord }>(response);

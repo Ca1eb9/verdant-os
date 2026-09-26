@@ -1,9 +1,15 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { SideNav } from "@/components/layout/SideNav";
 import { TopNav } from "@/components/layout/TopNav";
 import styles from "@/components/layout/AppShell.module.css";
 
 export function AppShell({ children }: { children: ReactNode }) {
+  // the login page stands alone, without navigation
+  if (usePathname() === "/login") return <>{children}</>;
+
   return (
     <div className={styles.shell}>
       <SideNav />

@@ -55,8 +55,19 @@ That runs lint, TypeScript, and production build validation.
 - `/history` - deterministic historical charts
 - `/alerts` - current and stored alert review
 - `/config` - deployment and ingestion readiness
+- `/login` - operator sign-in
 - `/api/sensor-events/latest` - latest Supabase sensor event
 - `/api/config/status` - server-side environment and ingestion status
+
+## Operator Sign-In
+
+Every page and API route requires an operator signed in with Supabase Auth (email and password). Sessions are kept in cookies and refreshed on each request, so operators stay signed in for weeks. Sign out from **Settings**.
+
+- **Vercel**: set `SUPABASE_URL` and `SUPABASE_ANON_KEY`. Sign-in fails closed: with these missing, nobody gets in.
+- **Farm Pi (LAN)**: set `AUTH_DISABLED=true`. The dashboard then skips sign-in and never contacts Supabase Auth, so it works with no internet. Only anyone already on the farm WiFi can reach it; do not port-forward it.
+- **Supabase dashboard, once**: Authentication → Sign In / Providers → turn off *Allow new users to sign up*. Add each operator under Authentication → Users → *Add user*. Leave the session *time-box* and *inactivity timeout* off (or at 14 days or more).
+
+Commands sent from the Farm page record the operator's email as `issued_by`.
 
 ## Arduino Live Ingestion
 

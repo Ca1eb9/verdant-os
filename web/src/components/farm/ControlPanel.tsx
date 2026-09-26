@@ -9,7 +9,6 @@ import type { ActionAtTarget, FarmTopology, GraphNode, NodeType, RobotCommand } 
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import styles from "@/components/farm/ControlPanel.module.css";
 
-const KEY_STORAGE = "verdantos:operator-key";
 const POLL_MS = 5_000;
 
 const ACTIONS: Record<NodeType, ActionAtTarget[]> = {
@@ -33,23 +32,6 @@ const COMMAND_LABEL: Record<RobotCommand["command"], string> = {
   stop: "Stop",
   resume: "Resume",
 };
-
-function readKey() {
-  try {
-    return window.localStorage.getItem(KEY_STORAGE) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function storeKey(value: string) {
-  try {
-    if (value) window.localStorage.setItem(KEY_STORAGE, value);
-    else window.localStorage.removeItem(KEY_STORAGE);
-  } catch {
-    // storage blocked: the key lasts for this page view only
-  }
-}
 
 export interface ControlPanelProps {
   source: FarmDataSource;
@@ -87,9 +69,6 @@ export function ControlPanel({
   const node = robot ? resolveNode(graph, robot.currentNode) : undefined;
   const target = targetNodeId ? graph.nodes.get(targetNodeId) : undefined;
 
-  const [operatorKey, setOperatorKey] = useState("");
-  const [keyDraft, setKeyDraft] = useState("");
-  const [showKey, setShowKey] = useState(false);
   const [quickImmediate, setQuickImmediate] = useState(false);
   const [action, setAction] = useState<ActionAtTarget | "">("");
   const [durationMin, setDurationMin] = useState("");
@@ -98,8 +77,6 @@ export function ControlPanel({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [recent, setRecent] = useState<CommandRecord[]>([]);
-
-  useEffect(() => setOperatorKey(readKey()), []);
 
   // action list follows the target's node type
   const actions = target ? ACTIONS[target.type] : [];
@@ -141,15 +118,10 @@ export function ControlPanel({
 
   const send = async (request: CommandRequest, after?: () => void) => {
     if (!robot) return;
-    if (!operatorKey) {
-      setShowKey(true);
-      setMessage({ tone: "error", text: "Enter the operator key to send commands." });
-      return;
-    }
     setBusy(true);
     setMessage(null);
     try {
-      await source.sendCommand(request, operatorKey);
+      await source.sendCommand(request);
       const target = request.command.target_node;
       setMessage({
         tone: "ok",
@@ -160,8 +132,12 @@ export function ControlPanel({
       after?.();
       void refreshRecent();
     } catch (err) {
-      const text = err instanceof Error ? err.message : "Could not send the command.";
-      if (err instanceof CommandError && err.status === 401) setShowKey(true);
+      const text =
+        err instanceof CommandError && err.status === 401
+          ? "Your session expired. Sign in again to send commands."
+          : err instanceof Error
+            ? err.message
+            : "Could not send the command.";
       setMessage({ tone: "error", text });
     } finally {
       setBusy(false);
@@ -210,15 +186,6 @@ export function ControlPanel({
       onRouteStart(robot, target.id);
       onTargetChange(null);
     });
-  };
-
-  const saveKey = () => {
-    const value = keyDraft.trim();
-    storeKey(value);
-    setOperatorKey(value);
-    setKeyDraft("");
-    setShowKey(false);
-    setMessage(value ? { tone: "ok", text: "Operator key saved on this device." } : null);
   };
 
   const levelOf = (n: GraphNode | undefined) => (n ? scene.levels.findIndex((lv) => lv.z === n.z) + 1 : 0);
@@ -428,34 +395,6 @@ export function ControlPanel({
         )}
       </section>
 
-      <section className={styles.keyRow}>
-        {showKey ? (
-          <form
-            className={styles.keyForm}
-            onSubmit={(event) => {
-              event.preventDefault();
-              saveKey();
-            }}
-          >
-            <input
-              id="operator-key"
-              className="controlSelect"
-              type="password"
-              autoComplete="off"
-              placeholder="Operator key"
-              value={keyDraft}
-              onChange={(event) => setKeyDraft(event.target.value)}
-            />
-            <button type="submit" className={styles.btn}>
-              Save
-            </button>
-          </form>
-        ) : (
-          <button type="button" className={styles.linkBtn} onClick={() => setShowKey(true)}>
-            {operatorKey ? "Change operator key" : "Set operator key"}
-          </button>
-        )}
-      </section>
     </aside>
   );
 }

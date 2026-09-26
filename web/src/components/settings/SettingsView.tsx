@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { signOut } from "@/app/login/actions";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { TIME_ZONES, type ThemePreference, type TimeZoneSetting } from "@/lib/preferences";
 import styles from "@/components/settings/SettingsView.module.css";
@@ -58,7 +59,8 @@ function Row({ id, label, hint, children }: { id: string; label: string; hint: s
   );
 }
 
-export function SettingsView() {
+/** account: the signed-in operator's email, or null when there is no sign-in */
+export function SettingsView({ account }: { account: string | null }) {
   const { prefs, setPref, reset, fmt, theme } = usePreferences();
   const [now, setNow] = useState(() => Date.now());
 
@@ -173,6 +175,19 @@ export function SettingsView() {
           </button>
         </div>
       </div>
+
+      {account ? (
+        <div className={`glassPanel ${styles.panel}`}>
+          <h2 className={styles.groupTitle}>Account</h2>
+          <Row id="sign-out" label="Signed in" hint={account}>
+            <form action={signOut}>
+              <button id="sign-out" type="submit" className={styles.reset}>
+                Sign out
+              </button>
+            </form>
+          </Row>
+        </div>
+      ) : null}
     </section>
   );
 }

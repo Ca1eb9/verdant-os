@@ -1,6 +1,7 @@
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getOperator } from "@/lib/auth";
 import { getSupabaseReadConfig } from "@/lib/supabase-config";
 import type { CommandRecord } from "@/lib/farm/data-source";
 import type { ActionAtTarget, CommandType, RemoteCommand, RobotCommand, TaskPriority } from "@/lib/farm/types";
@@ -23,14 +24,6 @@ function client(key: string, url: string) {
 
 function error(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
-}
-
-function operatorKeyMatches(provided: string | null) {
-  const expected = process.env.OPERATOR_KEY;
-  if (!expected || !provided) return false;
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -95,12 +88,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!process.env.OPERATOR_KEY) {
-    return error("Remote commands are turned off. Set OPERATOR_KEY on the server to enable them.", 503);
-  }
-  if (!operatorKeyMatches(request.headers.get("x-operator-key"))) {
-    return error("Operator key is missing or wrong.", 401);
-  }
+  // the middleware already requires a session; this also names who sent the command
+  const operator = await getOperator();
+  if (!operator) return error("Sign in to send commands.", 401);
 
   const parsed = parseCommand(await request.json().catch(() => null));
   if (typeof parsed === "string") return error(parsed, 400);
@@ -114,7 +104,7 @@ export async function POST(request: Request) {
     id: randomUUID(),
     robot_id: parsed.robotId,
     command: parsed.command,
-    issued_by: "dashboard",
+    issued_by: operator.email,
     issued_at: Date.now(),
   };
 

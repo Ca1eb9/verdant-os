@@ -247,13 +247,3 @@
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
-
-.keyRow {
-  padding-top: 0.2rem;
-}
-
-.keyForm {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.5rem;
-}

@@ -1,13 +1,9 @@
-const SHELL_CACHE = "verdantos-shell-v5";
-const RUNTIME_CACHE = "verdantos-runtime-v5";
+const SHELL_CACHE = "verdantos-shell-v6";
+const RUNTIME_CACHE = "verdantos-runtime-v6";
 
+// pages are not precached: signed out they redirect to /login. They are
+// cached as the operator visits them instead (see handleNavigation).
 const PRECACHE_URLS = [
-  "/",
-  "/farm",
-  "/history",
-  "/alerts",
-  "/config",
-  "/settings",
   "/manifest.webmanifest",
   "/images/sprout-logo.webp",
   "/images/alert-danger.webp",
@@ -79,7 +75,7 @@ async function handleNavigation(request) {
     const response = await fetch(request);
     const cache = await caches.open(RUNTIME_CACHE);
 
-    if (response.ok) {
+    if (response.ok && !response.redirected) {
       cache.put(request, response.clone());
     }
 
