@@ -11,31 +11,6 @@ export function formatInteger(value: number) {
   }).format(value);
 }
 
-export function formatTimestamp(value: string | Date) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-  }).format(new Date(value));
-}
-
-export function formatChartTick(value: string, compact = false) {
-  return new Intl.DateTimeFormat(
-    "en-US",
-    compact
-      ? {
-          hour: "numeric",
-        }
-      : {
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-        },
-  ).format(new Date(value));
-}
-
 export function average(values: number[]) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }

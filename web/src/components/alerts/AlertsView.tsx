@@ -1,25 +1,25 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
-import { AssetImage } from "@/components/ui/AssetImage";
 import { evaluateTelemetryAlerts, readTelemetryAlerts } from "@/lib/alerts";
-import { FARMS } from "@/lib/mock-data";
-import { formatTimestamp } from "@/lib/format";
+import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { useFarmTelemetry } from "@/hooks/useFarmTelemetry";
 import type { TelemetryAlert } from "@/lib/types";
 import styles from "@/components/alerts/AlertsView.module.css";
-
-const ALERT_FALLBACK = "\u26A0\uFE0F";
 
 function alertSignature(alert: Pick<TelemetryAlert, "farmId" | "metric" | "severity" | "title" | "threshold">) {
   return [alert.farmId, alert.metric, alert.severity, alert.title, alert.threshold ?? ""].join("|");
 }
 
 export function AlertsView() {
-  const { activeFarmId, farm, setActiveFarmId } = useSelectedFarm();
+  const { activeFarmId, farm } = useSelectedFarm();
+  const { fmt } = usePreferences();
   const [limit, setLimit] = useState<10 | 20>(20);
   const { snapshot, lastUpdate } = useFarmTelemetry(activeFarmId);
+  // stored alerts live in the browser, so build the list after mount to match the server render
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const currentAlerts = useMemo(
     () => evaluateTelemetryAlerts(farm, snapshot, lastUpdate, Date.now()),
@@ -27,6 +27,7 @@ export function AlertsView() {
   );
 
   const alerts = useMemo(() => {
+    if (!mounted) return [];
     const combined = [...currentAlerts, ...readTelemetryAlerts(activeFarmId)];
     const seen = new Set<string>();
     const deduped: TelemetryAlert[] = [];
@@ -46,7 +47,7 @@ export function AlertsView() {
     }
 
     return deduped.slice(0, limit);
-  }, [activeFarmId, currentAlerts, limit]);
+  }, [activeFarmId, currentAlerts, limit, mounted]);
 
   const counts = useMemo(
     () => ({
@@ -58,7 +59,7 @@ export function AlertsView() {
 
   return (
     <section className="pageSection">
-      <div className={`glassPanel ${styles.hero}`}>
+      <header className={styles.hero}>
         <div className={styles.heroContent}>
           <span className="eyebrow">System alerts</span>
           <h1 className="pageTitle">Alerts</h1>
@@ -66,35 +67,9 @@ export function AlertsView() {
             Review the latest ingestion and sensor warnings for {farm.name}.
           </p>
         </div>
-
-        <div className={styles.heroIconWrap}>
-          <AssetImage
-            src="/images/alert-danger.webp"
-            alt="Alert icon"
-            fallback={ALERT_FALLBACK}
-            className={styles.heroIcon}
-            fallbackClassName={`${styles.heroIcon} assetFallback`}
-          />
-        </div>
-      </div>
+      </header>
 
       <div className={styles.toolbar}>
-        <div className={styles.selectorGroup}>
-          <span className={styles.metaLabel}>Farm</span>
-          <select
-            className="controlSelect"
-            value={activeFarmId}
-            onChange={(event) => setActiveFarmId(event.target.value)}
-            aria-label="Alert farm selector"
-          >
-            {FARMS.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
         <div className={styles.selectorGroup}>
           <span className={styles.metaLabel}>Window</span>
           <div className={styles.rangeRow}>
@@ -130,7 +105,9 @@ export function AlertsView() {
         </article>
         <article className={`glassPanel ${styles.summaryCard}`}>
           <span className={styles.summaryLabel}>Heartbeat</span>
-          <strong className={styles.summaryValue}>{formatTimestamp(lastUpdate)}</strong>
+          <strong className={styles.summaryValue} suppressHydrationWarning>
+            {fmt.time(lastUpdate)}
+          </strong>
           <span className={styles.summaryDetail}>Last sensor heartbeat seen</span>
         </article>
       </div>
@@ -154,11 +131,12 @@ export function AlertsView() {
                 </span>
               </div>
 
+              {/* message text is stored when the alert fires, in the units it was recorded with */}
               <p className={styles.alertMessage}>{alert.message}</p>
 
               <div className={styles.alertMeta}>
                 <span>
-                  <strong>Detected:</strong> {formatTimestamp(alert.detectedAt)}
+                  <strong>Detected:</strong> {fmt.time(alert.detectedAt)}
                 </span>
                 {alert.value ? (
                   <span>

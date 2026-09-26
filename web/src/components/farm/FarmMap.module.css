@@ -1,0 +1,135 @@
+.map {
+  display: grid;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.toolLabel {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.tabDot {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.3rem;
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 50%;
+  background: #d9722e;
+}
+
+.caption {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.canvas {
+  position: relative;
+  padding: 0.5rem 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgb(var(--surface-rgb) / 0.55);
+}
+
+.canvas svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+.overlay {
+  position: absolute;
+  left: 50%;
+  top: 0.9rem;
+  transform: translateX(-50%);
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgb(var(--surface-rgb) / 0.92);
+  color: var(--muted);
+  max-width: calc(100% - 1rem);
+  font-size: 0.8rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.legend i.dashed {
+  border: 1px dashed #bdb6ae;
+}
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1.1rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgb(var(--surface-rgb) / 0.55);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.status strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+@media (max-width: 560px) {
+  .caption {
+    display: none;
+  }
+
+  /* keep rovers legible on phones: the drawing scrolls sideways instead of shrinking */
+  .canvas {
+    overflow-x: auto;
+  }
+
+  .canvas svg {
+    min-width: 540px;
+  }
+
+  .overlay {
+    position: sticky;
+    left: 0;
+    display: block;
+    width: fit-content;
+    margin: 0 auto 0.4rem;
+    transform: none;
+  }
+}

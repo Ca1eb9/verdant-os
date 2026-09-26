@@ -2,45 +2,37 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useSelectedFarm } from "@/components/farms/FarmContext";
+import { isActive, NAV_ITEMS } from "@/components/layout/nav-items";
 import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 import { AssetImage } from "@/components/ui/AssetImage";
+import { FARMS } from "@/lib/mock-data";
 import styles from "@/components/layout/TopNav.module.css";
 
-const DASHBOARD_FALLBACK = "\uD83E\uDDED";
-const HISTORY_FALLBACK = "\uD83D\uDCC8";
-const ALERTS_FALLBACK = "\u26A0\uFE0F";
-const CONFIG_FALLBACK = "\u2699\uFE0F";
 const LOGO_FALLBACK = "\uD83C\uDF3F";
 
-const navItems = [
-  {
-    href: "/",
-    label: "Dashboard",
-    icon: "/images/dashboard-icon.svg",
-    fallback: DASHBOARD_FALLBACK,
-  },
-  {
-    href: "/history",
-    label: "History",
-    icon: "/images/history-icon.svg",
-    fallback: HISTORY_FALLBACK,
-  },
-  {
-    href: "/alerts",
-    label: "Alerts",
-    icon: "/images/alert-danger.webp",
-    fallback: ALERTS_FALLBACK,
-  },
-  {
-    href: "/config",
-    label: "Config",
-    icon: "/images/config-icon.svg",
-    fallback: CONFIG_FALLBACK,
-  },
-];
+function useNetworkOnline() {
+  const [online, setOnline] = useState(true);
+
+  useEffect(() => {
+    const sync = () => setOnline(window.navigator.onLine);
+    sync();
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
+  }, []);
+
+  return online;
+}
 
 export function TopNav() {
   const pathname = usePathname();
+  const { activeFarmId, setActiveFarmId } = useSelectedFarm();
+  const online = useNetworkOnline();
 
   return (
     <header className={styles.wrap}>
@@ -60,25 +52,41 @@ export function TopNav() {
         </Link>
 
         <div className={styles.actions}>
-          <span className={styles.readinessBadge}>Offline shell ready</span>
+          <select
+            id="active-farm"
+            className={`controlSelect ${styles.farmSelect}`}
+            value={activeFarmId}
+            onChange={(event) => setActiveFarmId(event.target.value)}
+            aria-label="Active farm"
+          >
+            {FARMS.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+          <span className={`${styles.netBadge} ${online ? styles.netOnline : styles.netOffline}`}>
+            <span className="statusDot" />
+            {online ? "Online" : "Offline"}
+          </span>
           <InstallAppButton className={styles.installButton} />
         </div>
       </div>
 
-      <nav className={styles.bottomDock}>
-        {navItems.map((item) => {
-          const isActive =
-            item.href === "/" ? pathname === item.href : pathname.startsWith(item.href);
+      <nav className={styles.bottomDock} aria-label="Main navigation">
+        {NAV_ITEMS.map((item) => {
+          const active = isActive(pathname, item.href);
 
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`${styles.navItem} ${isActive ? styles.active : ""}`}
+              className={`${styles.navItem} ${active ? styles.active : ""}`}
+              aria-current={active ? "page" : undefined}
             >
               <AssetImage
                 src={item.icon}
-                alt={`${item.label} icon`}
+                alt=""
                 fallback={item.fallback}
                 className={styles.navIcon}
                 fallbackClassName={`${styles.navIcon} assetFallback`}

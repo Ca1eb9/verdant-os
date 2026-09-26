@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { AssetImage } from "@/components/ui/AssetImage";
+import { MetricValue } from "@/components/ui/MetricValue";
 import styles from "@/components/dashboard/DashboardView.module.css";
 
 type CardAccent = "cyan" | "teal" | "lime";
@@ -8,27 +9,24 @@ type MetricTone = "stable" | "watch" | "focus";
 interface SensorCardMetric {
   label: string;
   value: string;
-  hint: string;
   tone: MetricTone;
 }
 
 interface SensorCardProps {
   title: string;
-  subtitle: string;
   icon: string;
   fallback: string;
   accent: CardAccent;
   heroLabel: string;
   heroValue: string;
-  trend: string;
   metrics: SensorCardMetric[];
   visual?: ReactNode;
 }
 
 const accentMap: Record<CardAccent, string> = {
-  cyan: "103, 223, 255",
-  teal: "111, 247, 195",
-  lime: "216, 255, 114",
+  cyan: "var(--cyan-rgb)",
+  teal: "var(--teal-rgb)",
+  lime: "var(--lime-rgb)",
 };
 
 export function SensorCard({
@@ -38,9 +36,7 @@ export function SensorCard({
   heroValue,
   icon,
   metrics,
-  subtitle,
   title,
-  trend,
   visual,
 }: SensorCardProps) {
   return (
@@ -58,17 +54,14 @@ export function SensorCard({
             fallbackClassName={`${styles.sensorIcon} assetFallback`}
           />
         </div>
-        <div className={styles.sensorHead}>
-          <span className="eyebrow">{title}</span>
-          <h2 className={styles.sensorTitle}>{title}</h2>
-          <p className={styles.sensorSubtitle}>{subtitle}</p>
-        </div>
+        <h2 className={styles.sensorTitle}>{title}</h2>
       </div>
 
       <div className={styles.heroValueBlock}>
         <span className={styles.heroValueLabel}>{heroLabel}</span>
-        <strong className={styles.heroValue}>{heroValue}</strong>
-        <span className={styles.heroTrend}>{trend}</span>
+        <strong className={styles.heroValue} suppressHydrationWarning>
+          <MetricValue value={heroValue} />
+        </strong>
       </div>
 
       {visual ? <div className={styles.sensorVisual}>{visual}</div> : null}
@@ -80,8 +73,9 @@ export function SensorCard({
               <span className={styles.metricLabel}>{metric.label}</span>
               <span className={`${styles.metricTone} ${styles[`tone${metric.tone}`]}`} />
             </div>
-            <strong className={styles.metricValue}>{metric.value}</strong>
-            <span className={styles.metricHint}>{metric.hint}</span>
+            <strong className={styles.metricValue} suppressHydrationWarning>
+              <MetricValue value={metric.value} />
+            </strong>
           </div>
         ))}
       </div>

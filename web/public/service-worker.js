@@ -1,11 +1,13 @@
-const SHELL_CACHE = "verdantos-shell-v2";
-const RUNTIME_CACHE = "verdantos-runtime-v2";
+const SHELL_CACHE = "verdantos-shell-v5";
+const RUNTIME_CACHE = "verdantos-runtime-v5";
 
 const PRECACHE_URLS = [
   "/",
+  "/farm",
   "/history",
   "/alerts",
   "/config",
+  "/settings",
   "/manifest.webmanifest",
   "/images/sprout-logo.webp",
   "/images/alert-danger.webp",
@@ -15,8 +17,10 @@ const PRECACHE_URLS = [
   "/images/water-icon.svg",
   "/images/light-icon.svg",
   "/images/dashboard-icon.svg",
+  "/images/farm-icon.svg",
   "/images/history-icon.svg",
   "/images/config-icon.svg",
+  "/images/settings-icon.svg",
   "/images/icon-192.png",
   "/images/icon-512.png",
   "/images/icon-maskable-512.png",

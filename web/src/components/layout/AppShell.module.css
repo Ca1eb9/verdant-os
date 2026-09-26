@@ -1,7 +1,11 @@
 .shell {
   position: relative;
   min-height: 100vh;
-  padding: 0.45rem 0.45rem calc(6.4rem + env(safe-area-inset-bottom, 0px));
+}
+
+.column {
+  min-width: 0;
+  padding: 0.45rem 0.45rem calc(5.4rem + env(safe-area-inset-bottom, 0px));
 }
 
 .main {
@@ -11,9 +15,16 @@
   margin: 0.65rem auto 0;
 }
 
+/* desktop: sidebar column + content; no bottom dock to clear */
 @media (min-width: 980px) {
   .shell {
-    padding: 0.8rem clamp(0.75rem, 1.8vw, 1.4rem) calc(6.5rem + env(safe-area-inset-bottom, 0px));
+    display: grid;
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+    transition: grid-template-columns 180ms ease;
+  }
+
+  .column {
+    padding: 0.8rem clamp(0.75rem, 1.8vw, 1.4rem) 2rem;
   }
 
   .main {

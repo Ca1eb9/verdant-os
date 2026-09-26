@@ -1,5 +1,5 @@
 .hero {
-  padding: 1rem;
+  padding: 0 0.25rem;
   display: grid;
   gap: 1rem;
 }
@@ -43,22 +43,22 @@
   min-width: 4.5rem;
   min-height: 2.9rem;
   padding: 0.7rem 1rem;
-  border-radius: 999px;
-  border: 1px solid rgba(129, 181, 255, 0.12);
-  background: rgba(4, 17, 28, 0.72);
+  border-radius: var(--radius-control);
+  border: 1px solid rgb(var(--line-rgb) / 0.12);
+  background: rgb(var(--surface-rgb) / 0.72);
   color: var(--muted);
   transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
 }
 
 .rangeButton:hover {
   transform: translateY(-1px);
-  border-color: rgba(103, 223, 255, 0.24);
+  border-color: rgb(var(--cyan-rgb) / 0.24);
 }
 
 .rangeActive {
   color: var(--text);
-  background: rgba(103, 223, 255, 0.14);
-  border-color: rgba(103, 223, 255, 0.3);
+  background: rgb(var(--cyan-rgb) / 0.14);
+  border-color: rgb(var(--cyan-rgb) / 0.3);
 }
 
 .summaryGrid {
@@ -71,9 +71,9 @@
   padding: 1rem 1.05rem;
   display: grid;
   gap: 0.45rem;
-  border-radius: 22px;
-  border: 1px solid rgba(129, 181, 255, 0.12);
-  background: rgba(4, 17, 28, 0.58);
+  border-radius: var(--radius-md);
+  border: 1px solid rgb(var(--line-rgb) / 0.12);
+  background: rgb(var(--surface-rgb) / 0.58);
 }
 
 .summaryValue {
@@ -89,7 +89,7 @@
 }
 
 .chartPanel {
-  min-height: 22rem;
+  min-width: 0;
   padding: 1rem;
   display: grid;
   gap: 1rem;
@@ -103,7 +103,8 @@
 .chartTitle {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-size: 1.15rem;
+  font-weight: 600;
 }
 
 .chartDescription {
@@ -111,16 +112,18 @@
   line-height: 1.6;
 }
 
+/* a definite height so the chart can size itself on the first measure */
 .chartBody {
-  min-height: 15.5rem;
+  height: 16rem;
+  min-width: 0;
 }
 
 .tooltip {
   min-width: 12rem;
   padding: 0.9rem;
-  border-radius: 18px;
-  border: 1px solid rgba(129, 181, 255, 0.18);
-  background: rgba(2, 13, 22, 0.94);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgb(var(--line-rgb) / 0.18);
+  background: rgb(var(--surface-rgb) / 0.94);
   box-shadow: var(--shadow);
 }
 
@@ -153,10 +156,6 @@
 }
 
 @media (min-width: 760px) {
-  .hero {
-    padding: 1.45rem;
-  }
-
   .summaryGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -196,6 +195,6 @@
   }
 
   .summaryGrid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }

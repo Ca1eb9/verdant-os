@@ -3,14 +3,13 @@
 import { useMemo, useState } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { MetricChartPanel } from "@/components/history/MetricChartPanel";
+import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import {
-  FARMS,
   HISTORY_RANGE_HOURS,
   buildHistoricalSeries,
 } from "@/lib/mock-data";
 import {
   average,
-  formatInteger,
   formatMetric,
   maximum,
   minimum,
@@ -19,18 +18,32 @@ import type { HistoryRange } from "@/lib/types";
 import styles from "@/components/history/HistoryView.module.css";
 
 const rangeOptions: HistoryRange[] = ["24h", "72h", "7d"];
-const DEGREE_C = "\u00B0C";
+
+// series colours per theme (light uses deeper tones so lines read on white)
+const SERIES_COLORS = {
+  dark: { cyan: "#67dfff", teal: "#6ff7c3", amber: "#ffc45f", lime: "#d8ff72" },
+  light: { cyan: "#0891b2", teal: "#059669", amber: "#d97706", lime: "#65a30d" },
+} as const;
 const RANGE_ARROW = "\u2192";
 const MID_DOT = "\u00B7";
 
 export function HistoryView() {
-  const { activeFarmId, farm, setActiveFarmId } = useSelectedFarm();
+  const { activeFarmId, farm } = useSelectedFarm();
   const [range, setRange] = useState<HistoryRange>("72h");
+  const { fmt, prefs, theme } = usePreferences();
+  const color = SERIES_COLORS[theme];
+  const DEGREE = fmt.tempUnit;
 
-  const data = useMemo(
-    () => buildHistoricalSeries(activeFarmId, HISTORY_RANGE_HOURS[range]),
-    [activeFarmId, range],
-  );
+  // temperatures are stored in °C; convert once for display
+  const data = useMemo(() => {
+    const series = buildHistoricalSeries(activeFarmId, HISTORY_RANGE_HOURS[range]);
+    if (prefs.temperatureUnit === "C") return series;
+    return series.map((point) => ({
+      ...point,
+      air: { ...point.air, temperature: fmt.tempValue(point.air.temperature) },
+      water: { ...point.water, temperature: fmt.tempValue(point.water.temperature) },
+    }));
+  }, [activeFarmId, fmt, prefs.temperatureUnit, range]);
 
   const summary = useMemo(() => {
     const airTemp = data.map((point) => point.air.temperature);
@@ -40,12 +53,11 @@ export function HistoryView() {
     const waterPh = data.map((point) => point.water.ph);
     const waterEc = data.map((point) => point.water.ec);
     const waterLevel = data.map((point) => point.water.level);
-    const hours = HISTORY_RANGE_HOURS[range];
 
     return [
       {
         label: "Climate average",
-        value: `${formatMetric(average(airTemp), DEGREE_C, 1)} ${MID_DOT} ${formatMetric(average(humidity), "%", 0)}`,
+        value: `${formatMetric(average(airTemp), DEGREE, 1)} ${MID_DOT} ${formatMetric(average(humidity), "%", 0)}`,
         detail: "Average air temperature and humidity",
       },
       {
@@ -60,16 +72,11 @@ export function HistoryView() {
       },
       {
         label: "Reservoir reserve",
-        value: `${formatMetric(average(waterTemp), DEGREE_C, 1)} ${MID_DOT} ${formatMetric(minimum(waterLevel), "%", 0)}`,
+        value: `${formatMetric(average(waterTemp), DEGREE, 1)} ${MID_DOT} ${formatMetric(minimum(waterLevel), "%", 0)}`,
         detail: "Average water temp and minimum level",
       },
-      {
-        label: "Dataset density",
-        value: `${formatInteger(data.length)} pts ${MID_DOT} ${formatMetric(data.length / hours, "pts/hr", 2)}`,
-        detail: "Captured points inside the selected time window",
-      },
     ];
-  }, [data, range]);
+  }, [DEGREE, data]);
 
   const charts = [
     {
@@ -79,15 +86,15 @@ export function HistoryView() {
         {
           key: "air.temperature",
           label: "Air Temp",
-          color: "#67dfff",
-          unit: DEGREE_C,
+          color: color.cyan,
+          unit: DEGREE,
           precision: 1,
           axisId: "left" as const,
         },
         {
           key: "air.humidity",
           label: "Humidity",
-          color: "#6ff7c3",
+          color: color.teal,
           unit: "%",
           precision: 0,
           axisId: "right" as const,
@@ -101,7 +108,7 @@ export function HistoryView() {
         {
           key: "air.pressure",
           label: "Pressure",
-          color: "#ffc45f",
+          color: color.amber,
           unit: "hPa",
           precision: 1,
           axisId: "left" as const,
@@ -115,15 +122,15 @@ export function HistoryView() {
         {
           key: "water.temperature",
           label: "Water Temp",
-          color: "#67dfff",
-          unit: DEGREE_C,
+          color: color.cyan,
+          unit: DEGREE,
           precision: 1,
           axisId: "left" as const,
         },
         {
           key: "water.level",
           label: "Water Level",
-          color: "#6ff7c3",
+          color: color.teal,
           unit: "%",
           precision: 0,
           axisId: "right" as const,
@@ -137,7 +144,7 @@ export function HistoryView() {
         {
           key: "water.ph",
           label: "pH",
-          color: "#d8ff72",
+          color: color.lime,
           unit: "",
           precision: 2,
           axisId: "left" as const,
@@ -145,7 +152,7 @@ export function HistoryView() {
         {
           key: "water.ec",
           label: "EC",
-          color: "#67dfff",
+          color: color.cyan,
           unit: "mS/cm",
           precision: 2,
           axisId: "right" as const,
@@ -159,7 +166,7 @@ export function HistoryView() {
         {
           key: "light.ppfd",
           label: "PPFD",
-          color: "#d8ff72",
+          color: color.lime,
           unit: "PPFD",
           precision: 0,
           axisId: "left" as const,
@@ -170,7 +177,7 @@ export function HistoryView() {
 
   return (
     <section className="pageSection">
-      <div className={`glassPanel ${styles.hero}`}>
+      <header className={styles.hero}>
         <div className={styles.toolbar}>
           <div className={styles.heading}>
             <span className="eyebrow">Historical analytics</span>
@@ -179,22 +186,6 @@ export function HistoryView() {
           </div>
 
           <div className={styles.controlStack}>
-            <label className={styles.controlGroup}>
-              <span className={styles.metaLabel}>Farm</span>
-              <select
-                className="controlSelect"
-                value={activeFarmId}
-                onChange={(event) => setActiveFarmId(event.target.value)}
-                aria-label="History farm selector"
-              >
-                {FARMS.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
             <div className={styles.controlGroup}>
               <span className={styles.metaLabel}>Window</span>
               <div className={styles.rangeRow}>
@@ -222,7 +213,7 @@ export function HistoryView() {
             </article>
           ))}
         </div>
-      </div>
+      </header>
 
       <div className={styles.chartGrid}>
         {charts.map((chart) => (

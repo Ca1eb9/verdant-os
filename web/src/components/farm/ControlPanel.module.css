@@ -1,0 +1,259 @@
+.panel {
+  display: grid;
+  gap: 1.1rem;
+  align-content: start;
+  padding: 1rem;
+}
+
+.section {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.section + .section {
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.count,
+.muted {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem 1rem;
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.facts dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  margin-bottom: 0.15rem;
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  font-size: 0.75rem;
+  text-transform: capitalize;
+}
+
+.offline,
+.st_lost {
+  color: var(--muted);
+}
+
+.st_en_route,
+.st_returning_to_dock,
+.st_docking,
+.cmd_sent {
+  color: var(--cyan);
+  border-color: rgb(var(--cyan-rgb) / 0.35);
+}
+
+.st_working,
+.st_charging,
+.st_idle {
+  color: var(--teal);
+  border-color: rgb(var(--teal-rgb) / 0.35);
+}
+
+.st_manual,
+.cmd_pending {
+  color: var(--amber);
+  border-color: rgb(var(--amber-rgb) / 0.4);
+}
+
+.st_error,
+.cmd_failed {
+  color: var(--danger);
+  border-color: rgb(var(--danger-rgb) / 0.45);
+}
+
+.btn {
+  min-height: 2.6rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: rgb(var(--surface-rgb) / 0.7);
+  color: var(--text);
+  font-weight: 600;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: rgb(var(--cyan-rgb) / 0.4);
+  background: rgb(var(--cyan-rgb) / 0.08);
+}
+
+.btn:focus-visible,
+.linkBtn:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.stop {
+  min-height: 3rem;
+  border-color: rgb(var(--danger-rgb) / 0.55);
+  background: rgb(var(--danger-rgb) / 0.16);
+  color: var(--danger-ink);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.stop:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: rgb(var(--danger-rgb) / 0.26);
+}
+
+.primary {
+  border-color: rgb(var(--teal-rgb) / 0.45);
+  background: rgb(var(--teal-rgb) / 0.12);
+}
+
+.primary:hover:not(:disabled) {
+  border-color: var(--teal);
+  background: rgb(var(--teal-rgb) / 0.2);
+}
+
+.confirm {
+  border-color: var(--amber);
+  background: rgb(var(--amber-rgb) / 0.16);
+  color: var(--amber-ink);
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.field :global(.controlSelect) {
+  width: 100%;
+  min-width: 0;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.check input {
+  margin-top: 0.2rem;
+  accent-color: #d9722e;
+}
+
+.check small {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.linkBtn {
+  justify-self: start;
+  padding: 0.2rem 0;
+  background: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.linkBtn:hover {
+  color: var(--text);
+}
+
+.message {
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid rgb(var(--teal-rgb) / 0.3);
+  border-radius: var(--radius-sm);
+  background: rgb(var(--teal-rgb) / 0.08);
+  font-size: 0.85rem;
+}
+
+.messageError {
+  border-color: rgb(var(--danger-rgb) / 0.4);
+  background: rgb(var(--danger-rgb) / 0.08);
+}
+
+.log {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+}
+
+.log li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.logText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.keyRow {
+  padding-top: 0.2rem;
+}
+
+.keyForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+}
