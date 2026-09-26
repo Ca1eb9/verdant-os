@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getOperator } from "@/lib/auth";
 import { getSupabaseReadConfig } from "@/lib/supabase-config";
 import type { SensorEventRecord } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  // the middleware checks this too; a second check here in case it is ever bypassed
+  if (!(await getOperator())) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
   const config = getSupabaseReadConfig();
 
   if (!config.url || !config.key) {

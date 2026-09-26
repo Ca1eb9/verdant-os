@@ -10,9 +10,19 @@ export interface SignInState {
   email: string;
 }
 
-/** Only same-site paths, so ?next= can't send someone to another site */
+/**
+ * Only paths on this site, so ?next= can't send someone elsewhere. Parsing
+ * catches every trick the browser would also resolve: //host, /\host, tabs,
+ * newlines, other schemes.
+ */
 function safeNext(value: FormDataEntryValue | null) {
-  return typeof value === "string" && value.startsWith("/") && !value.startsWith("//") ? value : "/";
+  if (typeof value !== "string") return "/";
+  try {
+    const url = new URL(value, "http://local");
+    return url.origin === "http://local" ? url.pathname + url.search : "/";
+  } catch {
+    return "/";
+  }
 }
 
 const UNREACHABLE = "Can't reach the sign-in service. Check the connection and try again.";

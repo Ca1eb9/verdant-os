@@ -33,3 +33,14 @@ export function getSupabaseAuthConfig() {
 export function authDisabled() {
   return process.env.AUTH_DISABLED === "true";
 }
+
+/**
+ * Session cookies. httpOnly: nothing in the browser reads them (there is no
+ * browser Supabase client), so an injected script can't steal the session.
+ * @supabase/ssr keeps its 400-day maxAge default.
+ */
+export const AUTH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+} as const;

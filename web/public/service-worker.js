@@ -1,8 +1,11 @@
-const SHELL_CACHE = "verdantos-shell-v6";
-const RUNTIME_CACHE = "verdantos-runtime-v6";
+const SHELL_CACHE = "verdantos-shell-v7";
+const RUNTIME_CACHE = "verdantos-runtime-v7";
 
 // pages are not precached: signed out they redirect to /login. They are
 // cached as the operator visits them instead (see handleNavigation).
+// never kept offline: /settings shows the operator's email
+const UNCACHED_PAGES = ["/login", "/settings"];
+
 const PRECACHE_URLS = [
   "/manifest.webmanifest",
   "/images/sprout-logo.webp",
@@ -48,6 +51,13 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// sent on sign-out so visited pages don't stay readable offline
+self.addEventListener("message", (event) => {
+  if (event.data === "clear-pages") {
+    event.waitUntil(caches.delete(RUNTIME_CACHE));
+  }
+});
+
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") {
     return;
@@ -75,7 +85,8 @@ async function handleNavigation(request) {
     const response = await fetch(request);
     const cache = await caches.open(RUNTIME_CACHE);
 
-    if (response.ok && !response.redirected) {
+    const path = new URL(request.url).pathname;
+    if (response.ok && !response.redirected && !UNCACHED_PAGES.includes(path)) {
       cache.put(request, response.clone());
     }
 

@@ -180,7 +180,7 @@ export function SettingsView({ account }: { account: string | null }) {
         <div className={`glassPanel ${styles.panel}`}>
           <h2 className={styles.groupTitle}>Account</h2>
           <Row id="sign-out" label="Signed in" hint={account}>
-            <form action={signOut}>
+            <form action={signOut} onSubmit={() => navigator.serviceWorker?.controller?.postMessage("clear-pages")}>
               <button id="sign-out" type="submit" className={styles.reset}>
                 Sign out
               </button>

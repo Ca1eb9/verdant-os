@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getOperator } from "@/lib/auth";
+import { getOperator, sameOrigin } from "@/lib/auth";
 import { getSupabaseReadConfig } from "@/lib/supabase-config";
 import type { CommandRecord } from "@/lib/farm/data-source";
 import type { ActionAtTarget, CommandType, RemoteCommand, RobotCommand, TaskPriority } from "@/lib/farm/types";
@@ -69,6 +69,8 @@ function parseCommand(body: unknown): { robotId: string; command: RobotCommand }
 }
 
 export async function GET(request: Request) {
+  if (!(await getOperator())) return error("Sign in required.", 401);
+
   const config = getSupabaseReadConfig();
   if (!config.url || !config.key) {
     return NextResponse.json({ commands: [], error: "Supabase is not configured." });
@@ -88,6 +90,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  // blocks cross-site form posts: a form can't send JSON, and browsers mark the origin
+  if (!sameOrigin(request)) return error("Cross-site requests are not allowed.", 403);
+  if (!request.headers.get("content-type")?.startsWith("application/json")) {
+    return error("Send the command as application/json.", 415);
+  }
   // the middleware already requires a session; this also names who sent the command
   const operator = await getOperator();
   if (!operator) return error("Sign in to send commands.", 401);

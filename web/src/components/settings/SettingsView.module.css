@@ -35,6 +35,10 @@
   border-bottom: 1px solid var(--line);
 }
 
+.row:last-child {
+  border-bottom: 0;
+}
+
 .rowText {
   display: grid;
   gap: 0.2rem;
