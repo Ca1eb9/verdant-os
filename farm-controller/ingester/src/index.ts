@@ -31,6 +31,9 @@ db.pragma("journal_mode = WAL"); // better concurrent read performance
 // Tables from before task_id / nullable columns are rebuilt and their rows copied
 const robotCols = db.prepare(`PRAGMA table_info(robot_telemetry)`).all() as { name: string }[];
 const migrateRobot = robotCols.length > 0 && !robotCols.some((c) => c.name === "task_id");
+// Tables that already have task_id only need the newer column added
+const addLastCompleted = robotCols.some((c) => c.name === "task_id") &&
+  !robotCols.some((c) => c.name === "last_completed_task_id");
 if (migrateRobot) {
   db.exec(`
     ALTER TABLE robot_telemetry RENAME TO robot_telemetry_old;
@@ -46,6 +49,7 @@ db.exec(`
     status TEXT NOT NULL,
     current_node TEXT,
     task_id TEXT,
+    last_completed_task_id TEXT,
     battery_pct REAL NOT NULL,
     heading INTEGER,
     obstacle_cm REAL,
@@ -86,6 +90,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_shelf_id ON shelf_sensors(shelf_id, timestamp);
 `);
 
+if (addLastCompleted) {
+  db.exec(`ALTER TABLE robot_telemetry ADD COLUMN last_completed_task_id TEXT`);
+}
+
 if (migrateRobot) {
   db.exec(`
     INSERT INTO robot_telemetry (robot_id, status, current_node, battery_pct, heading, obstacle_cm, temperature_c, humidity_pct, light_lux, timestamp, received_at)
@@ -98,8 +106,8 @@ if (migrateRobot) {
 
 // Prepared statements for fast inserts
 const insertRobot = db.prepare(`
-  INSERT INTO robot_telemetry (robot_id, status, current_node, task_id, battery_pct, heading, obstacle_cm, temperature_c, humidity_pct, light_lux, timestamp)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO robot_telemetry (robot_id, status, current_node, task_id, last_completed_task_id, battery_pct, heading, obstacle_cm, temperature_c, humidity_pct, light_lux, timestamp)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 const insertShelf = db.prepare(`
@@ -130,12 +138,14 @@ async function main() {
 
   // --- Robot telemetry ---
   mqtt.subscribe<RobotTelemetry>(TOPICS.robot.telemetryAll, (msg, topic) => {
+    // Topic id, same as the orchestrator uses
     const id = extractIdFromTopic(topic) ?? msg.robot_id;
     insertRobot.run(
-      msg.robot_id,
+      id,
       msg.status,
       msg.current_node ?? null,
       msg.task_id ?? null,
+      msg.last_completed_task_id ?? null,
       msg.battery_pct,
       msg.heading ?? null,
       msg.obstacle_cm ?? null,
