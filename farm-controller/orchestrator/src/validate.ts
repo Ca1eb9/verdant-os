@@ -78,6 +78,7 @@ export function isRemoteCommand(v: unknown): v is RemoteCommand {
     optStr(c.target_node) &&
     (c.action_at_target === undefined || ACTIONS.has(c.action_at_target as string)) &&
     optNum(c.duration_ms) &&
+    optBool(c.immediate) &&
     PRIORITIES.has(c.priority as string) &&
     SOURCES.has(c.source as string)
   );

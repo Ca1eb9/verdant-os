@@ -190,6 +190,17 @@ export interface RemoteCommand {
   issued_at: number;
 }
 
+/** Published (retained) by the orchestrator to farm/robot/{id}/state */
+export interface RobotStateUpdate {
+  robot_id: string;
+  /** Orchestrator's view, e.g. "lost" while the robot is silent */
+  status: RobotStatus;
+  /** Task the orchestrator has assigned to this robot */
+  task: Pick<FarmTask, "task_id" | "type" | "target_node" | "status"> | null;
+  expected_path: string[];
+  timestamp: number;
+}
+
 /////////////
 // --- Orchestrator internal types --------
 /////////////

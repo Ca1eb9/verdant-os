@@ -19,6 +19,7 @@ import {
   type FarmTask,
   type FarmAlert,
   type RemoteCommand,
+  type RobotStateUpdate,
   RobotStatus,
   RobotEventType,
   Heading,
@@ -103,6 +104,26 @@ function isKnownTask(taskId: string): boolean {
   );
 }
 
+/** Last state published per robot, to publish only on change */
+const publishedState = new Map<string, string>();
+
+/** Publish the orchestrator's view of each robot (retained) when it changes */
+function publishStates() {
+  for (const [robotId, s] of robots) {
+    const t = s.assigned_task;
+    const update: Omit<RobotStateUpdate, "timestamp"> = {
+      robot_id: robotId,
+      status: s.status,
+      task: t ? { task_id: t.task_id, type: t.type, target_node: t.target_node, status: t.status } : null,
+      expected_path: s.expected_path,
+    };
+    const key = JSON.stringify(update);
+    if (publishedState.get(robotId) === key) continue;
+    publishedState.set(robotId, key);
+    mqtt.publish(TOPICS.robot.state(robotId), { ...update, timestamp: Date.now() }, true);
+  }
+}
+
 function persist() {
   saveTasks(STATE_PATH, {
     queue: [...queue.all()],
@@ -111,11 +132,12 @@ function persist() {
   });
 }
 
-/** Wrap a handler so task state is saved after it runs */
+/** Wrap a handler so task state is saved and published after it runs */
 function persisting<A extends unknown[]>(fn: (...args: A) => void) {
   return (...args: A) => {
     fn(...args);
     persist();
+    publishStates();
   };
 }
 
@@ -420,6 +442,8 @@ function onRemoteCommand(raw: unknown, topic: string) {
     return;
   }
   const msg = raw;
+  // Accept immediate on the message or inside the command (dashboard rows)
+  msg.immediate = msg.immediate ?? (msg.command as { immediate?: boolean }).immediate === true;
   console.log(
     `[REMOTE] from ${msg.issued_by}: ${msg.command.command}` +
     (msg.robot_id ? ` -> ${msg.robot_id}` : "") +
@@ -470,6 +494,11 @@ function onRemoteCommand(raw: unknown, topic: string) {
     for (const [robotId, state] of targets) {
       const task = state?.assigned_task;
       if (!state || !task || (taskId && task.task_id !== taskId)) continue;
+      if (task.type === "stop") {
+        console.log(`[REMOTE] ${task.task_id} is a stop; use resume instead of cancel`);
+        found = true;
+        continue;
+      }
       state.assigned_task = null;
       state.expected_path = [];
       state.waypoints_hit = [];
@@ -594,6 +623,7 @@ async function main() {
     if (task.assigned_robot) getOrCreateRobot(task.assigned_robot).assigned_task = task;
   }
   completedTasks.push(...saved.finished.slice(-config.completed_task_limit));
+  publishStates();
 
   console.log(`[ORCH]   queue:     ${queue.length} tasks, ${saved.assigned.length} assigned (${STATE_PATH})`);
 

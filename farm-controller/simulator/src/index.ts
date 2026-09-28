@@ -245,13 +245,16 @@ async function main() {
         robot.pausedStatus = null;
       }
 
-      // Cancel drops the task only if it's ours; a dock detour carries on to charge
+      // Cancel drops the task only if it's ours. A dock detour (task paused
+      // for charging) carries on to charge; a dock task stops heading there.
       if (cmd.command === "cancel" && cmd.task_id) {
+        const detour = robot.resumeTask !== null;
         if (robot.resumeTask?.taskId === cmd.task_id) robot.resumeTask = null;
         if (robot.taskId === cmd.task_id) {
           robot.taskId = null;
           const onTask = (s: RobotStatus | null) =>
-            s === RobotStatus.EN_ROUTE || s === RobotStatus.WORKING;
+            s === RobotStatus.EN_ROUTE || s === RobotStatus.WORKING ||
+            (!detour && (s === RobotStatus.RETURNING_TO_DOCK || s === RobotStatus.DOCKING));
           if (onTask(robot.status) || onTask(robot.pausedStatus)) {
             if (robot.status !== RobotStatus.STOPPED) robot.status = RobotStatus.IDLE;
             else robot.pausedStatus = RobotStatus.IDLE;

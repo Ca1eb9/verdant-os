@@ -18,6 +18,8 @@ export const TOPICS = {
     config: (id: string) => `farm/robot/${id}/config` as const,
     // inside robot:
     events: (id: string) => `farm/robot/${id}/events` as const,
+    /** Orchestrator's view of a robot (retained): assigned task, path */
+    state: (id: string) => `farm/robot/${id}/state` as const,
 
     /** Subscribe to all robot telemetry */
     telemetryAll: "farm/robot/+/telemetry" as const,
@@ -25,6 +27,7 @@ export const TOPICS = {
     commandAll: "farm/robot/+/command" as const,
     configAll: "farm/robot/+/config" as const,
     eventsAll: "farm/robot/+/events" as const,
+    stateAll: "farm/robot/+/state" as const,
   },
 
   elevator: {
