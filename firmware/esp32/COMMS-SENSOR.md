@@ -32,19 +32,26 @@ Decisions worth knowing:
 - **No `delay()`** in either task. WiFi and MQTT reconnect with backoff. A broker connect attempt can block the comms task for ~3 s, but it runs alone on core 0 at the lowest priority.
 - **Battery %** uses a Li-ion voltage curve rather than a straight line, because a straight line reads up to 20 points high mid-pack. Sprint 3 replaces the table with measurements from the real pack.
 
-## Wiring (ESP32 DevKit)
+## Wiring
 
-| Part | Part pin | ESP32 |
-|---|---|---|
-| PN532 (SPI mode: SEL0 **OFF**, SEL1 **ON**) | SCK / MISO / MOSI / SS | 18 / 19 / 23 / 5 |
-| RC522 (if used instead) | SCK / MISO / MOSI / SDA(SS) / RST | 18 / 19 / 23 / 5 / 27 |
-| VL53L4CX | SDA / SCL / VIN / GND | 21 / 22 / 3V3 / GND |
-| VL53L4CX (optional) | XSHUT | any free GPIO → set `PIN_TOF_XSHUT` |
-| Battery divider tap | 100k / 33k midpoint | 34 |
+The team's boards are **ESP32-S3-WROOM-1** DevKitC. `platformio.ini` targets the S3, and `config.h` picks the pin set for whichever chip is built (the classic ESP32 set is kept in case a different board is used).
+
+| Part | Part pin | ESP32-S3 GPIO | (classic ESP32) |
+|---|---|---|---|
+| PN532 (SPI mode: SEL0 **OFF**, SEL1 **ON**) | SCK / MISO / MOSI / SS | 12 / 13 / 11 / 10 | 18 / 19 / 23 / 5 |
+| RC522 (if used instead) | + RST | 14 | 27 |
+| VL53L4CX | SDA / SCL | 8 / 9 | 21 / 22 |
+| VL53L4CX (optional) | XSHUT | e.g. 5 → set `PIN_TOF_XSHUT` | |
+| Battery divider tap | 100k / 33k midpoint | 4 | 34 |
+| All modules | VIN / GND | 3V3 / GND | |
 
 To switch RFID modules, add `-DRFID_READER_RC522` to `build_flags` in `platformio.ini`. PN532 is the default.
 
-> **Battery divider:** with 100k/33k, a full pack puts 3.13 V on GPIO34. That's at the edge of what the ESP32 ADC can read, and it's inaccurate above ~2.5 V. Swapping R2 for **22k** gives 2.27 V at full and 1.73 V empty, inside the accurate range. Update `BATTERY_R2_OHMS` if you change it.
+**S3 pins to leave alone:** 0, 3, 45 and 46 (boot strapping); 19/20 (USB); 26–32 (flash); 33–37 (PSRAM on R8 modules); 43/44 (UART0). Only ADC1 pins (GPIO1–10) can read voltages while WiFi is on. `docs/battery-monitoring.md` says GPIO34, which only applies to the classic ESP32; on the S3 it's GPIO4.
+
+**USB:** plug into the S3 DevKit's port marked **USB** (native USB). Serial output goes there. If an upload says "Failed to connect", hold **BOOT**, tap **EN/RST**, release **BOOT**, then upload.
+
+> **Battery divider:** with 100k/33k, a full pack puts 3.13 V on the ADC pin. That's at the edge of what the ESP32 ADC can read, and it's inaccurate above ~2.5 V. Swapping R2 for **22k** gives 2.27 V at full and 1.73 V empty, inside the accurate range. Update `BATTERY_R2_OHMS` if you change it.
 
 ## Running the bench test
 
@@ -91,4 +98,5 @@ If someone renames a field or adds an enum value in `types.ts`, the check fails 
    sudo systemctl restart chrony
    ```
 5. **`topology.json` tag IDs are placeholders.** Real UIDs are 4 or 7 bytes (`0x04A1B2C3`), not `0x2A01`. Once tags arrive, run the bench build, pass each tag over the reader, and copy the printed UID into `topology.json`. Also, `water-11` reuses `water-01`'s tag `0x3C10` and `z: 0`, so a tag lookup always returns `water-01`.
-6. **RFID module.** The timeline says RC522, but `platformio.ini` was set up with the PN532. Both are supported; confirm which one is being bought.
+6. **The boards are ESP32-S3, not classic ESP32.** `platformio.ini` originally targeted `esp32dev`, which can't flash an S3, and several classic-ESP32 pins break on the S3: 22 and 23 don't exist, 19 is a USB data line, 27 is a flash pin, and 34 is a PSRAM pin with no ADC. It's now set to `esp32-s3-devkitc-1`; Caleb's nav and motor code should take pins from `config.h`.
+7. **RFID module.** The timeline says RC522, but `platformio.ini` was set up with the PN532. Both are supported; confirm which one is being bought.

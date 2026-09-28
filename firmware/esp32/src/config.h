@@ -6,6 +6,12 @@
 
 #include <stdint.h>
 
+// Defines CONFIG_IDF_TARGET_* so the pin section below picks the right chip
+// no matter which header a .cpp includes first.
+#if __has_include(<sdkconfig.h>)
+#include <sdkconfig.h>
+#endif
+
 // ---- Identity ----------------------------------------------------------------
 
 #define ROBOT_ID "robot-1"
@@ -48,8 +54,32 @@ constexpr uint16_t MQTT_KEEPALIVE_S = 15;
 constexpr uint16_t MQTT_SOCKET_TIMEOUT_S = 2;
 constexpr uint16_t MQTT_BUFFER_SIZE = 2048;     // a 24-waypoint command is ~900 B
 
-// ---- Pins (ESP32 DevKit / esp32dev) ------------------------------------------
-// ADC note: only ADC1 pins (GPIO32-39) work while WiFi is on.
+// ---- Pins ------------------------------------------------------------------------
+// The compiler picks the set for whichever chip the board in platformio.ini
+// uses. ADC note: only ADC1 pins work while WiFi is on.
+
+#if defined(CONFIG_IDF_TARGET_ESP32S3)
+// ESP32-S3 (ESP32-S3-WROOM-1 DevKitC). Avoid: 0/3/45/46 (strapping),
+// 19/20 (USB D-/D+), 26-32 (flash), 33-37 (octal PSRAM on R8 modules),
+// 43/44 (UART0).
+
+// SPI (FSPI default pins) - RFID reader
+constexpr int PIN_SPI_SCK = 12;
+constexpr int PIN_SPI_MISO = 13;
+constexpr int PIN_SPI_MOSI = 11;
+constexpr int PIN_RFID_SS = 10;
+constexpr int PIN_RFID_RST = 14;   // RC522 only; PN532 over SPI doesn't need it
+
+// I2C - VL53L4CX time-of-flight sensor
+constexpr int PIN_I2C_SDA = 8;
+constexpr int PIN_I2C_SCL = 9;
+constexpr int PIN_TOF_XSHUT = -1;  // set to a GPIO (e.g. 5) if XSHUT is wired, else -1
+
+// Battery voltage divider tap (ADC1 = GPIO1-10 on the S3)
+constexpr int PIN_BATTERY_ADC = 4;
+
+#else
+// Classic ESP32 (ESP32-WROOM-32 DevKit / esp32dev). ADC1 = GPIO32-39.
 
 // SPI (VSPI) - RFID reader
 constexpr int PIN_SPI_SCK = 18;
@@ -65,6 +95,7 @@ constexpr int PIN_TOF_XSHUT = -1;  // set to a GPIO if XSHUT is wired, else -1
 
 // Battery voltage divider tap (docs/battery-monitoring.md)
 constexpr int PIN_BATTERY_ADC = 34;
+#endif
 
 // ---- RFID ----------------------------------------------------------------------
 // Pick exactly one. platformio.ini pulls in both libraries; the timeline

@@ -151,7 +151,16 @@ static void bench_nav_task(void*) {
 
 void setup() {
   Serial.begin(115200);
+#if ARDUINO_USB_CDC_ON_BOOT
+  // Native USB (ESP32-S3): never let a log call block a task when no
+  // computer is reading the port.
+  Serial.setTxTimeoutMs(0);
+  // Wait up to 3 s for the serial monitor so the boot messages aren't lost.
+  // setup() only, before any tasks exist.
+  for (uint32_t t0 = millis(); !Serial && millis() - t0 < 3000;) delay(10);
+#else
   delay(200);  // let the USB serial settle; setup() only, before any tasks
+#endif
   LOG("bench", "=== comms + sensor bench, robot '%s' ===", ROBOT_ID);
 
   if (!create_queues()) {
