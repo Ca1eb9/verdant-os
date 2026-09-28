@@ -73,6 +73,7 @@ void on_message(char* topic, uint8_t* payload, unsigned int len) {
 enum class Link { WifiDown, MqttDown, Up };
 
 uint32_t s_last_wifi_begin = 0;
+volatile int s_wifi_fail_reason = 0;  // set by the disconnect event
 bool s_wifi_begun = false;
 bool s_wifi_was_up = false;
 uint32_t s_last_mqtt_try = 0;
@@ -80,6 +81,12 @@ uint32_t s_mqtt_backoff = MQTT_RETRY_MIN_MS;
 bool s_mqtt_ever_tried = false;
 
 void start_wifi() {
+  if (s_wifi_fail_reason) {
+    int r = s_wifi_fail_reason;
+    LOG("comms", "WiFi attempt failed: reason %d (%s)", r,
+        WiFi.disconnectReasonName((wifi_err_reason_t)r));
+    s_wifi_fail_reason = 0;
+  }
   WiFi.disconnect();
   WiFi.begin(WIFI_SSID, WIFI_PASS);  // returns immediately
   s_last_wifi_begin = millis();
@@ -197,6 +204,9 @@ void comms_task(void* /*param*/) {
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);        // lower latency for commands
   WiFi.setAutoReconnect(false);  // service_link() handles reconnects
+  WiFi.onEvent([](WiFiEvent_t, WiFiEventInfo_t info) {
+    s_wifi_fail_reason = info.wifi_sta_disconnected.reason;
+  }, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
 
   s_mqtt.setServer(MQTT_BROKER_IP, MQTT_PORT);
   s_mqtt.setCallback(on_message);

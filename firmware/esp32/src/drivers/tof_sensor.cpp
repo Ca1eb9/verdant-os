@@ -11,6 +11,7 @@
 
 static VL53L4CX s_tof(&Wire, PIN_TOF_XSHUT);
 static bool s_wire_started = false;
+static bool s_fail_logged = false;  // log a missing sensor once, not every retry
 
 bool TofSensor::begin() {
   if (!s_wire_started) {
@@ -31,9 +32,11 @@ bool TofSensor::begin() {
 
   ok_ = (st == VL53L4CX_ERROR_NONE);
   if (ok_) {
+    s_fail_logged = false;
     LOG("tof", "VL53L4CX ready (short mode, %lu ms budget)", (unsigned long)TOF_TIMING_BUDGET_US / 1000);
-  } else {
-    LOG("tof", "VL53L4CX init failed (error %d) - check I2C wiring", (int)st);
+  } else if (!s_fail_logged) {
+    LOG("tof", "VL53L4CX init failed (error %d) - check I2C wiring; retrying quietly", (int)st);
+    s_fail_logged = true;
   }
   return ok_;
 }

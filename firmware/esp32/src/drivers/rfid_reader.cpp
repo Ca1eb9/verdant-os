@@ -9,6 +9,9 @@
 #include "../config.h"
 #include "../log.h"
 
+// Log a missing reader once, not on every 5 s retry.
+static bool s_fail_logged = false;
+
 #if defined(RFID_READER_PN532)
 // ---- Adafruit PN532 over hardware SPI ---------------------------------------
 // Set the breakout's SEL0/SEL1 jumpers to SPI mode.
@@ -21,13 +24,15 @@ bool RfidReader::begin() {
   s_nfc.begin();
   uint32_t ver = s_nfc.getFirmwareVersion();
   if (!ver) {
-    LOG("rfid", "PN532 not found (check wiring + SPI jumpers)");
+    if (!s_fail_logged) LOG("rfid", "PN532 not found (check wiring + SPI jumpers); retrying quietly");
+    s_fail_logged = true;
     ok_ = false;
     return false;
   }
   LOG("rfid", "PN532 firmware %lu.%lu", (unsigned long)(ver >> 16) & 0xFF,
       (unsigned long)(ver >> 8) & 0xFF);
   // One activation attempt per poll, so an empty field returns quickly.
+  s_fail_logged = false;
   s_nfc.setPassiveActivationRetries(0x01);
   s_nfc.SAMConfig();
   ok_ = true;
@@ -54,10 +59,12 @@ bool RfidReader::begin() {
   s_rc522.PCD_Init();
   byte v = s_rc522.PCD_ReadRegister(MFRC522::VersionReg);
   if (v == 0x00 || v == 0xFF) {
-    LOG("rfid", "RC522 not found (VersionReg 0x%02X)", v);
+    if (!s_fail_logged) LOG("rfid", "RC522 not found (VersionReg 0x%02X); retrying quietly", v);
+    s_fail_logged = true;
     ok_ = false;
     return false;
   }
+  s_fail_logged = false;
   LOG("rfid", "RC522 version 0x%02X", v);
   ok_ = true;
   return true;
