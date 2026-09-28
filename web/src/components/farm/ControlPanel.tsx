@@ -21,6 +21,8 @@ const KEY_STORAGE = "verdantos:operator-key";
 const POLL_MS = 5_000;
 /** Resend while a jog button is held; under the robot's 500 ms pulse so it drives smoothly */
 const JOG_REPEAT_MS = 400;
+/** Same as MANUAL_TIMEOUT_MS on the robot: a session ends after this long without a jog */
+const MANUAL_TIMEOUT_S = 5;
 /** States the robot accepts a jog in */
 const JOGGABLE: RobotStatus[] = ["idle", "en_route", "working", "stopped", "error", "manual"];
 
@@ -492,8 +494,8 @@ export function ControlPanel({
                 </button>
               </div>
               <p className={styles.muted}>
-                Hold to drive; the robot stops within half a second of letting go. Resume hands control back
-                {task ? ` and continues ${taskText}` : ""}.
+                Hold to drive; the robot stops within half a second of letting go. After {MANUAL_TIMEOUT_S} s without
+                input, or on Resume, it takes back control{task ? ` and continues ${taskText}` : ""}.
               </p>
             </>
           ) : confirmingManual ? (
@@ -510,7 +512,9 @@ export function ControlPanel({
                 Confirm: take manual control
               </button>
               <p className={styles.muted}>
-                {task ? `Pauses ${taskText} until you press Resume.` : "The robot stays in manual until you press Resume."}
+                {task
+                  ? `Pauses ${taskText} while you drive. It continues ${MANUAL_TIMEOUT_S} s after your last input, or on Resume.`
+                  : `The robot stays in manual until ${MANUAL_TIMEOUT_S} s after your last input, or until Resume.`}
               </p>
               <button type="button" className={styles.linkBtn} onClick={() => setConfirmingManual(false)}>
                 Not now
