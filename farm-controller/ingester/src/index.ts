@@ -28,18 +28,30 @@ const db = new Database(DB_PATH);
 
 db.pragma("journal_mode = WAL"); // better concurrent read performance
 
+// Tables from before task_id / nullable columns are rebuilt and their rows copied
+const robotCols = db.prepare(`PRAGMA table_info(robot_telemetry)`).all() as { name: string }[];
+const migrateRobot = robotCols.length > 0 && !robotCols.some((c) => c.name === "task_id");
+if (migrateRobot) {
+  db.exec(`
+    ALTER TABLE robot_telemetry RENAME TO robot_telemetry_old;
+    DROP INDEX IF EXISTS idx_robot_ts;
+    DROP INDEX IF EXISTS idx_robot_id;
+  `);
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS robot_telemetry (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     robot_id TEXT NOT NULL,
     status TEXT NOT NULL,
-    current_node TEXT NOT NULL,
+    current_node TEXT,
+    task_id TEXT,
     battery_pct REAL NOT NULL,
-    heading INTEGER NOT NULL,
+    heading INTEGER,
     obstacle_cm REAL,
-    temperature_c REAL NOT NULL,
-    humidity_pct REAL NOT NULL,
-    light_lux REAL NOT NULL,
+    temperature_c REAL,
+    humidity_pct REAL,
+    light_lux REAL,
     timestamp INTEGER NOT NULL,
     received_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000)
   );
@@ -74,10 +86,20 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_shelf_id ON shelf_sensors(shelf_id, timestamp);
 `);
 
+if (migrateRobot) {
+  db.exec(`
+    INSERT INTO robot_telemetry (robot_id, status, current_node, battery_pct, heading, obstacle_cm, temperature_c, humidity_pct, light_lux, timestamp, received_at)
+      SELECT robot_id, status, current_node, battery_pct, heading, obstacle_cm, temperature_c, humidity_pct, light_lux, timestamp, received_at
+      FROM robot_telemetry_old;
+    DROP TABLE robot_telemetry_old;
+  `);
+  console.log("Migrated robot_telemetry table");
+}
+
 // Prepared statements for fast inserts
 const insertRobot = db.prepare(`
-  INSERT INTO robot_telemetry (robot_id, status, current_node, battery_pct, heading, obstacle_cm, temperature_c, humidity_pct, light_lux, timestamp)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO robot_telemetry (robot_id, status, current_node, task_id, battery_pct, heading, obstacle_cm, temperature_c, humidity_pct, light_lux, timestamp)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 const insertShelf = db.prepare(`
@@ -112,20 +134,22 @@ async function main() {
     insertRobot.run(
       msg.robot_id,
       msg.status,
-      msg.current_node,
+      msg.current_node ?? null,
+      msg.task_id ?? null,
       msg.battery_pct,
-      msg.heading,
-      msg.obstacle_cm,
-      msg.temperature_c,
-      msg.humidity_pct,
-      msg.light_lux,
+      msg.heading ?? null,
+      msg.obstacle_cm ?? null,
+      msg.temperature_c ?? null,
+      msg.humidity_pct ?? null,
+      msg.light_lux ?? null,
       msg.timestamp
     );
     counts.robot++;
 
-    const arrow = ["N", "E", "S", "W"][msg.heading];
+    const arrow = msg.heading === null ? "-" : ["N", "E", "S", "W"][msg.heading];
     console.log(
-      `Robot: ${id} | ${msg.status.padEnd(16)} | ${arrow} ${msg.current_node} | Battery: ${msg.battery_pct}%`
+      `Robot: ${id} | ${msg.status.padEnd(16)} | ${arrow} ${msg.current_node ?? "-"} | ` +
+      `Task: ${msg.task_id ?? "-"} | Battery: ${msg.battery_pct}%`
     );
   });
 
