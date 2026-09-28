@@ -46,6 +46,8 @@ const BATTERY_CUTOFF_THRESHOLD = 5;
 /** Each jog drives for this long from receipt; a newer jog restarts it */
 const JOG_PULSE_MS = 500;
 const MANUAL_TICK_MS = 100;
+/** Manual control ends by itself after this long without a jog */
+const MANUAL_TIMEOUT_MS = 5000;
 
 // --- Load topology -------------------------------------------
 
@@ -94,6 +96,8 @@ const robot = {
   jogUntil: 0,
   /** Drive time accumulated towards the next node */
   jogDrivenMs: 0,
+  /** Last jog received, for the manual timeout */
+  lastJogAt: 0,
 };
 
 // --- MQTT client (set in main) -------------------------------
@@ -297,6 +301,7 @@ async function main() {
           if (robot.jogDirection !== cmd.direction) robot.jogDrivenMs = 0;
           robot.jogDirection = cmd.direction;
           robot.jogUntil = Date.now() + JOG_PULSE_MS;
+          robot.lastJogAt = Date.now();
         }
       }
 
@@ -310,6 +315,11 @@ async function main() {
           robot.pausedStatus = null;
           // stopped at the dock after a detour: head back to the kept task
           if (!paused && robot.resumeTask) resumeKeptTask();
+          // manual control may have moved it while stopped: re-plan unless still working at the target
+          else if (paused && ON_TASK.includes(paused) && robot.targetNode &&
+                   !(paused === RobotStatus.WORKING && robot.currentNodeId === robot.targetNode)) {
+            startNavigation(robot.targetNode);
+          }
           else robot.status = paused ?? RobotStatus.IDLE;
           // the action timer doesn't run while stopped
           if (paused === RobotStatus.WORKING) robot.actionStartedAt += Date.now() - robot.pausedAt;
@@ -527,7 +537,12 @@ function handleCharging() {
 }
 
 function handleManual() {
-  if (robot.status !== RobotStatus.MANUAL || !robot.jogDirection || Date.now() >= robot.jogUntil) return;
+  if (robot.status !== RobotStatus.MANUAL) return;
+  if (Date.now() - robot.lastJogAt > MANUAL_TIMEOUT_MS) {
+    exitManual(true);
+    return;
+  }
+  if (!robot.jogDirection || Date.now() >= robot.jogUntil) return;
   robot.jogDrivenMs += MANUAL_TICK_MS;
   if (robot.jogDrivenMs < MOVE_INTERVAL_MS) return;
   robot.jogDrivenMs = 0;
@@ -545,12 +560,22 @@ function handleManual() {
   console.log(`[JOG] ${robot.jogDirection} ${here.id} -> ${next.id} battery=${robot.battery.toFixed(1)}%`);
 }
 
-/** Leave manual control: re-plan to the kept task from here, or go idle */
-function exitManual() {
-  console.log(`[MANUAL] releasing control`);
+/**
+ * Leave manual control: re-plan to the kept task from here, or go idle.
+ * On a timeout a robot that was stopped goes back to stopped; resume
+ * releases the stop too.
+ */
+function exitManual(timedOut = false) {
+  console.log(`[MANUAL] releasing control${timedOut ? " (timeout)" : ""}`);
+  const from = robot.manualFrom;
   robot.manualFrom = null;
   robot.jogUntil = 0;
   robot.jogDirection = null;
+  if (timedOut && from === RobotStatus.STOPPED) {
+    robot.status = RobotStatus.STOPPED; // pausedStatus and the latch are kept
+    robot.path = [];
+    return;
+  }
   robot.stopLatched = false;
   robot.pausedStatus = null;
   if (robot.taskId && robot.targetNode && startNavigation(robot.targetNode)) {
