@@ -443,6 +443,28 @@ function onRemoteCommand(raw: unknown, topic: string) {
     return;
   }
   const msg = raw;
+
+  // Jog: manual driving from the dashboard, farm network only. Always
+  // immediate, one robot, never queued. Not logged: it repeats while held.
+  if (msg.command.command === "jog") {
+    if (topic !== TOPICS.commands.local) {
+      console.log(`[REMOTE] Jog rejected: only accepted from the farm network`);
+      return;
+    }
+    if (!msg.robot_id || !robots.has(msg.robot_id)) {
+      console.log(`[REMOTE] Jog for unknown robot: ${msg.robot_id}`);
+      return;
+    }
+    const jog: RobotCommand = {
+      command: "jog",
+      direction: msg.command.direction,
+      priority: TaskPriority.CRITICAL,
+      source: CommandSource.LOCAL,
+    };
+    mqtt.publish(TOPICS.robot.command(msg.robot_id), jog);
+    return;
+  }
+
   // Accept immediate on the message or inside the command (dashboard rows)
   msg.immediate = msg.immediate ?? (msg.command as { immediate?: boolean }).immediate === true;
   console.log(

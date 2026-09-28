@@ -42,6 +42,10 @@ const BATTERY_DRAIN_PER_MOVE = 1.5;
 const BATTERY_CHARGE_RATE = 5;
 const BATTERY_LOW_THRESHOLD = 20;
 const BATTERY_CRITICAL_THRESHOLD = 15;
+const BATTERY_CUTOFF_THRESHOLD = 5;
+/** Each jog drives for this long from receipt; a newer jog restarts it */
+const JOG_PULSE_MS = 500;
+const MANUAL_TICK_MS = 100;
 
 // --- Load topology -------------------------------------------
 
@@ -83,6 +87,13 @@ const robot = {
   dockTask: false,
   /** When stop paused the robot, to hold the action timer */
   pausedAt: 0,
+  /** Status manual control interrupted */
+  manualFrom: null as RobotStatus | null,
+  jogDirection: null as "forward" | "backward" | null,
+  /** Motors run until this time (deadman): each jog pushes it out */
+  jogUntil: 0,
+  /** Drive time accumulated towards the next node */
+  jogDrivenMs: 0,
 };
 
 // --- MQTT client (set in main) -------------------------------
@@ -193,7 +204,10 @@ function startReturnToDock(dockTaskId?: string) {
   if (DOCK_TRIP.includes(robot.status)) return;
   const path = dijkstra(graph, robot.currentNodeId, DOCK_NODE);
   if (!path) return;
-  const active = robot.status === RobotStatus.STOPPED ? robot.pausedStatus : robot.status;
+  const active =
+    robot.status === RobotStatus.STOPPED ? robot.pausedStatus
+    : robot.status === RobotStatus.MANUAL ? robot.manualFrom
+    : robot.status;
   if (robot.taskId && !robot.dockTask && robot.targetNode && active && ON_TASK.includes(active)) {
     robot.resumeTask = {
       taskId: robot.taskId,
@@ -207,6 +221,8 @@ function startReturnToDock(dockTaskId?: string) {
   }
   // a stop stays latched through the dock trip
   robot.pausedStatus = null;
+  robot.manualFrom = null;
+  robot.jogUntil = 0;
   robot.path = path;
   robot.pathIndex = 0;
   robot.targetNode = DOCK_NODE;
@@ -248,6 +264,8 @@ async function main() {
           robot.pausedStatus = null;
           robot.stopLatched = false;
           robot.dockTask = false;
+          robot.manualFrom = null;
+          robot.jogUntil = 0;
         } else {
           publishEvent(RobotEventType.TASK_FAILED, `no path to ${cmd.target_node}`, cmd.task_id ?? null);
         }
@@ -265,7 +283,27 @@ async function main() {
         robot.pausedAt = Date.now();
       }
 
-      if (cmd.command === "resume" && robot.stopLatched) {
+      // Jog: take manual control and drive a short pulse (deadman)
+      if (cmd.command === "jog" && cmd.direction) {
+        const jogable = [RobotStatus.IDLE, RobotStatus.EN_ROUTE, RobotStatus.WORKING,
+          RobotStatus.STOPPED, RobotStatus.ERROR, RobotStatus.MANUAL];
+        if (jogable.includes(robot.status) && robot.battery > BATTERY_CUTOFF_THRESHOLD) {
+          if (robot.status !== RobotStatus.MANUAL) {
+            robot.manualFrom = robot.status;
+            robot.status = RobotStatus.MANUAL;
+            robot.path = [];
+            console.log(`[MANUAL] taking manual control (was ${robot.manualFrom})`);
+          }
+          if (robot.jogDirection !== cmd.direction) robot.jogDrivenMs = 0;
+          robot.jogDirection = cmd.direction;
+          robot.jogUntil = Date.now() + JOG_PULSE_MS;
+        }
+      }
+
+      // Resume in manual hands control back: continue the task, or go idle
+      if (cmd.command === "resume" && robot.status === RobotStatus.MANUAL) {
+        exitManual();
+      } else if (cmd.command === "resume" && robot.stopLatched) {
         robot.stopLatched = false;
         if (robot.status === RobotStatus.STOPPED) {
           const paused = robot.pausedStatus;
@@ -306,6 +344,9 @@ async function main() {
   setInterval(() => {
     mqtt.publish(TOPICS.robot.telemetry(ROBOT_ID), buildTelemetry());
   }, TELEMETRY_INTERVAL_MS);
+
+  // Manual driving tick: move one node per MOVE_INTERVAL_MS of driving
+  setInterval(handleManual, MANUAL_TICK_MS);
 
   // Main simulation tick
   setInterval(() => {
@@ -482,6 +523,44 @@ function handleCharging() {
       return;
     }
     resumeKeptTask();
+  }
+}
+
+function handleManual() {
+  if (robot.status !== RobotStatus.MANUAL || !robot.jogDirection || Date.now() >= robot.jogUntil) return;
+  robot.jogDrivenMs += MANUAL_TICK_MS;
+  if (robot.jogDrivenMs < MOVE_INTERVAL_MS) return;
+  robot.jogDrivenMs = 0;
+
+  // forward follows the heading; backward reverses without turning
+  const want = robot.jogDirection === "forward" ? robot.heading : ((robot.heading + 2) % 4) as Heading;
+  const here = currentNode();
+  const next = (graph.adjacency.get(here.id) ?? [])
+    .map((n) => graph.nodes.get(n.neighborId)!)
+    .find((n) => computeHeading(here, n) === want);
+  if (!next) return; // end of the track
+  robot.currentNodeId = next.id;
+  robot.battery = Math.max(0, robot.battery - BATTERY_DRAIN_PER_MOVE);
+  checkBatteryThresholds();
+  console.log(`[JOG] ${robot.jogDirection} ${here.id} -> ${next.id} battery=${robot.battery.toFixed(1)}%`);
+}
+
+/** Leave manual control: re-plan to the kept task from here, or go idle */
+function exitManual() {
+  console.log(`[MANUAL] releasing control`);
+  robot.manualFrom = null;
+  robot.jogUntil = 0;
+  robot.jogDirection = null;
+  robot.stopLatched = false;
+  robot.pausedStatus = null;
+  if (robot.taskId && robot.targetNode && startNavigation(robot.targetNode)) {
+    console.log(`[TASK] continuing ${robot.taskId} at ${robot.targetNode}`);
+  } else {
+    // idle never holds a task
+    if (robot.taskId) publishEvent(RobotEventType.TASK_FAILED, `can't continue after manual control`);
+    robot.taskId = null;
+    robot.status = RobotStatus.IDLE;
+    robot.path = [];
   }
 }
 

@@ -60,6 +60,13 @@ export function processTelemetry(
     state.status = msg.status as RobotStatus;
   }
 
+  // Manual driving leaves the planned route: drop it so the tags it passes
+  // aren't deviations. It's rebuilt from where the robot is when it resumes.
+  if (state.status === RobotStatus.MANUAL) {
+    state.expected_path = [];
+    state.waypoints_hit = [];
+  }
+
   // Track waypoint progress while en route
   if (
     state.status === RobotStatus.EN_ROUTE &&

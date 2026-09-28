@@ -117,12 +117,14 @@ export interface RobotTelemetry {
 
 /** Published to farm/robot/{id}/command */
 export interface RobotCommand {
-  command: "navigate" | "return_to_dock" | "stop" | "resume" | "cancel";
+  command: "navigate" | "return_to_dock" | "stop" | "resume" | "cancel" | "jog";
   task_id?: string;
   path?: string[];
   target_node?: string;
   action_at_target?: "water" | "grow" | "harvest" | "charge" | "idle";
   duration_ms?: number;
+  /** jog only: drive for a fixed pulse (robot side) in this direction */
+  direction?: "forward" | "backward";
   priority: TaskPriority;
   source: CommandSource;
 }

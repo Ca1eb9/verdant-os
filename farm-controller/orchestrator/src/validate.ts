@@ -19,7 +19,8 @@ const EVENT_TYPES = new Set<string>(Object.values(RobotEventType));
 const HEADINGS = new Set<unknown>([Heading.NORTH, Heading.EAST, Heading.SOUTH, Heading.WEST]);
 const PRIORITIES = new Set<string>(Object.values(TaskPriority));
 const SOURCES = new Set<string>(Object.values(CommandSource));
-const COMMANDS = new Set(["navigate", "return_to_dock", "stop", "resume", "cancel"]);
+const COMMANDS = new Set(["navigate", "return_to_dock", "stop", "resume", "cancel", "jog"]);
+const DIRECTIONS = new Set(["forward", "backward"]);
 const ACTIONS = new Set(["water", "grow", "harvest", "charge", "idle"]);
 
 type Obj = Record<string, unknown>;
@@ -79,6 +80,8 @@ export function isRemoteCommand(v: unknown): v is RemoteCommand {
     (c.action_at_target === undefined || ACTIONS.has(c.action_at_target as string)) &&
     optNum(c.duration_ms) &&
     optBool(c.immediate) &&
+    (c.direction === undefined || DIRECTIONS.has(c.direction as string)) &&
+    (c.command !== "jog" || c.direction !== undefined) &&
     PRIORITIES.has(c.priority as string) &&
     SOURCES.has(c.source as string)
   );
