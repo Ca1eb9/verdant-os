@@ -44,7 +44,9 @@ export function processTelemetry(
   state: RobotState,
   msg: RobotTelemetry,
   config: OrchestratorConfig,
-  now: number
+  now: number,
+  /** A stop task is queued or assigned for this robot */
+  stopPending: boolean
 ): Result {
   const effects: SideEffect[] = [];
   const prev = { ...state };
@@ -93,10 +95,14 @@ export function processTelemetry(
   const task = state.assigned_task;
   if (task) {
     if (
+      // Robot finished it but the task_complete event was lost
+      msg.last_completed_task_id === task.task_id ||
       (task.type === "stop" && state.status === RobotStatus.STOPPED) ||
       (task.type === "return_to_dock" &&
         (state.status === RobotStatus.DOCKING || state.status === RobotStatus.CHARGING))
     ) {
+      state.expected_path = [];
+      state.waypoints_hit = [];
       effects.push({ type: "complete_task" });
     } else if (!msg.task_id && now - (task.assigned_at ?? 0) > config.command_ack_timeout_ms) {
       state.expected_path = [];
@@ -114,10 +120,12 @@ export function processTelemetry(
 
   // Battery preemption — only when idle or on a task. Idle robots use the
   // assignment threshold so a robot too low to take work still goes to charge.
+  // A pending stop wins; only firmware survival overrides can override it.
   const dockThreshold = state.status === RobotStatus.IDLE
     ? config.battery_low_pct + config.battery_assign_margin_pct
     : config.battery_low_pct;
-  if (state.battery_pct <= dockThreshold &&
+  if (!stopPending &&
+      state.battery_pct <= dockThreshold &&
       (state.status === RobotStatus.IDLE ||
        state.status === RobotStatus.EN_ROUTE ||
        state.status === RobotStatus.WORKING)
@@ -128,8 +136,6 @@ export function processTelemetry(
       return { state, effects };
     }
     state.dock_requested_at = now;
-    state.expected_path = [];
-    state.waypoints_hit = [];
 
     effects.push({
       type: "send_command",
@@ -315,8 +321,6 @@ function handleEventCharging(state: RobotState, event: RobotEvent): Result {
   const effects: SideEffect[] = [];
 
   if (event.event === RobotEventType.CHARGE_COMPLETE) {
-    state.expected_path = [];
-    state.waypoints_hit = [];
     effects.push({ type: "request_next_task" });
     return { state, effects };
   }

@@ -62,6 +62,7 @@ const robot = {
   pathIndex: 0,
   targetNode: null as string | null,
   taskId: null as string | null,
+  lastCompletedTaskId: null as string | null,
   currentAction: "idle" as "water" | "grow" | "harvest" | "charge" | "idle",
   actionDurationMs: 0,
   actionStartedAt: 0,
@@ -137,6 +138,7 @@ function buildTelemetry(): RobotTelemetry {
     status: robot.status,
     current_node: node.id,
     task_id: robot.taskId,
+    last_completed_task_id: robot.lastCompletedTaskId,
     battery_pct: Math.round(robot.battery * 10) / 10,
     heading: robot.heading,
     obstacle_cm: null,
@@ -382,6 +384,7 @@ function handleWorking() {
     console.log(`[DONE] ${robot.currentAction} complete at ${robot.currentNodeId}`);
     robot.status = RobotStatus.IDLE;
     robot.targetNode = null;
+    robot.lastCompletedTaskId = robot.taskId;
     robot.taskId = null;
     robot.currentAction = "idle";
     robot.actionDurationMs = 0;
@@ -395,6 +398,7 @@ function handleDocking() {
   // A dock task is done once connected; an interrupted task is kept
   if (robot.taskId && !robot.resumeTask) {
     publishEvent(RobotEventType.TASK_COMPLETE, `docked`);
+    robot.lastCompletedTaskId = robot.taskId;
     robot.taskId = null;
   }
   console.log(`[CHARGE] started`);

@@ -175,10 +175,14 @@ function tryAssignTask(robotId: string) {
   if (state.status !== RobotStatus.IDLE) return;
   if (state.assigned_task) return;
   if (state.current_node === null) return; // hasn't read a tag yet
-  if (state.battery_pct <= config.battery_low_pct + config.battery_assign_margin_pct) return; // needs charging first
 
-  // First task this robot may take; tasks pinned to other robots don't block it
-  const task = queue.all().find((t) => !t.pinned_robot || t.pinned_robot === robotId);
+  // First task this robot may take; tasks pinned to other robots don't block it.
+  // Stop and dock tasks don't need charge; everything else waits for charging.
+  const charged = state.battery_pct > config.battery_low_pct + config.battery_assign_margin_pct;
+  const task = queue.all().find((t) =>
+    (!t.pinned_robot || t.pinned_robot === robotId) &&
+    (charged || t.type === "stop" || t.type === "return_to_dock")
+  );
   if (!task) return;
   queue.remove(task.task_id);
 
@@ -293,7 +297,11 @@ function onTelemetry(raw: unknown, topic: string) {
   // Pi receive time; robot clocks aren't synced
   state.last_seen = Date.now();
 
-  const { effects } = processTelemetry(state, msg, config, state.last_seen);
+  const stopPending =
+    state.assigned_task?.type === "stop" ||
+    queue.all().some((t) => t.type === "stop" && t.pinned_robot === robotId);
+
+  const { effects } = processTelemetry(state, msg, config, state.last_seen, stopPending);
   executeEffects(robotId, effects);
 }
 
@@ -348,6 +356,10 @@ function onRemoteCommand(raw: unknown, topic: string) {
   // Queued stop / return_to_dock: one pinned task per robot, carried
   // out once the robot finishes its current task
   if (msg.command.command === "stop" || msg.command.command === "return_to_dock") {
+    if (targets.length === 0) {
+      console.log(`[REMOTE] Unknown robot: ${msg.robot_id}`);
+      return;
+    }
     for (const [robotId] of targets) {
       const task = remoteTask(msg, msg.robot_id ? msg.id : `${msg.id}-${robotId}`);
       task.pinned_robot = robotId;

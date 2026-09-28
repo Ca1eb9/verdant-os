@@ -103,6 +103,8 @@ export interface RobotTelemetry {
   current_node: string | null;
   /** Task the robot is carrying out; null when it has none */
   task_id: string | null;
+  /** Last task the robot completed successfully; null if none since boot */
+  last_completed_task_id: string | null;
   battery_pct: number;
   heading: Heading | null;
   obstacle_cm?: number | null;

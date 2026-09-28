@@ -39,6 +39,7 @@ export function isRobotTelemetry(v: unknown, nodes: ReadonlySet<string>): v is R
     STATUSES.has(v.status as string) &&
     (v.current_node === null || (isStr(v.current_node) && nodes.has(v.current_node))) &&
     (v.task_id === null || isStr(v.task_id)) &&
+    (v.last_completed_task_id === null || isStr(v.last_completed_task_id)) &&
     isNum(v.battery_pct) &&
     (v.heading === null || HEADINGS.has(v.heading)) &&
     (v.obstacle_cm === undefined || v.obstacle_cm === null || isNum(v.obstacle_cm)) &&
