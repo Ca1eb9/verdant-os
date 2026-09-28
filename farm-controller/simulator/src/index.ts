@@ -49,6 +49,7 @@ const topology: FarmTopology = JSON.parse(
   readFileSync(new URL(TOPOLOGY_PATH, import.meta.url), "utf-8")
 );
 const graph = buildGraph(topology);
+const DOCK_NODE = topology.nodes.find((n) => n.type === "dock")!.id;
 
 // --- Robot state ---------------------------------------------
 
@@ -66,6 +67,15 @@ const robot = {
   actionStartedAt: 0,
   batteryLowPublished: false,
   batteryCriticalPublished: false,
+  /** Task interrupted by a dock detour, resumed after charging */
+  resumeTask: null as null | {
+    taskId: string;
+    targetNode: string;
+    action: "water" | "grow" | "harvest" | "charge" | "idle";
+    durationMs: number;
+  },
+  /** Status to return to on resume */
+  pausedStatus: null as RobotStatus | null,
 };
 
 // --- MQTT client (set in main) -------------------------------
@@ -125,7 +135,8 @@ function buildTelemetry(): RobotTelemetry {
   return {
     robot_id: ROBOT_ID,
     status: robot.status,
-    current_node: node.tag_id,
+    current_node: node.id,
+    task_id: robot.taskId,
     battery_pct: Math.round(robot.battery * 10) / 10,
     heading: robot.heading,
     obstacle_cm: null,
@@ -151,6 +162,41 @@ function resetBatteryFlags() {
   robot.batteryCriticalPublished = false;
 }
 
+function startNavigation(targetNode: string, path?: string[]): boolean {
+  const route = path ?? dijkstra(graph, robot.currentNodeId, targetNode);
+  if (!route || route.length < 1) return false;
+  robot.path = route;
+  robot.pathIndex = 0;
+  robot.targetNode = targetNode;
+  robot.status = RobotStatus.EN_ROUTE;
+  return true;
+}
+
+/**
+ * Head to the dock. A task in progress is kept (task_id stays set) and
+ * resumed after charging. With no task, a dock task id is adopted.
+ */
+function startReturnToDock(dockTaskId?: string) {
+  const path = dijkstra(graph, robot.currentNodeId, DOCK_NODE);
+  if (!path) return;
+  if (robot.taskId && robot.targetNode &&
+      (robot.status === RobotStatus.EN_ROUTE || robot.status === RobotStatus.WORKING)) {
+    robot.resumeTask = {
+      taskId: robot.taskId,
+      targetNode: robot.targetNode,
+      action: robot.currentAction,
+      durationMs: robot.actionDurationMs,
+    };
+  } else if (!robot.taskId) {
+    robot.taskId = dockTaskId ?? null;
+  }
+  robot.path = path;
+  robot.pathIndex = 0;
+  robot.targetNode = DOCK_NODE;
+  robot.currentAction = "charge";
+  robot.status = RobotStatus.RETURNING_TO_DOCK;
+}
+
 // --- Simulation loop -----------------------------------------
 
 async function main() {
@@ -171,43 +217,30 @@ async function main() {
     (cmd) => {
       console.log(`[CMD] received: ${cmd.command} -> ${cmd.target_node ?? "n/a"}`);
 
-      if (cmd.command === "navigate") {
-        const nodeIds: string[] = [];
-        for (const tag of cmd.path!) {
-          for (const [id, node] of graph.nodes) {
-            if (node.tag_id === tag) {
-              nodeIds.push(id);
-              break;
-            }
-          }
+      if (cmd.command === "navigate" && cmd.target_node) {
+        // Path is node ids; plan our own when it isn't included
+        if (startNavigation(cmd.target_node, cmd.path)) {
+          robot.taskId = cmd.task_id ?? null;
+          robot.currentAction = cmd.action_at_target ?? "idle";
+          robot.actionDurationMs = cmd.duration_ms ?? 0;
+          robot.resumeTask = null;
+          robot.pausedStatus = null;
         }
-        robot.path = nodeIds;
-        robot.pathIndex = 0;
-        robot.targetNode = cmd.target_node ?? null;
-        robot.taskId = cmd.task_id ?? null;
-        robot.currentAction = cmd.action_at_target ?? "idle";
-        robot.actionDurationMs = cmd.duration_ms ?? 0;
-        robot.status = RobotStatus.EN_ROUTE;
       }
 
       if (cmd.command === "return_to_dock") {
-        const path = dijkstra(graph, robot.currentNodeId, "dock");
-        if (path) {
-          robot.path = path;
-          robot.pathIndex = 0;
-          robot.targetNode = "dock";
-          robot.taskId = cmd.task_id ?? null;
-          robot.currentAction = "charge";
-          robot.status = RobotStatus.RETURNING_TO_DOCK;
-        }
+        startReturnToDock(cmd.task_id);
       }
 
-      if (cmd.command === "stop") {
-        robot.status = RobotStatus.IDLE;
-        robot.path = [];
-        robot.targetNode = null;
-        robot.taskId = null;
-        robot.currentAction = "idle";
+      // Stop pauses in place and keeps the task; resume continues it
+      if (cmd.command === "stop" && robot.status !== RobotStatus.STOPPED) {
+        robot.pausedStatus = robot.status;
+        robot.status = RobotStatus.STOPPED;
+      }
+
+      if (cmd.command === "resume" && robot.status === RobotStatus.STOPPED) {
+        robot.status = robot.pausedStatus ?? RobotStatus.IDLE;
+        robot.pausedStatus = null;
       }
     }
   );
@@ -253,15 +286,7 @@ function handleIdle() {
   // Battery-triggered return to dock (always active, even in non-autonomous mode)
   if (robot.battery < BATTERY_LOW_THRESHOLD) {
     console.log(`[NAV] battery low (${robot.battery.toFixed(1)}%), returning to dock`);
-    const path = dijkstra(graph, robot.currentNodeId, "dock");
-    if (path) {
-      robot.path = path;
-      robot.pathIndex = 0;
-      robot.targetNode = "dock";
-      robot.taskId = null;
-      robot.currentAction = "charge";
-      robot.status = RobotStatus.RETURNING_TO_DOCK;
-    }
+    startReturnToDock();
     return;
   }
 
@@ -367,6 +392,11 @@ function handleWorking() {
 function handleDocking() {
   robot.status = RobotStatus.CHARGING;
   publishEvent(RobotEventType.DOCK_CONNECTED);
+  // A dock task is done once connected; an interrupted task is kept
+  if (robot.taskId && !robot.resumeTask) {
+    publishEvent(RobotEventType.TASK_COMPLETE, `docked`);
+    robot.taskId = null;
+  }
   console.log(`[CHARGE] started`);
 }
 
@@ -377,7 +407,19 @@ function handleCharging() {
     resetBatteryFlags();
     console.log(`[CHARGE] complete (${robot.battery.toFixed(1)}%)`);
     robot.status = RobotStatus.IDLE;
-    robot.taskId = null;
+    robot.currentAction = "idle";
+
+    // Pick the interrupted task back up
+    const resume = robot.resumeTask;
+    robot.resumeTask = null;
+    if (resume && startNavigation(resume.targetNode)) {
+      robot.taskId = resume.taskId;
+      robot.currentAction = resume.action;
+      robot.actionDurationMs = resume.durationMs;
+      console.log(`[TASK] resuming ${resume.taskId} at ${resume.targetNode}`);
+    } else {
+      robot.taskId = null;
+    }
   }
 }
 
