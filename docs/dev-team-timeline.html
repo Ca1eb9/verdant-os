@@ -411,7 +411,7 @@ alt="Timeline Gantt Chart" style="width: 900px; height: auto; border-radius: 10p
   <details>
     <summary>Requirements</summary>
     <ul>
-      <li>Poll the RC522 RFID reader via SPI at a regular interval. When a tag is present, read its UID.</li>
+      <li>Poll the PN532 RFID reader (I2C or SPI) at a regular interval. When a tag is present, read its UID.</li>
       <li>Read battery voltage through an ADC pin and a voltage divider. Convert the raw reading to a usable percentage.</li>
       <li>Read distance from the obstacle sensor (ultrasonic or IR). When the distance drops below a safety threshold, set the shared obstacle flag so the motor task stops immediately.</li>
       <li>Write all sensor readings into a struct and push it to the sensor queue for the nav task</li>
@@ -421,11 +421,11 @@ alt="Timeline Gantt Chart" style="width: 900px; height: auto; border-radius: 10p
     <summary>Approach</summary>
     <ul>
       <li>Test each sensor component individually with simple Arduino sketches before integrating into the FreeRTOS task</li>
-      <li>The MFRC522 library provides examples for reading tag UIDs — start there</li>
+      <li>The Adafruit PN532 library (already in <code>platformio.ini</code>) provides examples for reading tag UIDs — start there</li>
       <li>For the ADC: the ESP32's ADC range and the battery's voltage range may not match — research voltage dividers for your specific battery</li>
     </ul>
   </details>
-  <p class="deps">Depends on: queue struct definitions from FreeRTOS skeleton, RC522 module, battery, obstacle sensor</p>
+  <p class="deps">Depends on: queue struct definitions from FreeRTOS skeleton, PN532 module, battery, obstacle sensor</p>
 </div>
 
 <div class="task">
