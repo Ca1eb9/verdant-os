@@ -77,7 +77,19 @@ repeats, so the orchestrator uses it to correct itself:
   event with that `task_id`.
 - If the orchestrator has a task assigned and the robot reports a `null`
   `task_id` for longer than the grace period (`command_ack_timeout_ms`), the
-  orchestrator requeues the task.
+  orchestrator requeues the task. The grace period must stay well above the
+  telemetry interval.
+
+### Telemetry `last_completed_task_id`
+
+The id of the last task the robot **completed successfully**, or `null` if none
+since boot. It is set at the same moment `task_id` is cleared and the
+`task_complete` event is pushed. If that event is lost, the orchestrator still
+marks the task complete instead of requeuing it. A failed task does not set it,
+so a lost `task_failed` results in a retry.
+
+Keep this value in NVS (Preferences) if possible. Otherwise a reboot right after
+a lost `task_complete` makes the orchestrator redo that task.
 
 ## Commands
 
@@ -86,10 +98,15 @@ repeats, so the orchestrator uses it to correct itself:
 | `navigate` | Replaces the current task with `task_id`. If `path` is included, follow it; otherwise compute the shortest path to `target_node` on board. On arrival, publish `arrived`, then `task_started`, perform `action_at_target` for `duration_ms`, then `task_complete`. |
 | `stop` | Pause in place and report `stopped`. Keep the current `task_id`. The robot takes no new work until `resume`. |
 | `resume` | Leave `stopped` and continue what was paused (or return to `idle`). |
-| `return_to_dock` | Go to the dock and charge. If the robot is on a task, keep that `task_id` and resume the task after charging. If it has no task and the command carries a `task_id`, adopt it and publish `task_complete` for it once connected to the dock. |
+| `return_to_dock` | Go to the dock and charge. If the robot is on a task, keep that `task_id` and resume the task after charging. If it has no task and the command carries a `task_id`, adopt it and publish `task_complete` for it once connected to the dock. If already at the dock but not charging, run the dock sequence again. |
 
 The orchestrator sends a queued `stop` only when the robot is idle, so it acts as
 "pause after the current task". An immediate `stop` pauses mid-task.
+
+The orchestrator never sends a `stopped` robot to the dock for low battery, and
+does not send a robot to the dock while a stop is waiting for it. Only the
+firmware survival overrides can move a stopped robot. After a survival return
+and charge, the robot goes back to `stopped` until it receives `resume`.
 
 ## Survival overrides
 
