@@ -53,6 +53,8 @@ names must match exactly.
 - Publish telemetry to `farm/robot/{id}/telemetry` at a fixed interval.
 - Publish events to `farm/robot/{id}/events`.
 - Subscribe to `farm/robot/{id}/command`, using QoS 1 for the subscription.
+- `robot_id` in every payload must match the `{id}` in the topic. Pi services
+  identify the robot by the topic.
 
 ### Node ids, not tag ids
 
@@ -90,6 +92,27 @@ so a lost `task_failed` results in a retry.
 
 Keep this value in NVS (Preferences) if possible. Otherwise a reboot right after
 a lost `task_complete` makes the orchestrator redo that task.
+
+## Path planning
+
+When `navigate` has no `path`, and when returning to or leaving the dock, the
+robot computes its own shortest path. The orchestrator computes the same path to
+check for deviations, so the firmware must produce **exactly** the same route,
+including on ties between equal-cost routes. Mirror `dijkstra()` in
+`farm-controller/shared/src/navigation.ts`:
+
+1. Build adjacency lists in topology edge order. For each edge, append
+   `from → to`, then (unless `bidirectional` is `false`) `to → from`.
+2. Each round, pick the unvisited node with the smallest distance by scanning
+   nodes in topology order, replacing the current pick only on a **strictly
+   smaller** distance (the first node in order wins a tie).
+3. Stop as soon as the picked node is the target (or nothing reachable is left).
+4. Relax neighbours in adjacency order, updating distance and previous node
+   only on a **strictly smaller** distance.
+5. Rebuild the path by following previous nodes back from the target.
+
+Any different tie-break (e.g. a priority queue, `<=`, or a different node order)
+can pick a different equal-cost route and trigger false deviation alerts.
 
 ## Commands
 
