@@ -9,6 +9,9 @@ The simulator (`farm-controller/simulator/src/index.ts`, run with
 machine and command handling described here. When this document and the
 simulator disagree, fix one of them.
 
+State machine diagrams: `firmware/esp32/docs/state-machine.md` (robot) and
+`farm-controller/orchestrator/docs/state-machine.md` (orchestrator).
+
 ## Guiding principle: the robot is the source of truth
 
 The orchestrator treats the robot's telemetry as truth, including its status and
@@ -230,7 +233,7 @@ The orchestrator sends a queued `stop` only when the robot is idle, so it acts a
 | `water` | Water the plant for `duration_ms` |
 | `grow` | Stay under the grow lights for `duration_ms` |
 | `harvest` | TBD |
-| `idle` | Nothing: `task_complete` right after `task_started` |
+| `idle` | Wait at the target for `duration_ms` (the dashboard's "Wait"); with no duration, `task_complete` right after `task_started` |
 
 If `duration_ms` is missing, use a per-action default from `config.h`.
 
