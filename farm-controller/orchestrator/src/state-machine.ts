@@ -135,6 +135,7 @@ export function processTelemetry(
         now - state.dock_requested_at <= config.command_ack_timeout_ms) {
       return { state, effects };
     }
+    const firstRequest = state.dock_requested_at === null;
     state.dock_requested_at = now;
 
     effects.push({
@@ -146,11 +147,11 @@ export function processTelemetry(
         source: CommandSource.SCHEDULER,
       },
     });
-    if (state.battery_pct <= config.battery_critical_pct) {
+    if (firstRequest && state.battery_pct <= config.battery_critical_pct) {
       effects.push({
         type: "publish_alert",
         robotId: state.id,
-        severity: AlertSeverity.WARNING,
+        severity: AlertSeverity.CRITICAL,
         message: `Battery critical (${msg.battery_pct}%), returning to dock`,
       });
     }
@@ -180,11 +181,8 @@ export function processEvent(
     return handleErrorEvent(state, event);
   }
 
-  // Recovery event from error state
-  if (
-    event.event === RobotEventType.RECOVERY &&
-    state.status === RobotStatus.ERROR
-  ) {
+  // Recovery event, even if telemetry already moved the robot out of error
+  if (event.event === RobotEventType.RECOVERY) {
     return handleRecovery(state, event);
   }
 
@@ -371,11 +369,8 @@ export function processWatchdog(
 ): Result {
   const effects: SideEffect[] = [];
 
-  // Don't watchdog robots already lost or in error
-  if (
-    state.status === RobotStatus.LOST ||
-    state.status === RobotStatus.ERROR
-  ) {
+  // Don't watchdog robots already lost
+  if (state.status === RobotStatus.LOST) {
     return { state, effects };
   }
 

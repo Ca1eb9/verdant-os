@@ -244,6 +244,24 @@ async function main() {
         robot.status = robot.pausedStatus ?? RobotStatus.IDLE;
         robot.pausedStatus = null;
       }
+
+      // Cancel drops the task only if it's ours; a dock detour carries on to charge
+      if (cmd.command === "cancel" && cmd.task_id) {
+        if (robot.resumeTask?.taskId === cmd.task_id) robot.resumeTask = null;
+        if (robot.taskId === cmd.task_id) {
+          robot.taskId = null;
+          const onTask = (s: RobotStatus | null) =>
+            s === RobotStatus.EN_ROUTE || s === RobotStatus.WORKING;
+          if (onTask(robot.status) || onTask(robot.pausedStatus)) {
+            if (robot.status !== RobotStatus.STOPPED) robot.status = RobotStatus.IDLE;
+            else robot.pausedStatus = RobotStatus.IDLE;
+            robot.path = [];
+            robot.targetNode = null;
+            robot.currentAction = "idle";
+          }
+          console.log(`[TASK] ${cmd.task_id} cancelled`);
+        }
+      }
     }
   );
 

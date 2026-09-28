@@ -75,6 +75,25 @@ const robots = new Map<string, RobotState>();
 const queue = new TaskQueue();
 let mqtt: TypedMqttClient;
 
+/** Last time a cancel was sent to each robot, to avoid resending every message */
+const cancelSentAt = new Map<string, number>();
+
+function sendCancel(robotId: string, taskId: string) {
+  const command: RobotCommand = {
+    command: "cancel",
+    task_id: taskId,
+    priority: TaskPriority.CRITICAL,
+    source: CommandSource.REMOTE,
+  };
+  mqtt.publish(TOPICS.robot.command(robotId), command);
+  cancelSentAt.set(robotId, Date.now());
+  console.log(`[CMD] → ${robotId}: cancel ${taskId}`);
+}
+
+function isCancelled(taskId: string): boolean {
+  return completedTasks.some((t) => t.task_id === taskId && t.status === TaskStatus.CANCELLED);
+}
+
 /** True if a task with this id is queued, assigned, or recently finished */
 function isKnownTask(taskId: string): boolean {
   return (
@@ -365,6 +384,15 @@ function onTelemetry(raw: unknown, topic: string) {
 
   const { effects } = processTelemetry(state, msg, config, state.last_seen, stopPending);
   executeEffects(robotId, effects);
+
+  // Robot is still working on a cancelled task (e.g. it was offline when
+  // cancelled): tell it again, at most once per grace period
+  if (
+    msg.task_id && isCancelled(msg.task_id) &&
+    state.last_seen - (cancelSentAt.get(robotId) ?? 0) > config.command_ack_timeout_ms
+  ) {
+    sendCancel(robotId, msg.task_id);
+  }
 }
 
 function onEvent(raw: unknown, topic: string) {
@@ -408,10 +436,48 @@ function onRemoteCommand(raw: unknown, topic: string) {
       ((msg.command.command === "stop" || msg.command.command === "return_to_dock") &&
         msg.immediate)
     ) {
+    if (targets.length === 0) console.log(`[REMOTE] Unknown robot: ${msg.robot_id}`);
     for (const [robotId] of targets) {
       mqtt.publish(TOPICS.robot.command(robotId), msg.command);
       console.log(`[REMOTE] → ${robotId}: ${msg.command.command}`);
     }
+    return;
+  }
+
+  // Cancel: a queued task by id, or the robot's current task (also while
+  // the robot is lost). The robot is told now and again if it reappears
+  // still working on it.
+  if (msg.command.command === "cancel") {
+    const taskId = msg.command.task_id;
+    if (!taskId && !msg.robot_id) {
+      console.log(`[REMOTE] Cancel needs a robot_id or task_id`);
+      return;
+    }
+    const finish = (task: FarmTask) => {
+      task.status = TaskStatus.CANCELLED;
+      task.completed_at = Date.now();
+      task.error = `Cancelled by ${msg.issued_by}`;
+      recordFinished(task);
+      console.log(`[TASK] ${task.task_id} cancelled`);
+    };
+
+    const queued = taskId ? queue.remove(taskId) : null;
+    if (queued) {
+      finish(queued);
+      return;
+    }
+    let found = false;
+    for (const [robotId, state] of targets) {
+      const task = state?.assigned_task;
+      if (!state || !task || (taskId && task.task_id !== taskId)) continue;
+      state.assigned_task = null;
+      state.expected_path = [];
+      state.waypoints_hit = [];
+      finish(task);
+      sendCancel(robotId, task.task_id);
+      found = true;
+    }
+    if (!found) console.log(`[REMOTE] Nothing to cancel`);
     return;
   }
 

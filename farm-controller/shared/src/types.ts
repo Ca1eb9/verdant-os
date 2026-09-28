@@ -67,6 +67,7 @@ export enum TaskStatus {
   IN_PROGRESS = "in_progress",
   COMPLETED = "completed",
   FAILED = "failed",
+  CANCELLED = "cancelled",
 }
 
 export enum CommandSource {
@@ -116,7 +117,7 @@ export interface RobotTelemetry {
 
 /** Published to farm/robot/{id}/command */
 export interface RobotCommand {
-  command: "navigate" | "return_to_dock" | "stop" | "resume";
+  command: "navigate" | "return_to_dock" | "stop" | "resume" | "cancel";
   task_id?: string;
   path?: string[];
   target_node?: string;
