@@ -70,7 +70,7 @@ orchestrator uses it, for a robot that has gone silent.
 | `charging` | Connected to the charger | kept task or `null` (a dock task is complete by now) |
 | `stopped` | Paused by `stop` until `resume` | the paused task, or `null` |
 | `error` | Can't continue (e.g. missed tag, position lost) | kept |
-| `manual` | Driven by the RC controller | kept |
+| `manual` | Driven by the dashboard (`jog`) or the Bluetooth controller | kept |
 
 The orchestrator only assigns work to `idle` robots with a known node, and never
 sends `stopped`, `manual`, `error` or `initializing` robots to the dock.
@@ -112,6 +112,9 @@ pushed first, then the status changes.
 | `stopped` | `resume` | — | paused status, or `en_route` for a kept task after charging |
 | any | Unrecoverable fault | `error` | `error` |
 | `error` | Fault cleared (e.g. known tag read again) | `recovery` | re-plan and continue the task, else `idle` |
+| `idle`, `en_route`, `working`, `stopped`, `error` | `jog` | — | `manual` |
+| any but `initializing` | Bluetooth controller input | — | `manual` |
+| `manual` | `resume`, or Bluetooth timeout | — | re-localize, then continue (see [Manual control](#manual-control)) |
 
 Battery events (`battery_low`, `battery_critical`) are published once per
 discharge and re-armed after `charge_complete`.
@@ -212,8 +215,9 @@ The robot never queues commands: each one acts on the current state right away.
 |---|---|
 | `navigate` | Replaces the current task (and clears the stop latch, paused status and kept task). If `path` is included, follow it; otherwise compute the shortest path to `target_node` on board. Target already reached: `arrived` straight away. Unknown or unreachable target: publish `task_failed` with the command's `task_id` and stay as you were. **Ignore** a `navigate` whose `task_id` equals the current `task_id` or `last_completed_task_id` (a redelivered duplicate). |
 | `stop` | Pause in place: halt motors, hold the action timer, report `stopped`, keep `task_id`, set the stop latch. Ignored if already stopped. |
-| `resume` | Only acts if the stop latch is set: clear it and restore the paused status (the action timer continues with the remaining time). If the robot is stopped at the dock with a kept task, re-plan and continue it. |
+| `resume` | In `manual`: leave manual control (see [Manual control](#manual-control)) and clear the stop latch. Otherwise only acts if the stop latch is set: clear it and restore the paused status (the action timer continues with the remaining time). If the robot is stopped at the dock with a kept task, re-plan and continue it. |
 | `return_to_dock` | Ignored if already returning, docking or charging. Otherwise head to the dock. A task in progress or paused is kept and resumed after charging. With no task and a `task_id` on the command, adopt it as a dock task and publish `task_complete` for it once connected to the charger. If already at the dock but not charging, run the dock sequence again. A latched stop stays latched. |
+| `jog` | Manual driving from the dashboard; `direction` is `forward` or `backward`. Accepted in `idle`, `en_route`, `working`, `stopped`, `error` and `manual`; ignored otherwise (dock trips, `initializing`) and below the motor cutoff. The first jog enters `manual`. Each jog drives for a fixed **500 ms** from when it is received (`JOG_PULSE_MS` in `config.h`); a jog arriving while driving restarts the 500 ms. When the window runs out, the motors stop by themselves. `backward` reverses without turning; the heading doesn't change. |
 | `cancel` | Drop the task with this `task_id` if it is the current, paused or kept task: clear it without setting `last_completed_task_id` and without an event. A cancelled task that was moving or working goes to `idle` (or stays `stopped`). Cancelling a dock task stops the trip to the dock. Cancelling a kept task leaves the dock trip running, so the robot still charges. Ignore it if the id doesn't match. The orchestrator resends it whenever telemetry still shows the cancelled task, e.g. after the robot was offline. |
 
 The orchestrator sends a queued `stop` only when the robot is idle, so it acts as
@@ -263,7 +267,7 @@ override orchestrator commands, including `stop`.
 
 - **Battery:** three levels, set **below** the orchestrator's `battery_low_pct`
   (20%) so the orchestrator handles normal charging and a pending stop can win
-  above the firmware threshold:
+  above the firmware threshold (in `manual`, only the motor cutoff applies):
   - warn at 20%: publish `battery_low`;
   - force return to dock at 15%: publish `battery_critical` and go to the dock,
     keeping the task (and the stop latch);
@@ -274,15 +278,12 @@ override orchestrator commands, including `stop`.
   `path_blocked` and keeps waiting. The orchestrator only raises alerts for
   these.
 
-### Faults and manual driving
+### Faults
 
 - **Missed tag:** if the next tag isn't read within a timeout, stop, publish
   `error` and report `error`, keeping `task_id` and the last known node. When a
   known tag is read again, publish `recovery`, re-plan from that node and
   continue.
-- **Manual (RC controller):** entered and left locally, not over MQTT. Report
-  `manual` and keep `task_id`. On leaving manual, re-localize from the next tag
-  read, then continue the task or go `idle`.
 
 ### No Pi heartbeat watchdog
 
@@ -291,6 +292,45 @@ not a reason to return to dock. The robot keeps working on its current task
 until the battery thresholds send it to charge. When the connection returns, it
 reports its real state and the orchestrator adopts it. (This replaces the
 "Pi heartbeat watchdog" item in the development timeline.)
+
+## Manual control
+
+Two sources can drive the robot by hand. Both put it in `manual`, where it
+reports `manual`, keeps `task_id` (and any kept task), and stops following its
+path. The orchestrator gives a `manual` robot no work, never sends it to the
+dock, and drops its planned route so the tags it passes aren't reported as
+deviations.
+
+- **Dashboard (`jog`):** each held button sends a `jog` about every 400 ms, just
+  under the 500 ms pulse, so the robot drives smoothly while the button is held
+  and stops within 500 ms of release, or of a lost message. Jogging is only
+  offered on the farm network (the orchestrator rejects jogs that come through
+  Supabase). The operator leaves manual with `resume`.
+- **Bluetooth controller:** any drive input from the paired controller puts the
+  robot in `manual` from any state except `initializing`. Each input also only
+  drives briefly, like a jog, so losing the controller stops the robot. After
+  `BT_MANUAL_TIMEOUT_MS` (e.g. 5 s, in `config.h`) with no input, the robot
+  leaves manual by itself and goes back to what it was doing. `resume` also
+  ends it early.
+
+**Leaving manual** (`resume` or the Bluetooth timeout):
+
+1. Re-localize: if the robot isn't on a tag, creep forward slowly until one is
+   read. If it was in `error` for a lost position, publish `recovery` then.
+2. Go back to what it was doing:
+   - a task (`task_id`, or a kept task): re-plan from the current node and
+     continue (`en_route`). If it was `working`, the action restarts on arrival.
+     If the target can't be reached any more, publish `task_failed` and go
+     `idle`, since `idle` never holds a task.
+   - a dock trip (Bluetooth only): re-plan to the dock and continue.
+   - `stopped` before a Bluetooth session: back to `stopped` (the stop latch is
+     kept). `resume` clears the latch instead.
+   - nothing: `idle`.
+
+**Safety in manual:** the obstacle flag still hard-stops the motors. Battery
+survival is limited to the motor cutoff (about 5%): there is no forced return to
+dock while an operator is driving, but `battery_critical` is still published.
+The forced return applies again once the robot leaves manual.
 
 ## Time
 
@@ -307,3 +347,4 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
 - Turn calibration constants
 - Elevator moves (how the robot rides between levels and confirms arrival)
 - `harvest` action
+- Bluetooth controller pairing and input mapping
