@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 const TABLE = "remote_commands";
 const COLUMNS = "id,robot_id,command,issued_by,issued_at,status,error";
-const COMMANDS: CommandType[] = ["navigate", "return_to_dock", "stop", "resume"];
+const COMMANDS: CommandType[] = ["navigate", "return_to_dock", "stop", "resume", "cancel"];
 const PRIORITIES: TaskPriority[] = ["low", "normal", "high", "critical"];
 const ACTIONS: ActionAtTarget[] = ["water", "grow", "harvest", "charge", "idle"];
 const ID_PATTERN = /^[A-Za-z0-9._:-]{1,64}$/;
@@ -44,15 +44,21 @@ function parseCommand(body: unknown): { robotId: string; command: RobotCommand }
   const raw = body.command;
 
   if (typeof robotId !== "string" || !ID_PATTERN.test(robotId)) return "robot_id is missing or invalid.";
-  if (!COMMANDS.includes(raw.command as CommandType)) return "command must be navigate, return_to_dock, stop or resume.";
+  if (!COMMANDS.includes(raw.command as CommandType)) return "command must be navigate, return_to_dock, stop, resume or cancel.";
 
   const type = raw.command as CommandType;
   const priority = PRIORITIES.includes(raw.priority as TaskPriority) ? (raw.priority as TaskPriority) : "normal";
   const command: RobotCommand = { command: type, priority, source: "remote" };
 
   if (typeof raw.immediate === "boolean") command.immediate = raw.immediate;
-  // resume always takes effect right away
-  if (type === "resume") command.immediate = true;
+  // resume and cancel always take effect right away
+  if (type === "resume" || type === "cancel") command.immediate = true;
+
+  // cancel names the task, so a task that changed meanwhile isn't cancelled by mistake
+  if (type === "cancel") {
+    if (typeof raw.task_id !== "string" || !ID_PATTERN.test(raw.task_id)) return "cancel needs a task_id.";
+    command.task_id = raw.task_id;
+  }
 
   if (type === "navigate") {
     if (typeof raw.target_node !== "string" || !ID_PATTERN.test(raw.target_node)) {

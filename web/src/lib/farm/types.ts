@@ -12,9 +12,11 @@ export type RobotStatus =
   | "returning_to_dock"
   | "docking"
   | "charging"
+  | "stopped"
   | "lost"
   | "error"
-  | "manual";
+  | "manual"
+  | "initializing";
 
 export type RobotEventType =
   | "arrived"
@@ -48,7 +50,12 @@ export type PlantType =
 
 export type GrowthStage = "seedling" | "vegetative" | "mature" | "harvest_ready";
 
-export type CommandType = "navigate" | "return_to_dock" | "stop" | "resume";
+export type CommandType = "navigate" | "return_to_dock" | "stop" | "resume" | "cancel";
+
+/** FarmTask.type in the orchestrator */
+export type TaskType = "water" | "grow" | "harvest" | "custom" | "stop" | "return_to_dock";
+
+export type TaskStatus = "pending" | "assigned" | "in_progress" | "completed" | "failed" | "cancelled";
 
 export type ActionAtTarget = "water" | "grow" | "harvest" | "charge" | "idle";
 
@@ -56,10 +63,14 @@ export type ActionAtTarget = "water" | "grow" | "harvest" | "charge" | "idle";
 export interface RobotTelemetry {
   robot_id: string;
   status: RobotStatus;
-  /** RFID tag id of the last node the robot read */
-  current_node: string;
+  /** Node id of the last tag the robot read; null until the first read */
+  current_node: string | null;
+  /** Task the robot is carrying out; null when it has none */
+  task_id: string | null;
+  /** Last task the robot completed successfully */
+  last_completed_task_id: string | null;
   battery_pct: number;
-  heading: Heading;
+  heading: Heading | null;
   obstacle_cm?: number | null;
   temperature_c?: number;
   humidity_pct?: number;
@@ -88,6 +99,16 @@ export interface RobotEvent {
   task_id?: string;
   node_id?: string;
   details?: string;
+  timestamp: number;
+}
+
+/** Published (retained) by the orchestrator to farm/robot/{id}/state */
+export interface RobotStateUpdate {
+  robot_id: string;
+  status: RobotStatus;
+  /** Task the orchestrator has assigned to this robot */
+  task: { task_id: string; type: TaskType; target_node?: string; status: TaskStatus } | null;
+  expected_path: string[];
   timestamp: number;
 }
 

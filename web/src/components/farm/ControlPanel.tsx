@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CommandError, type CommandRecord, type CommandRequest, type FarmDataSource } from "@/lib/farm/data-source";
 import type { Scene } from "@/lib/farm/map/layout";
 import { resolveNode, type NavGraph } from "@/lib/farm/navigation";
-import { isStale, statusLabel, type RobotView } from "@/lib/farm/robots";
+import { describeTask, isStale, statusLabel, type RobotView } from "@/lib/farm/robots";
 import type { ActionAtTarget, FarmTopology, GraphNode, NodeType, RobotCommand } from "@/lib/farm/types";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import styles from "@/components/farm/ControlPanel.module.css";
@@ -32,6 +32,7 @@ const COMMAND_LABEL: Record<RobotCommand["command"], string> = {
   return_to_dock: "Return to dock",
   stop: "Stop",
   resume: "Resume",
+  cancel: "Cancel task",
 };
 
 function readKey() {
@@ -95,6 +96,7 @@ export function ControlPanel({
   const [durationMin, setDurationMin] = useState("");
   const [goImmediate, setGoImmediate] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [recent, setRecent] = useState<CommandRecord[]>([]);
@@ -108,6 +110,11 @@ export function ControlPanel({
     setConfirming(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetNodeId]);
+
+  const task = robot?.task ?? null;
+  const taskText = task ? robot?.taskLabel ?? describeTask(task) : null;
+  // a new robot or task needs a fresh confirmation
+  useEffect(() => setConfirmingCancel(false), [selectedRobotId, task?.id]);
 
   const refreshRecent = useCallback(async () => {
     try {
@@ -171,7 +178,18 @@ export function ControlPanel({
   const status = robot?.status;
   const canStop = online;
   const canDock = online && status !== "docking" && status !== "charging" && Boolean(dockNode);
-  const canResume = online && (status === "manual" || status === "idle");
+  const canResume = online && (status === "stopped" || status === "manual" || status === "idle");
+  // Cancel works offline too: the orchestrator resends it when the robot reconnects.
+  // A stop can't be cancelled; Resume releases the robot instead.
+  const stopActive = task?.type === "stop";
+  const canCancel = Boolean(task) && !stopActive;
+  const cancelTitle = !task
+    ? "This robot has no task to cancel."
+    : stopActive
+      ? "A stop is in progress and can't be cancelled. Use Resume to release the robot."
+      : online
+        ? `Cancels "${taskText}". The robot drops it right away.`
+        : `Cancels "${taskText}". The robot is offline and drops it when it reconnects.`;
   const canGo = online && Boolean(target) && target?.id !== node?.id && Boolean(action);
 
   const sendStop = () =>
@@ -189,6 +207,19 @@ export function ControlPanel({
 
   const sendResume = () =>
     robot && send({ robot_id: robot.id, command: { command: "resume", priority: "critical", immediate: true } });
+
+  const sendCancel = () => {
+    if (!robot || !task || !canCancel) return;
+    if (!confirmingCancel) {
+      setConfirmingCancel(true);
+      return;
+    }
+    setConfirmingCancel(false);
+    void send(
+      { robot_id: robot.id, command: { command: "cancel", task_id: task.id, priority: "critical", immediate: true } },
+      () => onRouteClear(robot.id),
+    );
+  };
 
   const sendGo = () => {
     if (!robot || !target || !action) return;
@@ -271,12 +302,6 @@ export function ControlPanel({
             <dt>Last seen</dt>
             <dd>{robot ? fmt.time(robot.lastSeen) : "—"}</dd>
           </div>
-          {robot?.taskLabel ? (
-            <div className={styles.wide}>
-              <dt>Task</dt>
-              <dd>{robot.taskLabel}</dd>
-            </div>
-          ) : null}
         </dl>
       </section>
 
@@ -305,6 +330,31 @@ export function ControlPanel({
             <small>Off: added to the robot&apos;s task queue at critical priority. Resume is always immediate.</small>
           </span>
         </label>
+      </section>
+
+      <section className={styles.section}>
+        <div className={styles.sectionHead}>
+          <span className="eyebrow">Current task</span>
+          {task ? <span className={styles.count}>{task.id.slice(0, 8)}</span> : null}
+        </div>
+        <p className={task ? styles.taskText : styles.muted}>{robot ? taskText ?? "No task" : "—"}</p>
+        {/* the wrapper carries the tooltip, since disabled buttons don't get hover events everywhere */}
+        <span className={styles.tip} title={cancelTitle}>
+          <button
+            type="button"
+            className={`${styles.btn} ${confirmingCancel ? styles.confirm : styles.caution}`}
+            disabled={!canCancel || busy}
+            onClick={sendCancel}
+          >
+            {confirmingCancel ? "Confirm: cancel current task" : "Cancel task"}
+          </button>
+        </span>
+        {stopActive ? <p className={styles.muted}>Stop in progress. Use Resume to release the robot.</p> : null}
+        {confirmingCancel ? (
+          <button type="button" className={styles.linkBtn} onClick={() => setConfirmingCancel(false)}>
+            Keep task
+          </button>
+        ) : null}
       </section>
 
       <section className={styles.section}>
@@ -417,6 +467,7 @@ export function ControlPanel({
                 <span className={styles.logText}>
                   {COMMAND_LABEL[cmd.command.command] ?? cmd.command.command}
                   {cmd.command.target_node ? ` ${cmd.command.target_node}` : ""}
+                  {cmd.command.command === "cancel" && cmd.command.task_id ? ` ${cmd.command.task_id.slice(0, 8)}` : ""}
                   {cmd.command.immediate ? " · immediate" : ""}
                 </span>
                 <time>{fmt.time(cmd.issued_at, { date: false })}</time>
