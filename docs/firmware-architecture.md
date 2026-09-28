@@ -64,6 +64,14 @@ tag UID to its node id on board. All positions sent to the Pi (`current_node`,
 Telemetry whose `current_node` is not a node in the topology is dropped.
 `current_node` is `null` only until the first tag has been read after boot.
 
+### Boot and localization
+
+After boot the robot reports `initializing` until it knows its node. It must
+find a tag on its own (e.g. creep forward slowly until one is read, or be
+placed on a tag). The orchestrator never assigns work to a robot without a
+node, and the robot can't plan a path to the dock without one, so a robot that
+reported `idle` with a `null` node would never move again.
+
 ### Telemetry `task_id`
 
 Telemetry carries `task_id`: the task the robot is carrying out, or `null` if
@@ -74,9 +82,12 @@ repeats, so the orchestrator uses it to correct itself:
   a survival-override return to dock, charging, an orchestrator low-battery
   return, or an immediate `stop`. Once charged or resumed, it continues the
   task.
-- The robot clears `task_id` only when the task is finished, failed or
-  abandoned, after publishing the matching `task_complete` or `task_failed`
-  event with that `task_id`.
+- The robot clears `task_id` only when the task is finished, failed,
+  abandoned or cancelled, after publishing the matching `task_complete` or
+  `task_failed` event with that `task_id` (no event for `cancel`).
+- `idle` always means no task: never report `idle` with a `task_id` set. The
+  orchestrator neither requeues nor replaces a task the robot still reports,
+  so an `idle` robot holding its assigned `task_id` would sit idle forever.
 - If the orchestrator has a task assigned and the robot reports a `null`
   `task_id` for longer than the grace period (`command_ack_timeout_ms`), the
   orchestrator requeues the task. The grace period must stay well above the
@@ -122,6 +133,7 @@ can pick a different equal-cost route and trigger false deviation alerts.
 | `stop` | Pause in place and report `stopped`. Keep the current `task_id`. The robot takes no new work until `resume`. |
 | `resume` | Leave `stopped` and continue what was paused (or return to `idle`). |
 | `return_to_dock` | Go to the dock and charge. If the robot is on a task, keep that `task_id` and resume the task after charging. If it has no task and the command carries a `task_id`, adopt it and publish `task_complete` for it once connected to the dock. If already at the dock but not charging, run the dock sequence again. |
+| `cancel` | Drop the task with this `task_id` if it is the current (or paused, or resume-after-charge) task: clear `task_id` without setting `last_completed_task_id` and without a `task_complete` event, stop moving, and report `idle` (or stay `stopped`). A dock detour continues to charge. Ignore it if the id doesn't match. The orchestrator resends it whenever telemetry still shows the cancelled task, e.g. after the robot was offline. |
 
 The orchestrator sends a queued `stop` only when the robot is idle, so it acts as
 "pause after the current task". An immediate `stop` pauses mid-task.

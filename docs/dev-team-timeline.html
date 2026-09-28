@@ -140,7 +140,7 @@ alt="Timeline Gantt Chart" style="width: 900px; height: auto; border-radius: 10p
 <table class="dl-table">
   <thead><tr><th>Team member</th><th>Deliverable by Nov 1</th><th>How to verify</th></tr></thead>
   <tbody>
-    <tr><td class="name-cell"><span class="name-tag caleb">Caleb</span></td><td>Survival overrides tested. Plant scheduler generating tasks. Farm map shows live robot position.</td><td>Disconnect the Pi while robot is moving — robot returns to dock. Dashboard map updates as robot moves.</td></tr>
+    <tr><td class="name-cell"><span class="name-tag caleb">Caleb</span></td><td>Survival overrides tested. Plant scheduler generating tasks. Farm map shows live robot position.</td><td>Disconnect the Pi while robot is moving — robot finishes its task and returns to dock only on low battery. Reconnect — orchestrator adopts the robot's reported state. Dashboard map updates as robot moves.</td></tr>
     <tr><td class="name-cell"><span class="name-tag adi">Adi</span></td><td>Dashboard works on both the farm's WiFi and on Vercel with automatic source detection. Stretch: remote command UI and/or login page.</td><td>Open the dashboard from the farm network — real-time data flows. Open it from a different network — data loads from Supabase.</td></tr>
     <tr><td class="name-cell"><span class="name-tag jameson">Jameson</span></td><td>Battery monitoring accurate. Dock sequence working. Survival overrides integrated into firmware.</td><td>Robot navigates a full path, docks, charges, resumes. Battery percentage in telemetry matches reality.</td></tr>
   </tbody>
@@ -193,10 +193,11 @@ alt="Timeline Gantt Chart" style="width: 900px; height: auto; border-radius: 10p
       <li>New service in <code>farm-controller/orchestrator</code></li>
       <li>Subscribe to the appropriate telemetry and event topics for all robots (check the topics file for wildcard patterns)</li>
       <li>Maintain an in-memory state object per robot: current position, battery, heading, assigned task, path progress, and a timestamp for the last message received</li>
-      <li>Implement the state machine that was designed for this project (Idle → En Route → Working → Idle, charge cycle, error states). Advance it based on incoming events.</li>
+      <li>Implement the state machine that was designed for this project (Idle → En Route → Working → Idle, charge cycle, stopped, error states). The robot's reported status and task are the source of truth; events are a fast path, and telemetry reconciles anything missed. See <code>docs/firmware-architecture.md</code>.</li>
       <li>Watchdog: periodically check whether each robot has gone silent for too long. If so, mark it as lost and publish an alert.</li>
-      <li>When a robot is idle, take the next task from the queue, compute the shortest path using the navigation utilities in the shared package, and publish a command with the RFID waypoint sequence</li>
-      <li>If a robot's battery drops below a configurable threshold, interrupt its task and send it to the dock. Re-queue remaining work.</li>
+      <li>When a robot is idle, take the next task from the queue, compute the shortest path using the navigation utilities in the shared package, and publish a command with the target (and optionally the node id path)</li>
+      <li>If a robot's battery drops below a configurable threshold, send it to the dock. The robot keeps its task and resumes it after charging; work is only re-queued if the robot reports it no longer has the task. A pending stop takes priority over the low-battery return.</li>
+      <li>Operators can stop, resume, return to dock, and cancel a robot's current task (even while the robot is lost)</li>
       <li>All tunable values (timeouts, thresholds, intervals) load from a config file at startup</li>
     </ul>
   </details>
@@ -253,7 +254,7 @@ alt="Timeline Gantt Chart" style="width: 900px; height: auto; border-radius: 10p
     <ul>
       <li>Battery thresholds at three levels: warn, force return to dock, kill motors. Checked every loop iteration before normal logic runs.</li>
       <li>Obstacle flag: set by the sensor task, checked by the motor task — hard stop when triggered</li>
-      <li>Pi heartbeat watchdog: if no orchestrator message arrives for a configurable period, autonomously return to dock using on-board pathfinding</li>
+      <li>No Pi heartbeat watchdog: losing the Pi is not a reason to return to dock. The robot keeps working on its task until the battery thresholds send it to charge.</li>
     </ul>
   </details>
   <p class="deps">Depends on: RFID navigation, motor control</p>
@@ -388,11 +389,9 @@ alt="Timeline Gantt Chart" style="width: 900px; height: auto; border-radius: 10p
     <summary>Requirements</summary>
     <ul>
       <li>Connect to the farm's WiFi network and the Mosquitto broker</li>
-      <li>Read from the telemetry queue (populated by the nav task) and publish each message as JSON to the robot's telemetry topic. Review the shared types to understand the expected message format and field names — the JSON fields must match exactly so Pi services can parse them.</li>
-      <li>Publish event messages from the nav task to the robot's events topic</li>
-      <li>Subscribe to the robot's command topic. Parse incoming JSON into a command struct and push it onto the command queue for the nav task to process.</li>
+      <li>Read from the single outbound queue (telemetry and events, in order, populated by the nav task) and publish each message as JSON to the robot's telemetry or events topic. Review the shared types to understand the expected message format and field names — the JSON fields must match exactly so Pi services can parse them.</li>
+            <li>Subscribe to the robot's command topic. Parse incoming JSON into a command struct and push it onto the command queue for the nav task to process.</li>
       <li>Handle disconnects gracefully — reconnect to WiFi and MQTT without blocking other tasks or using <code>delay()</code></li>
-      <li>Track when the last message was received from the orchestrator — the nav task uses this for its heartbeat watchdog</li>
     </ul>
   </details>
   <details>
