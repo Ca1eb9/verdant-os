@@ -10,7 +10,9 @@ const PRIORITY_RANK: Record<TaskPriority, number> = {
 export class TaskQueue {
   private tasks: FarmTask[] = [];
 
-  push(task: FarmTask) {
+  /** Returns false if a task with this id is already queued */
+  push(task: FarmTask): boolean {
+    if (this.tasks.some((t) => t.task_id === task.task_id)) return false;
     task.status = TaskStatus.PENDING;
     this.tasks.push(task);
     this.tasks.sort(
@@ -18,6 +20,7 @@ export class TaskQueue {
         PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
         a.created_at - b.created_at
     );
+    return true;
   }
 
   pop(): FarmTask | null {

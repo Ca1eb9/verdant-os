@@ -44,12 +44,16 @@ import {
   type SideEffect,
 } from "./state-machine.js";
 import { isRobotTelemetry, isRobotEvent, isRemoteCommand } from "./validate.js";
+import { loadTasks, saveTasks } from "./persistence.js";
 
 // --- Config & topology ---------------------------------------
 
 const CONFIG_PATH = process.env.CONFIG_PATH ?? "../../orchestrator-config.json";
 const TOPOLOGY_PATH = process.env.TOPOLOGY_PATH ?? "../../topology.json";
 const BROKER_URL = process.env.BROKER_URL ?? "mqtt://localhost:1883";
+const STATE_PATH = fileURLToPath(
+  new URL(process.env.STATE_PATH ?? "../../orchestrator-state.json", import.meta.url)
+);
 
 const config = loadConfig(fileURLToPath(new URL(CONFIG_PATH, import.meta.url)));
 const topology: FarmTopology = JSON.parse(
@@ -70,6 +74,31 @@ function recordFinished(task: FarmTask) {
 const robots = new Map<string, RobotState>();
 const queue = new TaskQueue();
 let mqtt: TypedMqttClient;
+
+/** True if a task with this id is queued, assigned, or recently finished */
+function isKnownTask(taskId: string): boolean {
+  return (
+    queue.all().some((t) => t.task_id === taskId) ||
+    [...robots.values()].some((s) => s.assigned_task?.task_id === taskId) ||
+    completedTasks.some((t) => t.task_id === taskId)
+  );
+}
+
+function persist() {
+  saveTasks(STATE_PATH, {
+    queue: [...queue.all()],
+    assigned: [...robots.values()].flatMap((s) => (s.assigned_task ? [s.assigned_task] : [])),
+    finished: completedTasks,
+  });
+}
+
+/** Wrap a handler so task state is saved after it runs */
+function persisting<A extends unknown[]>(fn: (...args: A) => void) {
+  return (...args: A) => {
+    fn(...args);
+    persist();
+  };
+}
 
 function getOrCreateRobot(robotId: string): RobotState {
   let state = robots.get(robotId);
@@ -150,10 +179,29 @@ function executeEffects(robotId: string, effects: SideEffect[]) {
       }
 
       case "requeue_task": {
+        // Robot dropped the task: retry up to max_task_retries, then fail it
         const state = robots.get(robotId);
-        if (state?.assigned_task) {
-          console.log(`[TASK] ↺ ${state.assigned_task.task_id} requeued`);
-          queue.requeue(state.assigned_task);
+        const task = state?.assigned_task;
+        if (state && task) {
+          task.retries = (task.retries ?? 0) + 1;
+          if (task.retries > config.max_task_retries) {
+            executeEffects(robotId, [
+              { type: "fail_task", error: `Dropped by robot ${task.retries} times` },
+              {
+                type: "publish_alert",
+                robotId,
+                severity: AlertSeverity.WARNING,
+                message: `Task ${task.task_id} failed: robot kept dropping it`,
+              },
+            ]);
+            break;
+          }
+          // Stop and dock retry right away; other tasks wait out the retry delay
+          if (task.type !== "stop" && task.type !== "return_to_dock") {
+            task.not_before = Date.now() + config.task_retry_delay_ms;
+          }
+          console.log(`[TASK] ↺ ${task.task_id} requeued (retry ${task.retries})`);
+          queue.requeue(task);
           state.assigned_task = null;
         }
         break;
@@ -179,8 +227,10 @@ function tryAssignTask(robotId: string) {
   // First task this robot may take; tasks pinned to other robots don't block it.
   // Stop and dock tasks don't need charge; everything else waits for charging.
   const charged = state.battery_pct > config.battery_low_pct + config.battery_assign_margin_pct;
+  const now = Date.now();
   const task = queue.all().find((t) =>
     (!t.pinned_robot || t.pinned_robot === robotId) &&
+    (!t.not_before || t.not_before <= now) &&
     (charged || t.type === "stop" || t.type === "return_to_dock")
   );
   if (!task) return;
@@ -297,6 +347,18 @@ function onTelemetry(raw: unknown, topic: string) {
   // Pi receive time; robot clocks aren't synced
   state.last_seen = Date.now();
 
+  // Robot is (back) on its way to a task, e.g. after a dock detour: add its
+  // route from here so nodes on the way back aren't reported as deviations
+  const target = state.assigned_task?.target_node;
+  if (
+    msg.status === RobotStatus.EN_ROUTE &&
+    state.status !== RobotStatus.EN_ROUTE &&
+    target && msg.current_node !== null
+  ) {
+    const route = dijkstra(graph, msg.current_node, target);
+    if (route) state.expected_path = [...new Set([...state.expected_path, ...route])];
+  }
+
   const stopPending =
     state.assigned_task?.type === "stop" ||
     queue.all().some((t) => t.type === "stop" && t.pinned_robot === robotId);
@@ -362,6 +424,10 @@ function onRemoteCommand(raw: unknown, topic: string) {
     }
     for (const [robotId] of targets) {
       const task = remoteTask(msg, msg.robot_id ? msg.id : `${msg.id}-${robotId}`);
+      if (isKnownTask(task.task_id)) {
+        console.log(`[REMOTE] Duplicate task ${task.task_id}, ignored`);
+        continue;
+      }
       task.pinned_robot = robotId;
       queue.push(task);
       console.log(`[QUEUE] +${task.task_id} (${task.type}) pinned to ${robotId}`);
@@ -374,6 +440,10 @@ function onRemoteCommand(raw: unknown, topic: string) {
   if (msg.command.command === "navigate" && msg.command.target_node) {
     if (!graph.nodes.has(msg.command.target_node)) {
       console.log(`[REMOTE] Unknown target node: ${msg.command.target_node}`);
+      return;
+    }
+    if (isKnownTask(msg.id)) {
+      console.log(`[REMOTE] Duplicate task ${msg.id}, ignored`);
       return;
     }
 
@@ -450,22 +520,31 @@ async function main() {
   console.log(`[ORCH]   topology:  ${topology.nodes.length} nodes, ${topology.edges.length} edges`);
   console.log(`[ORCH]   battery:   low=${config.battery_low_pct}% critical=${config.battery_critical_pct}%`);
   console.log(`[ORCH]   watchdog:  ${config.heartbeat_timeout_ms / 1000}s timeout`);
-  console.log(`[ORCH]   queue:     ${queue.length} tasks`);
+  // Restore tasks from the last run. Assigned tasks go back on their robot
+  // as-is; its first telemetry reconciles them like any other.
+  const saved = loadTasks(STATE_PATH);
+  for (const task of saved.queue) queue.push(task);
+  for (const task of saved.assigned) {
+    if (task.assigned_robot) getOrCreateRobot(task.assigned_robot).assigned_task = task;
+  }
+  completedTasks.push(...saved.finished.slice(-config.completed_task_limit));
+
+  console.log(`[ORCH]   queue:     ${queue.length} tasks, ${saved.assigned.length} assigned (${STATE_PATH})`);
 
   // Subscribe to all robot telemetry
-  mqtt.subscribe<unknown>(TOPICS.robot.telemetryAll, onTelemetry);
+  mqtt.subscribe<unknown>(TOPICS.robot.telemetryAll, persisting(onTelemetry));
 
   // Subscribe to all robot events
-  mqtt.subscribe<unknown>(TOPICS.robot.eventsAll, onEvent);
+  mqtt.subscribe<unknown>(TOPICS.robot.eventsAll, persisting(onEvent));
 
   // Subscribe to remote commands (from Supabase bridge)
-  mqtt.subscribe<unknown>(TOPICS.commands.remote, onRemoteCommand);
+  mqtt.subscribe<unknown>(TOPICS.commands.remote, persisting(onRemoteCommand));
 
   // Subscribe to local commands (from dashboard)
-  mqtt.subscribe<unknown>(TOPICS.commands.local, onRemoteCommand);
+  mqtt.subscribe<unknown>(TOPICS.commands.local, persisting(onRemoteCommand));
 
   // Start watchdog timer
-  setInterval(runWatchdog, config.watchdog_interval_ms);
+  setInterval(persisting(runWatchdog), config.watchdog_interval_ms);
 
   // --- Scheduler hook ----------------------------------------
   // When you add the plant scheduler module, import it here:
@@ -474,7 +553,8 @@ async function main() {
   //   startScheduler(queue, robots, config);
   //
   // The scheduler pushes FarmTasks into the queue on plant-care
-  // intervals. The orchestrator assigns them normally.
+  // intervals. The orchestrator assigns them normally. Call
+  // persist() after pushing so new tasks survive a restart.
   // -------------------------------------------------------------
 
   // Status logging

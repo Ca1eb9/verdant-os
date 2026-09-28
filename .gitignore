@@ -69,6 +69,10 @@ coverage/
 *.db-wal
 *.db-shm
 
+# Orchestrator task state
+orchestrator-state.json
+orchestrator-state.json.tmp
+
 # ──────────────────────────────────────────
 # PlatformIO
 # ──────────────────────────────────────────

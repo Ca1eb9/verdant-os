@@ -334,9 +334,7 @@ function handleErrorEvent(state: RobotState, event: RobotEvent): Result {
   const effects: SideEffect[] = [];
   const prevStatus = state.status;
 
-  // Task is kept; telemetry reconciliation requeues it if the robot drops it
-  state.expected_path = [];
-  state.waypoints_hit = [];
+  // Task and path are kept; telemetry reconciliation requeues it if the robot drops it
 
   effects.push({
     type: "publish_alert",
@@ -350,9 +348,6 @@ function handleErrorEvent(state: RobotState, event: RobotEvent): Result {
 
 function handleRecovery(state: RobotState, event: RobotEvent): Result {
   const effects: SideEffect[] = [];
-
-  state.expected_path = [];
-  state.waypoints_hit = [];
 
   effects.push({
     type: "publish_alert",

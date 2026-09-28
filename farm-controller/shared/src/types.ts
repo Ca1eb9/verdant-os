@@ -209,6 +209,10 @@ export interface FarmTask {
   completed_at?: number;
   error?: string;
   include_path?: boolean;
+  /** Times requeued because the robot dropped it */
+  retries?: number;
+  /** Not assignable before this time (retry delay) */
+  not_before?: number;
 }
 
 export interface RobotState {
