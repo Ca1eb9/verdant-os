@@ -11,9 +11,11 @@ export enum RobotStatus {
   RETURNING_TO_DOCK = "returning_to_dock",
   DOCKING = "docking",
   CHARGING = "charging",
+  STOPPED = "stopped",
   LOST = "lost",
   ERROR = "error",
   MANUAL = "manual",
+  INITIALIZING = "initializing"
 }
 
 // --- Robot event types (discrete, one-time signals)
@@ -97,9 +99,9 @@ export enum GrowthStage {
 export interface RobotTelemetry {
   robot_id: string;
   status: RobotStatus;
-  current_node: string;
+  current_node: string | null;
   battery_pct: number;
-  heading: Heading;
+  heading: Heading | null;
   obstacle_cm?: number | null;
   temperature_c?: number;
   humidity_pct?: number;
@@ -174,13 +176,17 @@ export interface FarmAlert {
 /** Published to farm/commands/remote by Supabase bridge */
 export interface RemoteCommand {
   id: string;
+  robot_id?: string;
+  immediate?: boolean;
+  include_path?: boolean;
   command: RobotCommand;
   issued_by: string;
   issued_at: number;
 }
 
+/////////////
 // --- Orchestrator internal types --------
-
+/////////////
 export interface FarmTask {
   task_id: string;
   type: "water" | "grow" | "harvest" | "custom";
@@ -194,13 +200,14 @@ export interface FarmTask {
   assigned_at?: number;
   completed_at?: number;
   error?: string;
+  include_path?: boolean;
 }
 
 export interface RobotState {
   id: string;
   status: RobotStatus;
-  current_node: string;
-  heading: Heading;
+  current_node: string | null;
+  heading: Heading | null;
   battery_pct: number;
   assigned_task: FarmTask | null;
   expected_path: string[];
