@@ -99,7 +99,10 @@ export enum GrowthStage {
 export interface RobotTelemetry {
   robot_id: string;
   status: RobotStatus;
+  /** Node id (not RFID tag id); null until the first tag is read */
   current_node: string | null;
+  /** Task the robot is carrying out; null when it has none */
+  task_id: string | null;
   battery_pct: number;
   heading: Heading | null;
   obstacle_cm?: number | null;
@@ -189,13 +192,16 @@ export interface RemoteCommand {
 /////////////
 export interface FarmTask {
   task_id: string;
-  type: "water" | "grow" | "harvest" | "custom";
-  target_node: string;
+  type: "water" | "grow" | "harvest" | "custom" | "stop" | "return_to_dock";
+  /** Required for navigate task types; unused for stop / return_to_dock */
+  target_node?: string;
   duration_ms?: number;
   priority: TaskPriority;
   source: CommandSource;
   created_at: number;
   status: TaskStatus;
+  /** Only this robot may take the task; survives requeue */
+  pinned_robot?: string;
   assigned_robot?: string;
   assigned_at?: number;
   completed_at?: number;
@@ -213,6 +219,8 @@ export interface RobotState {
   expected_path: string[];
   waypoints_hit: string[];
   last_seen: number;
+  /** When the orchestrator last sent a low-battery return_to_dock */
+  dock_requested_at: number | null;
   plant?: PlantRecord;
 }
 
@@ -285,7 +293,13 @@ export interface OrchestratorConfig {
   heartbeat_timeout_ms: number;
   battery_low_pct: number;
   battery_critical_pct: number;
+  /** Extra charge above battery_low_pct required before assigning a task */
+  battery_assign_margin_pct: number;
   charge_complete_pct: number;
+  /** Grace period for the robot to act on a command before reconciling */
+  command_ack_timeout_ms: number;
+  /** Max finished tasks kept in memory */
+  completed_task_limit: number;
   max_task_retries: number;
   task_retry_delay_ms: number;
   plant_schedules: PlantSchedule[];

@@ -43,17 +43,17 @@ type Result = { state: RobotState; effects: SideEffect[] };
 export function processTelemetry(
   state: RobotState,
   msg: RobotTelemetry,
-  config: OrchestratorConfig
+  config: OrchestratorConfig,
+  now: number
 ): Result {
   const effects: SideEffect[] = [];
   const prev = { ...state };
 
-  // Always update tracking fields
+  // Always update tracking fields (last_seen is set on receipt by the caller)
   state.current_node = msg.current_node;
   state.battery_pct = msg.battery_pct;
   state.heading = msg.heading;
-  state.last_seen = msg.timestamp;
-  
+
   if (msg.status !== state.status) {
     state.status = msg.status as RobotStatus;
   }
@@ -62,6 +62,7 @@ export function processTelemetry(
   if (
     state.status === RobotStatus.EN_ROUTE &&
     state.expected_path.length > 0 &&
+    state.current_node !== null &&
     !state.waypoints_hit.includes(state.current_node)
   ) {
     state.waypoints_hit.push(state.current_node);
@@ -75,39 +76,58 @@ export function processTelemetry(
     }
   }
 
-  // Recovery: if the robot was lost and telemetry resumes, it's back
-  if (prev.status === RobotStatus.LOST &&
-    !(state.status === RobotStatus.EN_ROUTE ||
-      state.status === RobotStatus.WORKING)
-  ) {
-    if (state.assigned_task) {
-      effects.push({ type: "requeue_task" });
-    }
-    state.expected_path = [];
-    state.waypoints_hit = [];
+  // Recovery: if the robot was lost and telemetry resumes, it's back.
+  // Its task is reconciled below like any other telemetry.
+  if (prev.status === RobotStatus.LOST && state.status !== RobotStatus.LOST) {
     effects.push({
       type: "publish_alert",
       robotId: state.id,
       severity: AlertSeverity.INFO,
-      message: `Robot recovered at ${state.current_node}`,
+      message: `Robot recovered at ${state.current_node ?? "unknown node"}`,
     });
-    effects.push({ type: "request_next_task" });
-    return { state, effects };
   }
 
-  // Battery preemption — only when actively working or navigating
-  if (state.battery_pct <= config.battery_low_pct || state.battery_pct <= config.battery_critical_pct) {
-    if (state.status === RobotStatus.RETURNING_TO_DOCK ||
-        state.status === RobotStatus.CHARGING ||
-        state.status === RobotStatus.DOCKING
-      ) {
-      return { state, effects };
-    }
-    // Requeue current task if one is assigned
-    if (state.assigned_task) {
+  // Reconcile the assigned task against the robot's reported task.
+  // The robot keeps its task_id through dock detours and overrides, so
+  // only requeue when it reports no task after the grace period.
+  const task = state.assigned_task;
+  if (task) {
+    if (
+      (task.type === "stop" && state.status === RobotStatus.STOPPED) ||
+      (task.type === "return_to_dock" &&
+        (state.status === RobotStatus.DOCKING || state.status === RobotStatus.CHARGING))
+    ) {
+      effects.push({ type: "complete_task" });
+    } else if (!msg.task_id && now - (task.assigned_at ?? 0) > config.command_ack_timeout_ms) {
+      state.expected_path = [];
+      state.waypoints_hit = [];
       effects.push({ type: "requeue_task" });
     }
+  }
 
+  if (state.status === RobotStatus.RETURNING_TO_DOCK ||
+      state.status === RobotStatus.DOCKING ||
+      state.status === RobotStatus.CHARGING
+  ) {
+    state.dock_requested_at = null;
+  }
+
+  // Battery preemption — only when idle or on a task. Idle robots use the
+  // assignment threshold so a robot too low to take work still goes to charge.
+  const dockThreshold = state.status === RobotStatus.IDLE
+    ? config.battery_low_pct + config.battery_assign_margin_pct
+    : config.battery_low_pct;
+  if (state.battery_pct <= dockThreshold &&
+      (state.status === RobotStatus.IDLE ||
+       state.status === RobotStatus.EN_ROUTE ||
+       state.status === RobotStatus.WORKING)
+  ) {
+    // Send once, then only resend if the robot hasn't acted on it
+    if (state.dock_requested_at !== null &&
+        now - state.dock_requested_at <= config.command_ack_timeout_ms) {
+      return { state, effects };
+    }
+    state.dock_requested_at = now;
     state.expected_path = [];
     state.waypoints_hit = [];
 
@@ -130,6 +150,11 @@ export function processTelemetry(
     }
 
     return { state, effects };
+  }
+
+  // Robot reports idle: give it the next task (no-op if it already has one)
+  if (state.status === RobotStatus.IDLE) {
+    effects.push({ type: "request_next_task" });
   }
 
   return { state, effects };
@@ -155,6 +180,20 @@ export function processEvent(
     state.status === RobotStatus.ERROR
   ) {
     return handleRecovery(state, event);
+  }
+
+  // Task events only apply to the task we assigned, whatever status we
+  // last stored (telemetry and events can arrive in either order)
+  if (
+    event.event === RobotEventType.TASK_COMPLETE ||
+    event.event === RobotEventType.TASK_FAILED
+  ) {
+    if (!state.assigned_task || event.task_id !== state.assigned_task.task_id) {
+      return { state, effects: [] };
+    }
+    if (state.status !== RobotStatus.EN_ROUTE) {
+      return handleEventWorking(state, event);
+    }
   }
 
   // Dispatch to per-state handler
@@ -276,7 +315,6 @@ function handleEventCharging(state: RobotState, event: RobotEvent): Result {
   const effects: SideEffect[] = [];
 
   if (event.event === RobotEventType.CHARGE_COMPLETE) {
-    state.assigned_task = null;
     state.expected_path = [];
     state.waypoints_hit = [];
     effects.push({ type: "request_next_task" });
@@ -292,11 +330,7 @@ function handleErrorEvent(state: RobotState, event: RobotEvent): Result {
   const effects: SideEffect[] = [];
   const prevStatus = state.status;
 
-  // If we had an active task, requeue it
-  if (state.assigned_task) {
-    effects.push({ type: "requeue_task" });
-  }
-
+  // Task is kept; telemetry reconciliation requeues it if the robot drops it
   state.expected_path = [];
   state.waypoints_hit = [];
 
@@ -313,7 +347,6 @@ function handleErrorEvent(state: RobotState, event: RobotEvent): Result {
 function handleRecovery(state: RobotState, event: RobotEvent): Result {
   const effects: SideEffect[] = [];
 
-  state.assigned_task = null;
   state.expected_path = [];
   state.waypoints_hit = [];
 
@@ -339,7 +372,7 @@ export function processWatchdog(
 ): Result {
   const effects: SideEffect[] = [];
 
-  // Don't watchdog robots that are idle at the dock or already lost/error
+  // Don't watchdog robots already lost or in error
   if (
     state.status === RobotStatus.LOST ||
     state.status === RobotStatus.ERROR
@@ -351,14 +384,9 @@ export function processWatchdog(
   if (silence > config.heartbeat_timeout_ms) {
     const prevStatus = state.status;
 
-    // Requeue active task
-    if (state.assigned_task) {
-      effects.push({ type: "requeue_task" });
-    }
-
+    // Keep the task and path: the robot may still be on it. Its telemetry
+    // decides what happens to the task once it reconnects.
     state.status = RobotStatus.LOST;
-    state.expected_path = [];
-    state.waypoints_hit = [];
 
     effects.push({
       type: "publish_alert",
