@@ -50,7 +50,9 @@ export type PlantType =
 
 export type GrowthStage = "seedling" | "vegetative" | "mature" | "harvest_ready";
 
-export type CommandType = "navigate" | "return_to_dock" | "stop" | "resume" | "cancel";
+export type CommandType = "navigate" | "return_to_dock" | "stop" | "resume" | "cancel" | "jog";
+
+export type JogDirection = "forward" | "backward";
 
 /** FarmTask.type in the orchestrator */
 export type TaskType = "water" | "grow" | "harvest" | "custom" | "stop" | "return_to_dock";
@@ -86,6 +88,8 @@ export interface RobotCommand {
   target_node?: string;
   action_at_target?: ActionAtTarget;
   duration_ms?: number;
+  /** jog only: the robot drives a fixed 500 ms pulse this way */
+  direction?: JogDirection;
   priority: TaskPriority;
   source: CommandSource;
   /** Interrupt the current task instead of queueing behind it */

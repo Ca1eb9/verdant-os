@@ -27,6 +27,11 @@ export interface CommandRequest {
 }
 
 export interface FarmDataSource {
+  /**
+   * "local" when talking to the Pi on the farm network, "remote" through
+   * Supabase. Manual driving (jog) is only offered in local mode.
+   */
+  readonly mode: "local" | "remote";
   /** Farm layout, or null to keep the default layout */
   getTopology(): Promise<FarmTopology | null>;
   /** Streams the full robot list whenever any robot changes. Returns unsubscribe. */
@@ -57,6 +62,7 @@ async function readJson<T>(response: Response): Promise<T> {
  * stream, and commands through this app's /api/commands route (Supabase).
  */
 export const dashboardApiSource: FarmDataSource = {
+  mode: "remote",
   async getTopology() {
     return null;
   },
