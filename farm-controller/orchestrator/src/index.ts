@@ -363,6 +363,7 @@ function remoteTask(msg: RemoteCommand, taskId: string): FarmTask {
     task_id: taskId,
     type: c.command === "stop" || c.command === "return_to_dock"
       ? c.command
+      : action === "charge" ? "return_to_dock" // "go to dock and charge"
       : action === "water" || action === "grow" || action === "harvest" ? action : "custom",
     target_node: c.target_node,
     duration_ms: c.duration_ms,
