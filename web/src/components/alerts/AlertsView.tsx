@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
-import { buildAlertSignature, evaluateTelemetryAlerts, fromFarmAlert, readTelemetryAlerts } from "@/lib/alerts";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { HeartbeatPanel, ago, isSilent, type Heartbeat } from "@/components/alerts/Heartbeats";
 import { useFarmLive } from "@/hooks/useFarmLive";
@@ -10,10 +9,11 @@ import { SENSOR_STALE_MS, useFarmTelemetry } from "@/hooks/useFarmTelemetry";
 import { TimeWindowPicker } from "@/components/ui/TimeWindowPicker";
 import { ROBOT_STALE_MS } from "@/lib/farm/robots";
 import { TIME_WINDOWS } from "@/lib/time-windows";
-import type { TelemetryAlert } from "@/lib/types";
+import type { FarmAlert } from "@/lib/farm/types";
 import styles from "@/components/alerts/AlertsView.module.css";
 
 const PAGE_SIZE = 25;
+const POLL_MS = 10_000;
 
 export function AlertsView() {
   const { activeFarmId, farm } = useSelectedFarm();
@@ -31,18 +31,23 @@ export function AlertsView() {
     return () => window.clearInterval(id);
   }, []);
 
-  // alerts the farm has stored (covers a reload; this tab's own list is in memory)
-  const [farmAlerts, setFarmAlerts] = useState<TelemetryAlert[]>([]);
+  // alerts come from the farm's alert engine via the data source; nothing is
+  // stored here, so a reload simply asks again
+  const [alerts, setAlerts] = useState<FarmAlert[]>([]);
   useEffect(() => {
     let cancelled = false;
-    source
-      .listAlerts(Date.now() - TIME_WINDOWS[timeWindow].ms)
-      .then((list) => !cancelled && setFarmAlerts(list.map((alert) => fromFarmAlert(alert, farm))))
-      .catch(() => !cancelled && setFarmAlerts([]));
+    const load = () =>
+      source
+        .listAlerts(Date.now() - TIME_WINDOWS[timeWindow].ms)
+        .then((list) => !cancelled && setAlerts([...list].sort((a, b) => b.timestamp - a.timestamp)))
+        .catch(() => !cancelled && setAlerts([]));
+    void load();
+    const id = window.setInterval(load, POLL_MS);
     return () => {
       cancelled = true;
+      window.clearInterval(id);
     };
-  }, [farm, source, timeWindow]);
+  }, [activeFarmId, source, timeWindow]);
 
   // every device that reports in: the shelf sensor feed and each robot
   const beats = useMemo<Heartbeat[]>(
@@ -56,71 +61,46 @@ export function AlertsView() {
 
   useEffect(() => setShown(PAGE_SIZE), [activeFarmId, timeWindow]);
 
-  const currentAlerts = useMemo(
-    () => evaluateTelemetryAlerts(farm, snapshot, lastUpdate, Date.now()),
-    [farm, lastUpdate, snapshot],
+  const recent = useMemo(() => {
+    if (now === null) return [];
+    const since = now - TIME_WINDOWS[timeWindow].ms;
+    return alerts.filter((alert) => alert.timestamp >= since);
+  }, [alerts, now, timeWindow]);
+
+  const counts = useMemo(
+    () => ({
+      warning: recent.filter((alert) => alert.severity === "warning").length,
+      critical: recent.filter((alert) => alert.severity === "critical").length,
+    }),
+    [recent],
   );
 
-  // active: shown whatever the window, dated from when they started.
-  // recent: earlier occurrences that started inside the window, newest first.
-  const { active, recent } = useMemo(() => {
-    if (now === null) return { active: [], recent: [] };
-    const byId = new Map([...readTelemetryAlerts(activeFarmId), ...farmAlerts].map((alert) => [alert.id, alert]));
-    const stored = [...byId.values()].sort(
-      (left, right) => new Date(right.detectedAt).getTime() - new Date(left.detectedAt).getTime(),
-    );
-    const ongoing = new Set<string>();
-
-    const active = currentAlerts.map((alert) => {
-      const signature = buildAlertSignature(alert);
-      const started = stored.find((item) => buildAlertSignature(item) === signature);
-      if (started) ongoing.add(started.id);
-      return started ? { ...alert, detectedAt: started.detectedAt } : alert;
-    });
-
-    const since = now - TIME_WINDOWS[timeWindow].ms;
-    const recent = stored.filter(
-      (alert) => !ongoing.has(alert.id) && new Date(alert.detectedAt).getTime() >= since,
-    );
-
-    return { active, recent };
-  }, [activeFarmId, currentAlerts, farmAlerts, now, timeWindow]);
-
-  const counts = useMemo(() => {
-    const inWindow = [...active, ...recent];
-    return {
-      warning: inWindow.filter((alert) => alert.severity === "warning").length,
-      critical: inWindow.filter((alert) => alert.severity === "critical").length,
-    };
-  }, [active, recent]);
-
-  const renderAlert = (alert: TelemetryAlert, ongoing: boolean) => (
-    <article key={alert.id} className={`glassPanel ${styles.alertCard}`}>
+  const renderAlert = (alert: FarmAlert) => (
+    <article key={alert.alert_id} className={`glassPanel ${styles.alertCard}`}>
       <div className={styles.alertHead}>
         <div>
-          <span className="eyebrow">{alert.source ? `${alert.source} \u00B7 ${alert.metric}` : alert.metric}</span>
-          <h2 className={styles.alertTitle}>{alert.title}</h2>
+          <span className="eyebrow">
+            {alert.source} {"\u00B7"} {alert.metric}
+          </span>
+          <h2 className={styles.alertTitle}>{alert.message}</h2>
         </div>
         <span className={`${styles.severity} ${styles[alert.severity]}`}>{alert.severity}</span>
       </div>
 
-      {/* message text is stored when the alert fires, in the units it was recorded with */}
-      <p className={styles.alertMessage}>{alert.message}</p>
+      <p className={styles.alertMessage}>
+        Raised by {alert.source_type} {alert.source}.
+      </p>
 
       <div className={styles.alertMeta}>
         <span>
-          <strong>{ongoing ? "Active since:" : "Detected:"}</strong> {fmt.time(alert.detectedAt)}
+          <strong>Detected:</strong> {fmt.time(alert.timestamp)}
         </span>
-        {alert.value ? (
-          <span>
-            <strong>Value:</strong> {alert.value}
-          </span>
-        ) : null}
-        {alert.threshold ? (
-          <span>
-            <strong>Threshold:</strong> {alert.threshold}
-          </span>
-        ) : null}
+        <span>
+          <strong>Value:</strong> {alert.value}
+        </span>
+        <span>
+          <strong>Threshold:</strong> {alert.threshold}
+        </span>
       </div>
     </article>
   );
@@ -146,9 +126,9 @@ export function AlertsView() {
 
       <div className={styles.summaryGrid}>
         <article className={`glassPanel ${styles.summaryCard}`}>
-          <span className={styles.summaryLabel}>Active now</span>
-          <strong className={styles.summaryValue}>{active.length}</strong>
-          <span className={styles.summaryDetail}>Out of range at this moment</span>
+          <span className={styles.summaryLabel}>Alerts</span>
+          <strong className={styles.summaryValue}>{recent.length}</strong>
+          <span className={styles.summaryDetail}>Raised in the last {windowLabel}</span>
         </article>
         <article className={`glassPanel ${styles.summaryCard}`}>
           <span className={styles.summaryLabel}>Warnings</span>
@@ -179,22 +159,15 @@ export function AlertsView() {
 
       {now !== null ? <HeartbeatPanel beats={beats} now={now} /> : null}
 
-      {active.length ? (
-        <div className={styles.list}>
-          <h2 className={styles.listTitle}>Active now</h2>
-          {active.map((alert) => renderAlert(alert, true))}
-        </div>
-      ) : null}
-
       <div className={styles.list}>
         <h2 className={styles.listTitle}>Last {windowLabel}</h2>
         {recent.length === 0 ? (
           <article className={`glassPanel ${styles.emptyState}`}>
-            <strong>No {active.length ? "other " : ""}alerts in the last {windowLabel}.</strong>
-            <span>{active.length ? "Only the active alerts above." : "System is within range for the selected farm."}</span>
+            <strong>No alerts in the last {windowLabel}.</strong>
+            <span>The farm has not raised any alerts in this window.</span>
           </article>
         ) : (
-          recent.slice(0, shown).map((alert) => renderAlert(alert, false))
+          recent.slice(0, shown).map(renderAlert)
         )}
         {recent.length > shown ? (
           <button type="button" className={styles.showMore} onClick={() => setShown((count) => count + PAGE_SIZE)}>

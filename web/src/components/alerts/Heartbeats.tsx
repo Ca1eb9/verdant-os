@@ -39,15 +39,13 @@ export function HeartbeatPanel({ beats, now }: { beats: Heartbeat[]; now: number
               <span className={`statusDot ${silent ? styles.beatSilent : styles.beatLive}`} />
               <span className={styles.beatName}>
                 <strong>{beat.id}</strong>
-                <span>{beat.kind}</span>
+                <span className={silent ? styles.beatSilent : undefined}>
+                  {beat.kind} {"\u00B7"}{" "}
+                  <time dateTime={new Date(beat.lastSeen).toISOString()} title={new Date(beat.lastSeen).toLocaleString()}>
+                    {ago(now - beat.lastSeen)}
+                  </time>
+                </span>
               </span>
-              <time
-                className={styles.beatAge}
-                dateTime={new Date(beat.lastSeen).toISOString()}
-                title={new Date(beat.lastSeen).toLocaleString()}
-              >
-                {ago(now - beat.lastSeen)}
-              </time>
             </li>
           );
         })}

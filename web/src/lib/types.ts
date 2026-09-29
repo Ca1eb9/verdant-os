@@ -1,15 +1,6 @@
 export type ConnectionState = "online" | "offline";
 export type LiveStatus = "live" | "stale";
 export type FloatSensorState = 0 | 1;
-export type AlertSeverity = "warning" | "critical";
-export type AlertMetric =
-  | "connection"
-  | "air.temperature"
-  | "air.humidity"
-  | "water.temperature"
-  | "water.ph"
-  | "water.level"
-  | "light.ppfd";
 
 export interface FarmIdentity {
   id: string;
@@ -69,22 +60,6 @@ export interface SensorEventRecord {
 
 export interface HistoryPoint extends TelemetrySnapshot {
   index: number;
-}
-
-export interface TelemetryAlert {
-  id: string;
-  farmId: string;
-  farmName: string;
-  /** AlertMetric for alerts raised in this tab; any metric name from the farm */
-  metric: AlertMetric | (string & {});
-  /** Device that raised it, e.g. robot-2 (farm alerts only) */
-  source?: string;
-  severity: AlertSeverity;
-  title: string;
-  message: string;
-  detectedAt: string;
-  value?: string;
-  threshold?: string;
 }
 
 export interface SensorEventPayload {

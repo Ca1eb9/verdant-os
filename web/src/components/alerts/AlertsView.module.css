@@ -107,6 +107,12 @@
   background: rgb(var(--amber-rgb) / 0.1);
 }
 
+.info {
+  color: var(--muted);
+  border: 1px solid var(--line-strong);
+  background: rgb(var(--surface-rgb) / 0.6);
+}
+
 .critical {
   color: var(--danger);
   border: 1px solid rgb(var(--danger-rgb) / 0.18);
@@ -148,7 +154,7 @@
 
 .beats {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
   gap: 0.25rem 1rem;
   margin: 0;
   padding: 0.6rem 1rem;
@@ -157,7 +163,7 @@
 
 .beat {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 0.65rem;
   padding: 0.45rem 0;
@@ -175,13 +181,9 @@
   white-space: nowrap;
 }
 
-.beatName span,
-.beatAge {
+.beatName span {
   color: var(--muted);
   font-size: 0.82rem;
-}
-
-.beatAge {
   font-variant-numeric: tabular-nums;
 }
 
@@ -190,5 +192,9 @@
 }
 
 .beatSilent {
+  color: var(--danger);
+}
+
+.beatName .beatSilent {
   color: var(--danger);
 }

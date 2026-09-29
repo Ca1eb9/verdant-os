@@ -87,7 +87,8 @@ For the Arduino Uno R3 USB serial to Supabase live ingestion flow, see [`docs/li
 
 - Runtime visuals are served from [`public/images`](./public/images), which maps to the `/images` URL path used throughout the app.
 - Supabase reads require explicit environment values. The app does not fall back to a bundled project key.
-- The dashboard simulates live telemetry and persists the latest snapshot locally so the last known state still renders when offline.
+- The dashboard polls the latest sensor reading from the database (`/api/sensor-events/latest`) and shows simulated values until the first one arrives. Nothing is saved in the browser except display preferences.
+- Alerts come from the farm's alert engine through the data source (`FarmDataSource.listAlerts`); the dashboard does not check thresholds itself.
 - Mock telemetry is generated in a TypeScript `MockSensorGenerator` using the same top-level payload shape as the live sensor pipeline: `type`, `ts`, `device`, `seq`, `air`, `water`, `light`, and `level`.
 - The history page uses deterministic time-series data for the selected farm context.
 - The config page surfaces deployment readiness, recent ingestion, and device health.
