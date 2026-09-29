@@ -386,9 +386,6 @@ onto this work, run `firmware/esp32/test_host/run.sh`, then fix:
 - **Battery before first read:** don't publish `battery_pct: 0` while the value
   is unknown; wait for the first sample.
 - **Trim hedges:** drop RC522 support and the MFRC522 library (PN532 is
-  confirmed), the classic-ESP32 pin set (boards are ESP32-S3), and the
-  `wifitest/` diagnostic once WiFi is reliable.
-- **Bench build:** keep `bench/` until the nav task exists, then remove it or
-  keep it as a hardware check.
-- **Tag UIDs:** replace the placeholder `tag_id`s in
-  `farm-controller/topology.json` with real UIDs read on the bench build.
+  confirmed) and the classic-ESP32 pin set (boards are ESP32-S3).
+- **Bench and WiFi builds:** keep `bench/` and `wifitest/` for now. Revisit
+  `bench/` once the nav task exists.
