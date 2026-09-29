@@ -17,6 +17,7 @@
 
 .selectorGroup {
   display: grid;
+  justify-items: start;
   gap: 0.55rem;
 }
 
@@ -26,27 +27,6 @@
 .alertMessage,
 .alertMeta {
   color: var(--muted);
-}
-
-.rangeRow {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem;
-}
-
-.rangeButton {
-  min-height: 2.9rem;
-  padding: 0.7rem 1rem;
-  border-radius: var(--radius-control);
-  border: 1px solid rgb(var(--line-rgb) / 0.12);
-  background: rgb(var(--surface-rgb) / 0.72);
-  color: var(--muted);
-}
-
-.rangeActive {
-  color: var(--text);
-  background: rgb(var(--cyan-rgb) / 0.14);
-  border-color: rgb(var(--cyan-rgb) / 0.3);
 }
 
 .summaryGrid {
@@ -76,6 +56,28 @@
   display: grid;
   gap: 0.85rem;
   margin-top: 1rem;
+}
+
+.listTitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.showMore {
+  justify-self: center;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: rgb(var(--surface-rgb) / 0.7);
+  color: var(--text);
+}
+
+.showMore:hover {
+  border-color: rgb(var(--cyan-rgb) / 0.4);
 }
 
 .alertHead {

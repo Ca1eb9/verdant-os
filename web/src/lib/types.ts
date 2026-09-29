@@ -1,6 +1,5 @@
 export type ConnectionState = "online" | "offline";
 export type LiveStatus = "live" | "stale";
-export type HistoryRange = "24h" | "72h" | "7d";
 export type FloatSensorState = 0 | 1;
 export type AlertSeverity = "warning" | "critical";
 export type AlertMetric =

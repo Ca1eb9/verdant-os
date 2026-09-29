@@ -2,59 +2,99 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
-import { evaluateTelemetryAlerts, readTelemetryAlerts } from "@/lib/alerts";
+import { buildAlertSignature, evaluateTelemetryAlerts, readTelemetryAlerts } from "@/lib/alerts";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { useFarmTelemetry } from "@/hooks/useFarmTelemetry";
+import { TimeWindowPicker } from "@/components/ui/TimeWindowPicker";
+import { TIME_WINDOWS } from "@/lib/time-windows";
 import type { TelemetryAlert } from "@/lib/types";
 import styles from "@/components/alerts/AlertsView.module.css";
 
-function alertSignature(alert: Pick<TelemetryAlert, "farmId" | "metric" | "severity" | "title" | "threshold">) {
-  return [alert.farmId, alert.metric, alert.severity, alert.title, alert.threshold ?? ""].join("|");
-}
+const PAGE_SIZE = 25;
 
 export function AlertsView() {
   const { activeFarmId, farm } = useSelectedFarm();
-  const { fmt } = usePreferences();
-  const [limit, setLimit] = useState<10 | 20>(20);
+  const { fmt, prefs } = usePreferences();
+  const timeWindow = prefs.timeWindow;
+  const windowLabel = TIME_WINDOWS[timeWindow].label;
+  const [shown, setShown] = useState(PAGE_SIZE);
   const { snapshot, lastUpdate } = useFarmTelemetry(activeFarmId);
   // stored alerts live in the browser, so build the list after mount to match the server render
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 15_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => setShown(PAGE_SIZE), [activeFarmId, timeWindow]);
 
   const currentAlerts = useMemo(
     () => evaluateTelemetryAlerts(farm, snapshot, lastUpdate, Date.now()),
     [farm, lastUpdate, snapshot],
   );
 
-  const alerts = useMemo(() => {
-    if (!mounted) return [];
-    const combined = [...currentAlerts, ...readTelemetryAlerts(activeFarmId)];
-    const seen = new Set<string>();
-    const deduped: TelemetryAlert[] = [];
+  // active: shown whatever the window, dated from when they started.
+  // recent: earlier occurrences that started inside the window, newest first.
+  const { active, recent } = useMemo(() => {
+    if (now === null) return { active: [], recent: [] };
+    const stored = [...readTelemetryAlerts(activeFarmId)].sort(
+      (left, right) => new Date(right.detectedAt).getTime() - new Date(left.detectedAt).getTime(),
+    );
+    const ongoing = new Set<string>();
 
-    for (const alert of combined.sort(
-      (left, right) =>
-        new Date(right.detectedAt).getTime() - new Date(left.detectedAt).getTime(),
-    )) {
-      const key = alertSignature(alert);
+    const active = currentAlerts.map((alert) => {
+      const signature = buildAlertSignature(alert);
+      const started = stored.find((item) => buildAlertSignature(item) === signature);
+      if (started) ongoing.add(started.id);
+      return started ? { ...alert, detectedAt: started.detectedAt } : alert;
+    });
 
-      if (seen.has(key)) {
-        continue;
-      }
+    const since = now - TIME_WINDOWS[timeWindow].ms;
+    const recent = stored.filter(
+      (alert) => !ongoing.has(alert.id) && new Date(alert.detectedAt).getTime() >= since,
+    );
 
-      seen.add(key);
-      deduped.push(alert);
-    }
+    return { active, recent };
+  }, [activeFarmId, currentAlerts, now, timeWindow]);
 
-    return deduped.slice(0, limit);
-  }, [activeFarmId, currentAlerts, limit, mounted]);
+  const counts = useMemo(() => {
+    const inWindow = [...active, ...recent];
+    return {
+      warning: inWindow.filter((alert) => alert.severity === "warning").length,
+      critical: inWindow.filter((alert) => alert.severity === "critical").length,
+    };
+  }, [active, recent]);
 
-  const counts = useMemo(
-    () => ({
-      warning: alerts.filter((alert) => alert.severity === "warning").length,
-      critical: alerts.filter((alert) => alert.severity === "critical").length,
-    }),
-    [alerts],
+  const renderAlert = (alert: TelemetryAlert, ongoing: boolean) => (
+    <article key={alert.id} className={`glassPanel ${styles.alertCard}`}>
+      <div className={styles.alertHead}>
+        <div>
+          <span className="eyebrow">{alert.metric}</span>
+          <h2 className={styles.alertTitle}>{alert.title}</h2>
+        </div>
+        <span className={`${styles.severity} ${styles[alert.severity]}`}>{alert.severity}</span>
+      </div>
+
+      {/* message text is stored when the alert fires, in the units it was recorded with */}
+      <p className={styles.alertMessage}>{alert.message}</p>
+
+      <div className={styles.alertMeta}>
+        <span>
+          <strong>{ongoing ? "Active since:" : "Detected:"}</strong> {fmt.time(alert.detectedAt)}
+        </span>
+        {alert.value ? (
+          <span>
+            <strong>Value:</strong> {alert.value}
+          </span>
+        ) : null}
+        {alert.threshold ? (
+          <span>
+            <strong>Threshold:</strong> {alert.threshold}
+          </span>
+        ) : null}
+      </div>
+    </article>
   );
 
   return (
@@ -72,36 +112,25 @@ export function AlertsView() {
       <div className={styles.toolbar}>
         <div className={styles.selectorGroup}>
           <span className={styles.metaLabel}>Window</span>
-          <div className={styles.rangeRow}>
-            {[10, 20].map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={`${styles.rangeButton} ${limit === value ? styles.rangeActive : ""}`}
-                onClick={() => setLimit(value as 10 | 20)}
-              >
-                Last {value}
-              </button>
-            ))}
-          </div>
+          <TimeWindowPicker />
         </div>
       </div>
 
       <div className={styles.summaryGrid}>
         <article className={`glassPanel ${styles.summaryCard}`}>
-          <span className={styles.summaryLabel}>Visible alerts</span>
-          <strong className={styles.summaryValue}>{alerts.length}</strong>
-          <span className={styles.summaryDetail}>Newest recognized warnings first</span>
+          <span className={styles.summaryLabel}>Active now</span>
+          <strong className={styles.summaryValue}>{active.length}</strong>
+          <span className={styles.summaryDetail}>Out of range at this moment</span>
         </article>
         <article className={`glassPanel ${styles.summaryCard}`}>
           <span className={styles.summaryLabel}>Warnings</span>
           <strong className={styles.summaryValue}>{counts.warning}</strong>
-          <span className={styles.summaryDetail}>Soft threshold breaches</span>
+          <span className={styles.summaryDetail}>Soft threshold breaches, last {windowLabel}</span>
         </article>
         <article className={`glassPanel ${styles.summaryCard}`}>
           <span className={styles.summaryLabel}>Critical</span>
           <strong className={styles.summaryValue}>{counts.critical}</strong>
-          <span className={styles.summaryDetail}>Hard threshold breaches</span>
+          <span className={styles.summaryDetail}>Hard threshold breaches, last {windowLabel}</span>
         </article>
         <article className={`glassPanel ${styles.summaryCard}`}>
           <span className={styles.summaryLabel}>Heartbeat</span>
@@ -112,46 +141,28 @@ export function AlertsView() {
         </article>
       </div>
 
+      {active.length ? (
+        <div className={styles.list}>
+          <h2 className={styles.listTitle}>Active now</h2>
+          {active.map((alert) => renderAlert(alert, true))}
+        </div>
+      ) : null}
+
       <div className={styles.list}>
-        {alerts.length === 0 ? (
+        <h2 className={styles.listTitle}>Last {windowLabel}</h2>
+        {recent.length === 0 ? (
           <article className={`glassPanel ${styles.emptyState}`}>
-            <strong>No alerts right now.</strong>
-            <span>System is within range for the selected farm.</span>
+            <strong>No {active.length ? "other " : ""}alerts in the last {windowLabel}.</strong>
+            <span>{active.length ? "Only the active alerts above." : "System is within range for the selected farm."}</span>
           </article>
         ) : (
-          alerts.map((alert) => (
-            <article key={alert.id} className={`glassPanel ${styles.alertCard}`}>
-              <div className={styles.alertHead}>
-                <div>
-                  <span className="eyebrow">{alert.metric}</span>
-                  <h2 className={styles.alertTitle}>{alert.title}</h2>
-                </div>
-                <span className={`${styles.severity} ${styles[alert.severity]}`}>
-                  {alert.severity}
-                </span>
-              </div>
-
-              {/* message text is stored when the alert fires, in the units it was recorded with */}
-              <p className={styles.alertMessage}>{alert.message}</p>
-
-              <div className={styles.alertMeta}>
-                <span>
-                  <strong>Detected:</strong> {fmt.time(alert.detectedAt)}
-                </span>
-                {alert.value ? (
-                  <span>
-                    <strong>Value:</strong> {alert.value}
-                  </span>
-                ) : null}
-                {alert.threshold ? (
-                  <span>
-                    <strong>Threshold:</strong> {alert.threshold}
-                  </span>
-                ) : null}
-              </div>
-            </article>
-          ))
+          recent.slice(0, shown).map((alert) => renderAlert(alert, false))
         )}
+        {recent.length > shown ? (
+          <button type="button" className={styles.showMore} onClick={() => setShown((count) => count + PAGE_SIZE)}>
+            Show more ({recent.length - shown} older)
+          </button>
+        ) : null}
       </div>
     </section>
   );

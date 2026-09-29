@@ -1,23 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { MetricChartPanel } from "@/components/history/MetricChartPanel";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
-import {
-  HISTORY_RANGE_HOURS,
-  buildHistoricalSeries,
-} from "@/lib/mock-data";
+import { TimeWindowPicker } from "@/components/ui/TimeWindowPicker";
+import { buildHistoricalSeries } from "@/lib/mock-data";
 import {
   average,
   formatMetric,
   maximum,
   minimum,
 } from "@/lib/format";
-import type { HistoryRange } from "@/lib/types";
+import { TIME_WINDOWS } from "@/lib/time-windows";
+import type { HistoryPoint } from "@/lib/types";
 import styles from "@/components/history/HistoryView.module.css";
-
-const rangeOptions: HistoryRange[] = ["24h", "72h", "7d"];
 
 // series colours per theme (light uses deeper tones so lines read on white)
 const SERIES_COLORS = {
@@ -29,21 +26,30 @@ const MID_DOT = "\u00B7";
 
 export function HistoryView() {
   const { activeFarmId, farm } = useSelectedFarm();
-  const [range, setRange] = useState<HistoryRange>("72h");
   const { fmt, prefs, theme } = usePreferences();
+  const timeWindow = prefs.timeWindow;
+  const [series, setSeries] = useState<HistoryPoint[]>([]);
+
+  // built in the browser only (no server/client mismatch on the anchor), then
+  // rebuilt every sample step so the short windows keep moving
+  useEffect(() => {
+    const build = () => setSeries(buildHistoricalSeries(activeFarmId, timeWindow));
+    build();
+    const id = window.setInterval(build, TIME_WINDOWS[timeWindow].stepMs);
+    return () => window.clearInterval(id);
+  }, [activeFarmId, timeWindow]);
   const color = SERIES_COLORS[theme];
   const DEGREE = fmt.tempUnit;
 
   // temperatures are stored in °C; convert once for display
   const data = useMemo(() => {
-    const series = buildHistoricalSeries(activeFarmId, HISTORY_RANGE_HOURS[range]);
     if (prefs.temperatureUnit === "C") return series;
     return series.map((point) => ({
       ...point,
       air: { ...point.air, temperature: fmt.tempValue(point.air.temperature) },
       water: { ...point.water, temperature: fmt.tempValue(point.water.temperature) },
     }));
-  }, [activeFarmId, fmt, prefs.temperatureUnit, range]);
+  }, [fmt, prefs.temperatureUnit, series]);
 
   const summary = useMemo(() => {
     const airTemp = data.map((point) => point.air.temperature);
@@ -81,7 +87,7 @@ export function HistoryView() {
   const charts = [
     {
       title: "Air Climate",
-      description: "Temperature and humidity over the selected operating window.",
+      description: `Temperature and humidity over the last ${TIME_WINDOWS[timeWindow].label}.`,
       series: [
         {
           key: "air.temperature",
@@ -188,18 +194,7 @@ export function HistoryView() {
           <div className={styles.controlStack}>
             <div className={styles.controlGroup}>
               <span className={styles.metaLabel}>Window</span>
-              <div className={styles.rangeRow}>
-                {rangeOptions.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className={`${styles.rangeButton} ${range === option ? styles.rangeActive : ""}`}
-                    onClick={() => setRange(option)}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
+              <TimeWindowPicker />
             </div>
           </div>
         </div>
@@ -222,7 +217,7 @@ export function HistoryView() {
             title={chart.title}
             description={chart.description}
             data={data}
-            range={range}
+            timeWindow={timeWindow}
             series={chart.series}
           />
         ))}

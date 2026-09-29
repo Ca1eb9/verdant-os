@@ -33,34 +33,6 @@
   color: var(--muted);
 }
 
-.rangeRow {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.55rem;
-}
-
-.rangeButton {
-  min-width: 4.5rem;
-  min-height: 2.9rem;
-  padding: 0.7rem 1rem;
-  border-radius: var(--radius-control);
-  border: 1px solid rgb(var(--line-rgb) / 0.12);
-  background: rgb(var(--surface-rgb) / 0.72);
-  color: var(--muted);
-  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
-}
-
-.rangeButton:hover {
-  transform: translateY(-1px);
-  border-color: rgb(var(--cyan-rgb) / 0.24);
-}
-
-.rangeActive {
-  color: var(--text);
-  background: rgb(var(--cyan-rgb) / 0.14);
-  border-color: rgb(var(--cyan-rgb) / 0.3);
-}
-
 .summaryGrid {
   display: grid;
   grid-template-columns: 1fr;
@@ -178,10 +150,6 @@
     width: auto;
     flex-wrap: wrap;
     justify-content: flex-end;
-  }
-
-  .rangeRow {
-    display: inline-flex;
   }
 
   .summaryGrid,

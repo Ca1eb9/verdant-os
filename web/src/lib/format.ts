@@ -1,4 +1,6 @@
 export function formatMetric(value: number, unit: string, precision = 1) {
+  // no readings yet (average of nothing is NaN, min/max are ±Infinity)
+  if (!Number.isFinite(value)) return "\u2014";
   return `${new Intl.NumberFormat("en-US", {
     minimumFractionDigits: precision,
     maximumFractionDigits: precision,

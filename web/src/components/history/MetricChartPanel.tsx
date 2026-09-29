@@ -12,7 +12,8 @@ import {
 } from "recharts";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { formatMetric } from "@/lib/format";
-import type { HistoryPoint, HistoryRange } from "@/lib/types";
+import { TIME_WINDOWS, type TimeWindow } from "@/lib/time-windows";
+import type { HistoryPoint } from "@/lib/types";
 import styles from "@/components/history/HistoryView.module.css";
 
 interface SeriesConfig {
@@ -28,7 +29,7 @@ interface MetricChartPanelProps {
   title: string;
   description: string;
   data: HistoryPoint[];
-  range: HistoryRange;
+  timeWindow: TimeWindow;
   series: SeriesConfig[];
 }
 
@@ -77,8 +78,8 @@ function ChartTooltip({
 export function MetricChartPanel({
   data,
   description,
-  range,
   series,
+  timeWindow,
   title,
 }: MetricChartPanelProps) {
   const hasRightAxis = series.some((item) => item.axisId === "right");
@@ -102,7 +103,7 @@ export function MetricChartPanel({
               tickLine={false}
               minTickGap={24}
               tick={{ fill: axis.tick, fontSize: 12 }}
-              tickFormatter={(value) => fmt.tick(value, range !== "7d")}
+              tickFormatter={(value) => fmt.tick(value, TIME_WINDOWS[timeWindow].tick)}
             />
             <YAxis
               yAxisId="left"

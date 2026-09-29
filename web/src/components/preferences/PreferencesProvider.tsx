@@ -13,6 +13,7 @@ import {
   type Preferences,
   type ResolvedTheme,
 } from "@/lib/preferences";
+import type { TickStyle } from "@/lib/time-windows";
 
 export const PREFERENCES_KEY = "verdantos:preferences";
 
@@ -29,7 +30,7 @@ interface PreferencesContextValue {
     temp: (celsius: number | null, precision?: number) => string;
     tempValue: (celsius: number) => number;
     tempUnit: string;
-    tick: (value: string, compact?: boolean) => string;
+    tick: (value: string, style: TickStyle) => string;
   };
 }
 
@@ -120,7 +121,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
         temp: (c, precision = 1) => formatTemperature(c, prefs, precision),
         tempValue: (c) => toDisplayTemp(c, prefs.temperatureUnit),
         tempUnit: temperatureLabel(prefs.temperatureUnit),
-        tick: (v, compact = false) => (ready ? formatChartTick(v, prefs, compact) : ""),
+        tick: (v, style) => (ready ? formatChartTick(v, prefs, style) : ""),
       },
     }),
     [prefs, ready, reset, setPref, theme],

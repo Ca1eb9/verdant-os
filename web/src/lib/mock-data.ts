@@ -2,17 +2,11 @@ import type {
   FarmIdentity,
   FloatSensorState,
   HistoryPoint,
-  HistoryRange,
   SensorEventPayload,
   TelemetrySnapshot,
 } from "@/lib/types";
 import { calibrateLightPpfd } from "@/lib/light-calibration";
-
-export const HISTORY_RANGE_HOURS: Record<HistoryRange, number> = {
-  "24h": 24,
-  "72h": 72,
-  "7d": 168,
-};
+import { TIME_WINDOWS, type TimeWindow } from "@/lib/time-windows";
 
 export const FARMS: FarmIdentity[] = [
   {
@@ -111,8 +105,9 @@ export class MockSensorGenerator {
     this.deviceId = deviceId;
   }
 
-  generate(timestamp: Date): SensorEventPayload {
-    this.sequence += 1;
+  /** sequence: pass one to make the reading depend only on it and the time (see history) */
+  generate(timestamp: Date, sequence = this.sequence + 1): SensorEventPayload {
+    this.sequence = sequence;
     const eventSeed = hashSeed(`${this.deviceId}:${this.sequence}:${timestamp.getTime()}`);
     const nextRandom = createSeededRandom(eventSeed);
     const lux = randomInteger(nextRandom, 18_000, 26_500);
@@ -177,11 +172,11 @@ function mapEventToTelemetrySnapshot(
   };
 }
 
-export function buildHistoricalSeries(farmId: string, hours = 168): HistoryPoint[] {
-  // anchored to the hour so the server render and the browser build the same series
-  const hourMs = 60 * 60 * 1000;
-  const now = Math.floor(Date.now() / hourMs) * hourMs;
-  const rawEvents = buildHistoricalSensorEvents(farmId, hours, now);
+export function buildHistoricalSeries(farmId: string, window: TimeWindow, now = Date.now()): HistoryPoint[] {
+  const { ms, stepMs } = TIME_WINDOWS[window];
+  // anchored to the step, so rebuilding as time passes keeps earlier points in place
+  const end = Math.floor(now / stepMs) * stepMs;
+  const rawEvents = buildHistoricalSensorEvents(farmId, ms / stepMs, stepMs, end);
 
   return rawEvents.map((event, index) => ({
     index,
@@ -203,13 +198,13 @@ export function buildLiveTelemetry(farmId: string, frames = 30): TelemetrySnapsh
   );
 }
 
-export function buildHistoricalSensorEvents(farmId: string, hours = 168, now = Date.now()) {
+export function buildHistoricalSensorEvents(farmId: string, count = 168, stepMs = 60 * 60 * 1000, now = Date.now()) {
   const generator = new MockSensorGenerator(mapDeviceId(farmId));
 
-  return Array.from({ length: hours }, (_, index) => {
-    const hoursBack = hours - index - 1;
-    const timestamp = new Date(now - hoursBack * 60 * 60 * 1000);
-    return generator.generate(timestamp);
+  return Array.from({ length: count }, (_, index) => {
+    const timestamp = new Date(now - (count - index - 1) * stepMs);
+    // seeded by time, so the same moment reads the same on every rebuild
+    return generator.generate(timestamp, Math.floor(timestamp.getTime() / stepMs));
   });
 }
 

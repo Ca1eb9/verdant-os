@@ -3,7 +3,10 @@ import type { FarmIdentity, TelemetryAlert, TelemetrySnapshot } from "@/lib/type
 const ALERT_STORAGE_PREFIX = "verdantos:alerts:v1:";
 const LAST_AGE_WARNING_MS = 10_000;
 const LAST_AGE_CRITICAL_MS = 30_000;
-const MAX_STORED_ALERTS = 50;
+// every occurrence is kept (not one per alert type) so time windows count
+// correctly; 7 days covers the longest window on the Alerts page
+const MAX_STORED_ALERTS = 500;
+const STORED_ALERT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 const THRESHOLDS = {
   airTemperature: {
@@ -72,7 +75,7 @@ function buildAlertId() {
   return globalThis.crypto?.randomUUID?.() ?? `alert-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function buildAlertSignature(alert: Omit<TelemetryAlert, "id">) {
+export function buildAlertSignature(alert: Omit<TelemetryAlert, "id">) {
   return [
     alert.farmId,
     alert.metric,
@@ -353,26 +356,18 @@ export function recordTelemetryAlerts(
 
   const nextActiveSignatures = currentAlerts.map(buildAlertSignature);
 
-  const dedupedAlerts: TelemetryAlert[] = [];
-  const seen = new Set<string>();
-
-  for (const alert of nextAlerts) {
-    const signature = buildAlertSignature(alert);
-
-    if (seen.has(signature)) {
-      continue;
-    }
-
-    seen.add(signature);
-    dedupedAlerts.push(alert);
-  }
+  // an alert is stored once when it starts; a later recurrence is a new entry
+  const oldest = Date.now() - STORED_ALERT_MAX_AGE_MS;
+  const keptAlerts = nextAlerts
+    .filter((alert) => new Date(alert.detectedAt).getTime() >= oldest)
+    .slice(0, MAX_STORED_ALERTS);
 
   writeStoredState(farmId, {
-    alerts: dedupedAlerts.slice(0, MAX_STORED_ALERTS),
+    alerts: keptAlerts,
     activeSignatures: nextActiveSignatures,
   });
 
-  return dedupedAlerts.slice(0, MAX_STORED_ALERTS);
+  return keptAlerts;
 }
 
 export function readTelemetryAlerts(farmId: string) {
