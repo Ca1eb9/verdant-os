@@ -75,7 +75,10 @@ export interface TelemetryAlert {
   id: string;
   farmId: string;
   farmName: string;
-  metric: AlertMetric;
+  /** AlertMetric for alerts raised in this tab; any metric name from the farm */
+  metric: AlertMetric | (string & {});
+  /** Device that raised it, e.g. robot-2 (farm alerts only) */
+  source?: string;
   severity: AlertSeverity;
   title: string;
   message: string;

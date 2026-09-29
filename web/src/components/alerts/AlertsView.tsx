@@ -2,10 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
-import { buildAlertSignature, evaluateTelemetryAlerts, readTelemetryAlerts } from "@/lib/alerts";
+import { buildAlertSignature, evaluateTelemetryAlerts, fromFarmAlert, readTelemetryAlerts } from "@/lib/alerts";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
-import { useFarmTelemetry } from "@/hooks/useFarmTelemetry";
+import { HeartbeatPanel, ago, isSilent, type Heartbeat } from "@/components/alerts/Heartbeats";
+import { useFarmLive } from "@/hooks/useFarmLive";
+import { SENSOR_STALE_MS, useFarmTelemetry } from "@/hooks/useFarmTelemetry";
 import { TimeWindowPicker } from "@/components/ui/TimeWindowPicker";
+import { ROBOT_STALE_MS } from "@/lib/farm/robots";
 import { TIME_WINDOWS } from "@/lib/time-windows";
 import type { TelemetryAlert } from "@/lib/types";
 import styles from "@/components/alerts/AlertsView.module.css";
@@ -19,13 +22,37 @@ export function AlertsView() {
   const windowLabel = TIME_WINDOWS[timeWindow].label;
   const [shown, setShown] = useState(PAGE_SIZE);
   const { snapshot, lastUpdate } = useFarmTelemetry(activeFarmId);
-  // stored alerts live in the browser, so build the list after mount to match the server render
+  const { source, robots } = useFarmLive();
+  // alerts and ages depend on the browser clock, so build them after mount to match the server render
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     setNow(Date.now());
-    const id = window.setInterval(() => setNow(Date.now()), 15_000);
+    const id = window.setInterval(() => setNow(Date.now()), 5_000);
     return () => window.clearInterval(id);
   }, []);
+
+  // alerts the farm has stored (covers a reload; this tab's own list is in memory)
+  const [farmAlerts, setFarmAlerts] = useState<TelemetryAlert[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    source
+      .listAlerts(Date.now() - TIME_WINDOWS[timeWindow].ms)
+      .then((list) => !cancelled && setFarmAlerts(list.map((alert) => fromFarmAlert(alert, farm))))
+      .catch(() => !cancelled && setFarmAlerts([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [farm, source, timeWindow]);
+
+  // every device that reports in: the shelf sensor feed and each robot
+  const beats = useMemo<Heartbeat[]>(
+    () => [
+      { id: snapshot.deviceId, kind: "Shelf sensor", lastSeen: lastUpdate.getTime(), staleAfterMs: SENSOR_STALE_MS },
+      ...robots.map((robot) => ({ id: robot.id, kind: "Robot", lastSeen: robot.lastSeen, staleAfterMs: ROBOT_STALE_MS })),
+    ],
+    [lastUpdate, robots, snapshot.deviceId],
+  );
+  const silent = now === null ? [] : beats.filter((beat) => isSilent(beat, now));
 
   useEffect(() => setShown(PAGE_SIZE), [activeFarmId, timeWindow]);
 
@@ -38,7 +65,8 @@ export function AlertsView() {
   // recent: earlier occurrences that started inside the window, newest first.
   const { active, recent } = useMemo(() => {
     if (now === null) return { active: [], recent: [] };
-    const stored = [...readTelemetryAlerts(activeFarmId)].sort(
+    const byId = new Map([...readTelemetryAlerts(activeFarmId), ...farmAlerts].map((alert) => [alert.id, alert]));
+    const stored = [...byId.values()].sort(
       (left, right) => new Date(right.detectedAt).getTime() - new Date(left.detectedAt).getTime(),
     );
     const ongoing = new Set<string>();
@@ -56,7 +84,7 @@ export function AlertsView() {
     );
 
     return { active, recent };
-  }, [activeFarmId, currentAlerts, now, timeWindow]);
+  }, [activeFarmId, currentAlerts, farmAlerts, now, timeWindow]);
 
   const counts = useMemo(() => {
     const inWindow = [...active, ...recent];
@@ -70,7 +98,7 @@ export function AlertsView() {
     <article key={alert.id} className={`glassPanel ${styles.alertCard}`}>
       <div className={styles.alertHead}>
         <div>
-          <span className="eyebrow">{alert.metric}</span>
+          <span className="eyebrow">{alert.source ? `${alert.source} \u00B7 ${alert.metric}` : alert.metric}</span>
           <h2 className={styles.alertTitle}>{alert.title}</h2>
         </div>
         <span className={`${styles.severity} ${styles[alert.severity]}`}>{alert.severity}</span>
@@ -133,13 +161,23 @@ export function AlertsView() {
           <span className={styles.summaryDetail}>Hard threshold breaches, last {windowLabel}</span>
         </article>
         <article className={`glassPanel ${styles.summaryCard}`}>
-          <span className={styles.summaryLabel}>Heartbeat</span>
-          <strong className={styles.summaryValue} suppressHydrationWarning>
-            {fmt.time(lastUpdate)}
+          <span className={styles.summaryLabel}>Devices reporting</span>
+          <strong className={styles.summaryValue}>
+            {now === null ? "\u2014" : `${beats.length - silent.length} / ${beats.length}`}
           </strong>
-          <span className={styles.summaryDetail}>Last sensor heartbeat seen</span>
+          <span className={styles.summaryDetail}>
+            {now === null
+              ? "Checking heartbeats"
+              : silent.length === 0
+                ? `All reporting \u00B7 oldest ${ago(now - Math.min(...beats.map((beat) => beat.lastSeen)))}`
+                : silent.length === 1
+                  ? `${silent[0].id} last heard ${ago(now - silent[0].lastSeen)}`
+                  : `${silent.length} silent: ${silent.map((beat) => beat.id).join(", ")}`}
+          </span>
         </article>
       </div>
+
+      {now !== null ? <HeartbeatPanel beats={beats} now={now} /> : null}
 
       {active.length ? (
         <div className={styles.list}>

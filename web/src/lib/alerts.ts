@@ -1,10 +1,11 @@
+import type { FarmAlert } from "@/lib/farm/types";
 import type { FarmIdentity, TelemetryAlert, TelemetrySnapshot } from "@/lib/types";
 
-const ALERT_STORAGE_PREFIX = "verdantos:alerts:v1:";
 const LAST_AGE_WARNING_MS = 10_000;
 const LAST_AGE_CRITICAL_MS = 30_000;
-// every occurrence is kept (not one per alert type) so time windows count
-// correctly; 7 days covers the longest window on the Alerts page
+// Alerts raised in this tab are kept in memory only (gone on reload; the farm's
+// own alert store is queried then). Every occurrence is kept, not one per alert
+// type, so time windows count correctly; 7 days is the longest window.
 const MAX_STORED_ALERTS = 500;
 const STORED_ALERT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -56,14 +57,6 @@ type StoredAlertState = {
   activeSignatures: string[];
 };
 
-function storageKey(farmId: string) {
-  return `${ALERT_STORAGE_PREFIX}${farmId}`;
-}
-
-function isClient() {
-  return typeof window !== "undefined";
-}
-
 function toFixed(value: number, precision = 1) {
   return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: precision,
@@ -85,36 +78,14 @@ export function buildAlertSignature(alert: Omit<TelemetryAlert, "id">) {
   ].join("|");
 }
 
+const alertLog = new Map<string, StoredAlertState>();
+
 function readStoredState(farmId: string): StoredAlertState {
-  if (!isClient()) {
-    return { alerts: [], activeSignatures: [] };
-  }
-
-  try {
-    const value = window.localStorage.getItem(storageKey(farmId));
-    if (!value) {
-      return { alerts: [], activeSignatures: [] };
-    }
-
-    const parsed = JSON.parse(value) as Partial<StoredAlertState>;
-
-    return {
-      alerts: Array.isArray(parsed.alerts) ? (parsed.alerts as TelemetryAlert[]) : [],
-      activeSignatures: Array.isArray(parsed.activeSignatures)
-        ? (parsed.activeSignatures as string[])
-        : [],
-    };
-  } catch {
-    return { alerts: [], activeSignatures: [] };
-  }
+  return alertLog.get(farmId) ?? { alerts: [], activeSignatures: [] };
 }
 
 function writeStoredState(farmId: string, state: StoredAlertState) {
-  if (!isClient()) {
-    return;
-  }
-
-  window.localStorage.setItem(storageKey(farmId), JSON.stringify(state));
+  alertLog.set(farmId, state);
 }
 
 function makeAlert(
@@ -372,4 +343,21 @@ export function recordTelemetryAlerts(
 
 export function readTelemetryAlerts(farmId: string) {
   return readStoredState(farmId).alerts;
+}
+
+/** A farm alert (alert engine, via the data source) in the shape the Alerts page shows */
+export function fromFarmAlert(alert: FarmAlert, farm: FarmIdentity): TelemetryAlert {
+  return {
+    id: alert.alert_id,
+    farmId: farm.id,
+    farmName: farm.name,
+    metric: alert.metric,
+    source: alert.source,
+    severity: alert.severity === "critical" ? "critical" : "warning",
+    title: alert.message,
+    message: `Raised by ${alert.source_type} ${alert.source}.`,
+    detectedAt: new Date(alert.timestamp).toISOString(),
+    value: String(alert.value),
+    threshold: String(alert.threshold),
+  };
 }

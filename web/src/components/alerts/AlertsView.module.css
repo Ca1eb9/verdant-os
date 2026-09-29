@@ -145,3 +145,50 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+.beats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.25rem 1rem;
+  margin: 0;
+  padding: 0.6rem 1rem;
+  list-style: none;
+}
+
+.beat {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.45rem 0;
+}
+
+.beatName {
+  display: grid;
+  min-width: 0;
+}
+
+.beatName strong {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.beatName span,
+.beatAge {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.beatAge {
+  font-variant-numeric: tabular-nums;
+}
+
+.beatLive {
+  color: var(--teal);
+}
+
+.beatSilent {
+  color: var(--danger);
+}

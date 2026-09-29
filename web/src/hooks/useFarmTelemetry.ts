@@ -12,7 +12,8 @@ import type {
   TelemetrySnapshot,
 } from "@/lib/types";
 
-const STALE_AFTER_MS = 10_000;
+/** Shelf sensor feed counts as silent after this long without a reading */
+export const SENSOR_STALE_MS = 10_000;
 const POLL_INTERVAL_MS = 2_000;
 
 function storageKey(farmId: string) {
@@ -287,7 +288,7 @@ export function useFarmTelemetry(farmId: string) {
     };
   }, [farmId, isOnline, latest]);
 
-  const isStale = now - lastUpdate.getTime() > STALE_AFTER_MS;
+  const isStale = now - lastUpdate.getTime() > SENSOR_STALE_MS;
   const liveStatus: LiveStatus = !isStale ? "live" : "stale";
   const alerts = useMemo<TelemetryAlert[]>(
     () => evaluateTelemetryAlerts(farm, snapshot, lastUpdate, now),

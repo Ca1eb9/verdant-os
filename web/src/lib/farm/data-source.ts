@@ -6,7 +6,7 @@
 // talk to this interface, so they work unchanged in both modes.
 
 import type { RobotView } from "@/lib/farm/robots";
-import type { FarmTopology, RobotCommand } from "@/lib/farm/types";
+import type { FarmAlert, FarmTopology, RobotCommand } from "@/lib/farm/types";
 
 export type CommandStatus = "pending" | "sent" | "failed";
 
@@ -33,6 +33,8 @@ export interface FarmDataSource {
   subscribeRobots(onRobots: (robots: RobotView[]) => void): () => void;
   sendCommand(request: CommandRequest): Promise<CommandRecord>;
   listRecentCommands(robotId?: string): Promise<CommandRecord[]>;
+  /** Alerts raised since this time (Unix ms), from the alerts the farm has stored */
+  listAlerts(since: number): Promise<FarmAlert[]>;
 }
 
 export class CommandError extends Error {
@@ -78,6 +80,11 @@ export const dashboardApiSource: FarmDataSource = {
     const response = await fetch(`/api/commands${query}`, { cache: "no-store" });
     const payload = await readJson<{ commands: CommandRecord[] }>(response);
     return payload.commands;
+  },
+  async listAlerts() {
+    // nothing stores farm/alerts yet; the data service reads them from the
+    // Pi (SQLite) or Supabase once the alert engine and bridge write them
+    return [];
   },
 };
 

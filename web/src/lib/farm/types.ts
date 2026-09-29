@@ -101,6 +101,20 @@ export interface ElevatorTelemetry {
   timestamp: number;
 }
 
+/** Published to farm/alerts by the alert engine or any service */
+export interface FarmAlert {
+  alert_id: string;
+  severity: "info" | "warning" | "critical";
+  /** Device or service that raised it, e.g. robot-2, shelf-1 */
+  source: string;
+  source_type: "robot" | "elevator" | "shelf" | "system";
+  message: string;
+  metric: string;
+  value: number;
+  threshold: number;
+  timestamp: number;
+}
+
 /**
  * Published to farm/commands/remote by the Supabase bridge.
  * robot_id is not in the shared type yet; the bridge needs it to pick
