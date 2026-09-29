@@ -354,3 +354,41 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
 - Elevator moves (how the robot rides between levels and confirms arrival)
 - `harvest` action
 - Bluetooth controller pairing and input mapping
+
+## Follow-ups for `jameson/comms-sensor-tasks`
+
+That branch (comms + sensor tasks) predates this contract. After rebasing it
+onto this work, run `firmware/esp32/test_host/run.sh`, then fix:
+
+- **Telemetry fields:** add `task_id` and `last_completed_task_id` to
+  `TelemetryMsg` and `build_telemetry_json` (send `null` when empty). The
+  orchestrator drops telemetry without them.
+- **Nullable position:** send `current_node: null` (not `""`) before the first
+  tag read, and allow `heading: null`.
+- **Node ids:** `current_node`, event `node_id` and command `path` entries are
+  node ids, not tag ids. The nav task maps tag UID to node via the flash graph.
+  Update `TelemetryMsg`/`Command` sizes and the tag-id regex in
+  `test_host/check_contract.mjs`.
+- **Optional `path`:** `parse_command_json` must accept `navigate` without a
+  `path` (remove the `MissingPath` error); the robot plans its own route.
+- **Commands:** add `cancel` (with `task_id`) and `jog` (with `direction`) to
+  `CommandType` and the parser. Ignore `immediate`.
+- **Statuses:** add `stopped` and `initializing` to `RobotStatus`; remove `lost`
+  (only the orchestrator reports it).
+- **No Pi heartbeat:** remove the `farm/system/orchestrator/heartbeat`
+  subscription and don't build a Pi watchdog. `g_last_pi_msg_ms` may stay for
+  diagnostics only.
+- **Single outbound FIFO:** merge `g_telemetry_queue` and `g_event_queue` into
+  one ordered queue (or keep the current events-before-telemetry draining and
+  note it here).
+- **No NTP:** remove the SNTP/clock code in `comms_task`; `timestamp` can be
+  `millis()`. Relax the Unix-ms check in `check_contract.mjs`.
+- **Battery before first read:** don't publish `battery_pct: 0` while the value
+  is unknown; wait for the first sample.
+- **Trim hedges:** drop RC522 support and the MFRC522 library (PN532 is
+  confirmed), the classic-ESP32 pin set (boards are ESP32-S3), and the
+  `wifitest/` diagnostic once WiFi is reliable.
+- **Bench build:** keep `bench/` until the nav task exists, then remove it or
+  keep it as a hardware check.
+- **Tag UIDs:** replace the placeholder `tag_id`s in
+  `farm-controller/topology.json` with real UIDs read on the bench build.
