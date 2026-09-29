@@ -11,6 +11,7 @@
     "ingest": "npm -w @farm/ingester run start",
     "ingest:dev": "npm -w @farm/ingester run dev",
     "orch": "npm -w @farm/orchestrator run start",
-    "orch:dev": "npm -w @farm/orchestrator run dev"
+    "orch:dev": "npm -w @farm/orchestrator run dev",
+    "typecheck": "npm run typecheck --workspaces --if-present"
   }
 }

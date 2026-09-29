@@ -81,8 +81,8 @@ If one of these blocks your task, raise it; don't work around it.
 ## Before you open a PR
 
 1. **Build and check** each part you touched:
-   - Pi services: `npm install` at the root, then `npm -w @farm/shared run build`.
-     Type-check with `tsc --noEmit --strict` and run the service.
+   - Pi services: `npm install` and `npm -w @farm/shared run build` at the root,
+     then `npm run typecheck`, and run the service.
    - Dashboard: `cd web && npm run lint && npm run typecheck && npm run build`.
    - Firmware: `pio run`, plus any host tests in `firmware/esp32`.
 2. **Run it for real.** For anything touching robot behaviour, run the
