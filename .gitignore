@@ -77,3 +77,5 @@ coverage/
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+# Firmware secrets (WiFi password)
+firmware/esp32/src/secrets.h
