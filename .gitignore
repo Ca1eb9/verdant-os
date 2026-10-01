@@ -81,5 +81,5 @@ orchestrator-state.json.tmp
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
-# Firmware secrets (WiFi password)
+# Firmware secrets
 firmware/esp32/src/secrets.h

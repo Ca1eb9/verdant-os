@@ -1,5 +1,5 @@
 // config.h
-// Pin assignments, WiFi credentials, thresholds, timing constants.
+// Pin assignments, thresholds, timing constants.
 // Nothing tunable should be hardcoded anywhere else.
 
 #pragma once
@@ -12,14 +12,12 @@
 
 // ---- Network (see docs/WIFI-SETUP.md) ---------------------------------------
 // Real credentials go in secrets.h (gitignored). Copy secrets.example.h to
-// secrets.h and edit it. The repo is public, so never commit the password.
+// secrets.h and edit it. Never commit the password.
 
 #if __has_include("secrets.h")
 #include "secrets.h"
 #else
-#warning "src/secrets.h not found - using placeholder WiFi credentials"
-#define WIFI_SSID "FarmNet"
-#define WIFI_PASS "CHANGE-THIS-PASSWORD"
+#warning "src/secrets.h not found"
 #endif
 
 #ifndef MQTT_BROKER_IP
