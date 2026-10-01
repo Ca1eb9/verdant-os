@@ -6,7 +6,7 @@
 // task that:
 //   - turns SensorData into a TelemetryMsg once a second
 //   - logs each new RFID tag UID (copy these into topology.json)
-//   - publishes "obstacle_detected" when the obstacle flag goes up
+//   - publishes "obstacle_detected" when a front or rear obstacle flag goes up
 //   - prints every command that arrives from the Pi
 //
 // It has no flash graph, so it can't map tags to nodes: it reports
@@ -54,9 +54,9 @@ static void print_command(const Command& c) {
 
 static void print_status() {
   uint32_t hb = g_last_command_ms;
-  LOG("bench", "mqtt=%s  last command=%s%lu ms ago  obstacle=%d",
+  LOG("bench", "mqtt=%s  last command=%s%lu ms ago  obstacle front=%d rear=%d",
       g_mqtt_connected ? "up" : "down", hb ? "" : "never/", hb ? (unsigned long)(millis() - hb) : 0UL,
-      (int)g_obstacle_flag);
+      (int)g_obstacle_front_flag, (int)g_obstacle_rear_flag);
   LOG("bench", "stack free (bytes): sensor=%u comms=%u nav=%u",
       (unsigned)uxTaskGetStackHighWaterMark(s_sensor_handle),
       (unsigned)uxTaskGetStackHighWaterMark(s_comms_handle),
@@ -80,11 +80,13 @@ static bool read_serial_line(char* buf, size_t cap, size_t& len) {
 
 static void bench_nav_task(void*) {
   SensorData latest = {};
-  latest.obstacle_cm = NAN;
+  latest.obstacle_front_cm = NAN;
+  latest.obstacle_rear_cm = NAN;
   latest.battery_pct = NAN;
   char current_node[NODE_ID_LEN] = "";
   uint32_t seen_seq = 0;
-  bool obstacle_was = false;
+  bool front_was = false;
+  bool rear_was = false;
   uint32_t last_telemetry = 0;
   char line[64];
   size_t line_len = 0;
@@ -101,15 +103,18 @@ static void bench_nav_task(void*) {
       if (uxQueueMessagesWaiting(g_sensor_queue) == 0) break;
     }
 
-    // Obstacle rising edge -> event.
-    bool obstacle = g_obstacle_flag;
-    if (obstacle && !obstacle_was) {
-      char details[32];
-      if (isnan(latest.obstacle_cm)) snprintf(details, sizeof(details), "sensor fault");
-      else snprintf(details, sizeof(details), "%.1f cm", latest.obstacle_cm);
-      send_event(RobotEventType::ObstacleDetected, current_node, details);
-    }
-    obstacle_was = obstacle;
+    // Obstacle rising edge on either side -> event.
+    auto obstacle_edge = [&](bool now_set, bool& was, const char* side, float cm) {
+      if (now_set && !was) {
+        char details[32];
+        if (isnan(cm)) snprintf(details, sizeof(details), "%s sensor fault", side);
+        else snprintf(details, sizeof(details), "%s %.1f cm", side, cm);
+        send_event(RobotEventType::ObstacleDetected, current_node, details);
+      }
+      was = now_set;
+    };
+    obstacle_edge(g_obstacle_front_flag, front_was, "front", latest.obstacle_front_cm);
+    obstacle_edge(g_obstacle_rear_flag, rear_was, "rear", latest.obstacle_rear_cm);
 
     // Commands from the Pi.
     Command cmd;
@@ -139,7 +144,7 @@ static void bench_nav_task(void*) {
       strncpy(t.current_node, current_node, sizeof(t.current_node));
       t.battery_pct = latest.battery_pct;  // NAN until the first sample: comms skips it
       t.heading_known = false;
-      t.obstacle_cm = latest.obstacle_cm;
+      t.obstacle_cm = latest.obstacle_front_cm;  // the bench never drives, so always front
       t.temperature_c = NAN;  // no environment sensors on the robot
       t.humidity_pct = NAN;
       t.light_lux = NAN;

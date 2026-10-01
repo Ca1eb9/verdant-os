@@ -93,10 +93,13 @@ struct SensorData {
   // Nav should act when tag_seq changes, not on tag_in_field. The sequence
   // number survives dropped queue messages; a one-shot bool would not.
 
-  // Obstacle (VL53L4CX time-of-flight)
-  bool tof_ok;                 // sensor producing measurements
-  float obstacle_cm;           // nearest valid target, NAN when none in range
-  bool obstacle_stop;          // copy of g_obstacle_flag at reading time
+  // Obstacles (VL53L4CX time-of-flight, front and rear)
+  bool tof_front_ok;           // sensor producing measurements
+  float obstacle_front_cm;     // nearest valid target, NAN when none in range
+  bool obstacle_front_stop;    // copy of g_obstacle_front_flag at reading time
+  bool tof_rear_ok;
+  float obstacle_rear_cm;
+  bool obstacle_rear_stop;     // copy of g_obstacle_rear_flag
 
   // Battery
   float battery_v;             // pack voltage (smoothed), NAN until first read
@@ -147,7 +150,9 @@ struct TelemetryMsg {
   float battery_pct;                         // NAN until the first sample: not published
   bool heading_known;                        // false -> heading: null
   Heading heading;
-  float obstacle_cm;              // NAN -> JSON null
+  // From the sensor on the side of the last drive direction: front, or rear
+  // after reversing. Kept when stopped. NAN -> JSON null.
+  float obstacle_cm;
   float temperature_c;            // NAN -> field omitted
   float humidity_pct;             // NAN -> field omitted
   float light_lux;                // NAN -> field omitted
@@ -179,7 +184,10 @@ extern QueueHandle_t g_event_queue;      // RobotEventMsg nav    -> comms
 
 // Safety flags: checked every motor cycle with no queue overhead.
 // Single-byte/word writes are atomic on the ESP32, so volatile is enough.
-extern volatile bool g_obstacle_flag;    // set/cleared by sensor task
+// The motor task checks the flag on the side it's driving toward, so the
+// robot can still back away from an obstacle in front (and vice versa).
+extern volatile bool g_obstacle_front_flag;  // set/cleared by sensor task
+extern volatile bool g_obstacle_rear_flag;   // set/cleared by sensor task
 extern volatile bool g_motor_kill_flag;  // set by survival overrides (nav)
 
 // Link state, for diagnostics. There is no Pi heartbeat watchdog: losing the

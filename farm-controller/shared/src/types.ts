@@ -108,6 +108,7 @@ export interface RobotTelemetry {
   last_completed_task_id: string | null;
   battery_pct: number;
   heading: Heading | null;
+  /** Distance ahead in the robot's drive direction (front, or rear after reversing) */
   obstacle_cm?: number | null;
   temperature_c?: number;
   humidity_pct?: number;

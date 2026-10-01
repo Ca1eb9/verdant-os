@@ -17,7 +17,8 @@
 namespace {
 
 RfidReader s_rfid;
-TofSensor s_tof;
+TofSensor s_tof_front("front", Wire, PIN_I2C_FRONT_SDA, PIN_I2C_FRONT_SCL, PIN_TOF_FRONT_XSHUT);
+TofSensor s_tof_rear("rear", Wire1, PIN_I2C_REAR_SDA, PIN_I2C_REAR_SCL, PIN_TOF_REAR_XSHUT);
 Battery s_battery;
 
 // ---- RFID state --------------------------------------------------------------
@@ -57,43 +58,46 @@ void update_rfid(uint32_t now) {
 }
 
 // ---- Obstacle state ----------------------------------------------------------
-// Sets the flag on the FIRST close reading. Clears it only after
-// OBSTACLE_CLEAR_COUNT readings beyond OBSTACLE_CLEAR_CM, so the robot
-// doesn't stutter at the threshold.
+// One per sensor. Sets that side's flag on the FIRST close reading. Clears it
+// only after OBSTACLE_CLEAR_COUNT readings beyond OBSTACLE_CLEAR_CM, so the
+// robot doesn't stutter at the threshold.
 
 struct ObstacleState {
+  TofSensor* tof;
+  volatile bool* flag;
   float cm = NAN;
   uint8_t clear_count = 0;
   uint32_t last_data_ms = 0;
   uint32_t last_reinit_ms = 0;
   bool fault_logged = false;
 };
-ObstacleState s_obs;
+ObstacleState s_front{&s_tof_front, &g_obstacle_front_flag};
+ObstacleState s_rear{&s_tof_rear, &g_obstacle_rear_flag};
 
-void set_obstacle_flag(bool on, const char* why) {
-  if (g_obstacle_flag == on) return;
-  g_obstacle_flag = on;
-  LOG("sensor", "obstacle flag %s (%s)", on ? "SET" : "cleared", why);
+void set_obstacle_flag(ObstacleState& obs, bool on, const char* why) {
+  if (*obs.flag == on) return;
+  *obs.flag = on;
+  LOG("sensor", "%s obstacle flag %s (%s)", obs.tof->name(), on ? "SET" : "cleared", why);
 }
 
-void update_obstacle(uint32_t now) {
+void update_obstacle(ObstacleState& obs, uint32_t now) {
   float cm = NAN;
-  TofReading r = s_tof.poll(&cm);
+  TofReading r = obs.tof->poll(&cm);
 
   switch (r) {
     case TofReading::Pending:
       break;
     case TofReading::Target:
     case TofReading::Clear:
-      s_obs.last_data_ms = now;
-      s_obs.fault_logged = false;
-      s_obs.cm = (r == TofReading::Target) ? cm : NAN;
+      obs.last_data_ms = now;
+      obs.fault_logged = false;
+      obs.cm = (r == TofReading::Target) ? cm : NAN;
       if (r == TofReading::Target && cm < OBSTACLE_STOP_CM) {
-        s_obs.clear_count = 0;
-        set_obstacle_flag(true, "target in range");
+        obs.clear_count = 0;
+        set_obstacle_flag(obs, true, "target in range");
       } else if (r == TofReading::Clear || cm > OBSTACLE_CLEAR_CM) {
-        if (s_obs.clear_count < OBSTACLE_CLEAR_COUNT) s_obs.clear_count++;
-        if (s_obs.clear_count >= OBSTACLE_CLEAR_COUNT) set_obstacle_flag(false, "path clear");
+        if (obs.clear_count < OBSTACLE_CLEAR_COUNT) obs.clear_count++;
+        if (obs.clear_count >= OBSTACLE_CLEAR_COUNT) set_obstacle_flag(obs, false, "path clear");
       }
       // Between STOP and CLEAR: hold the current flag state.
       break;
@@ -102,18 +106,19 @@ void update_obstacle(uint32_t now) {
   }
 
   // Fault: sensor dead or silent. Optionally fail safe (hold motors).
-  bool faulted = !s_tof.ok() || (now - s_obs.last_data_ms >= TOF_TIMEOUT_MS);
+  bool faulted = !obs.tof->ok() || (now - obs.last_data_ms >= TOF_TIMEOUT_MS);
   if (faulted) {
-    s_obs.cm = NAN;
-    s_obs.clear_count = 0;
-    if (!s_obs.fault_logged) {
-      LOG("sensor", "ToF sensor fault%s", OBSTACLE_FAILSAFE ? " - holding obstacle flag" : "");
-      s_obs.fault_logged = true;
+    obs.cm = NAN;
+    obs.clear_count = 0;
+    if (!obs.fault_logged) {
+      LOG("sensor", "%s ToF sensor fault%s", obs.tof->name(),
+          OBSTACLE_FAILSAFE ? " - holding its obstacle flag" : "");
+      obs.fault_logged = true;
     }
-    if (OBSTACLE_FAILSAFE) set_obstacle_flag(true, "sensor fault");
-    if (now - s_obs.last_reinit_ms >= TOF_REINIT_MS) {
-      s_obs.last_reinit_ms = now;
-      if (s_tof.begin()) s_obs.last_data_ms = now;  // give it a fresh timeout
+    if (OBSTACLE_FAILSAFE) set_obstacle_flag(obs, true, "sensor fault");
+    if (now - obs.last_reinit_ms >= TOF_REINIT_MS) {
+      obs.last_reinit_ms = now;
+      if (obs.tof->begin()) obs.last_data_ms = now;  // give it a fresh timeout
     }
   }
 }
@@ -133,14 +138,17 @@ void push_sensor_data(const SensorData& d) {
 
 void sensor_task(void* /*param*/) {
   s_rfid.begin();
-  s_tof.begin();
+  s_tof_front.begin();
+  s_tof_rear.begin();
   s_battery.begin();
   s_battery.sample();  // have a value before the first report
 
   uint32_t start = millis();
-  s_obs.last_data_ms = start;
+  for (ObstacleState* s : {&s_front, &s_rear}) {
+    s->last_data_ms = start;
+    s->last_reinit_ms = start;
+  }
   s_tag.last_reinit_ms = start;
-  s_obs.last_reinit_ms = start;
 
   uint32_t last_report_ms = 0;
   uint32_t last_battery_ms = start;
@@ -150,7 +158,9 @@ void sensor_task(void* /*param*/) {
   for (;;) {
     uint32_t now = millis();
 
-    update_obstacle(now);  // safety first: flag is set before anything else runs
+    // safety first: flags are set before anything else runs
+    update_obstacle(s_front, now);
+    update_obstacle(s_rear, now);
     update_rfid(now);
     if (now - last_battery_ms >= BATTERY_PERIOD_MS) {
       last_battery_ms = now;
@@ -165,9 +175,12 @@ void sensor_task(void* /*param*/) {
       d.tag_in_field = s_tag.in_field;
       d.tag_seq = s_tag.seq;
       strncpy(d.tag_uid, s_tag.uid, sizeof(d.tag_uid));
-      d.tof_ok = s_tof.ok();
-      d.obstacle_cm = s_obs.cm;
-      d.obstacle_stop = g_obstacle_flag;
+      d.tof_front_ok = s_tof_front.ok();
+      d.obstacle_front_cm = s_front.cm;
+      d.obstacle_front_stop = g_obstacle_front_flag;
+      d.tof_rear_ok = s_tof_rear.ok();
+      d.obstacle_rear_cm = s_rear.cm;
+      d.obstacle_rear_stop = g_obstacle_rear_flag;
       d.battery_v = s_battery.volts();
       d.battery_pct = s_battery.pct();
       push_sensor_data(d);

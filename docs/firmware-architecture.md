@@ -30,7 +30,7 @@ Four FreeRTOS tasks. `loop()` is empty.
 | Task | Priority | Core | Responsibility |
 |---|---|---|---|
 | Motor | Highest | 1 | Drives motors from the drive queue. Checks safety flags every cycle and stops immediately if one is set. |
-| Sensor | High | 1 | RFID reads, battery voltage, obstacle distance. Writes the sensor queue and sets safety flags. |
+| Sensor | High | 1 | RFID reads, battery voltage, front and rear obstacle distance. Writes the sensor queue and sets safety flags. |
 | Navigation | Medium | 1 | Robot state machine, survival overrides, path following, turn decisions. Produces telemetry and events. |
 | Comms | Lowest | 0 | WiFi and MQTT. Publishes outbound messages and pushes received commands onto the command queue. |
 
@@ -40,13 +40,13 @@ Networking runs on its own core so WiFi never blocks motor control.
 
 | Queue | Producer | Consumer | Contents |
 |---|---|---|---|
-| Sensor | Sensor | Navigation | Latest tag UID, battery %, obstacle distance |
+| Sensor | Sensor | Navigation | Latest tag UID, battery %, front and rear obstacle distance |
 | Drive | Navigation | Motor | Speed and direction per motor |
 | Command | Comms | Navigation | Parsed orchestrator command |
 | Telemetry | Navigation | Comms | Telemetry snapshots |
 | Event | Navigation | Comms | Events (see below) |
 
-Shared `volatile` flags (obstacle, battery kill) are used for safety signals that
+Shared `volatile` flags (front obstacle, rear obstacle, battery kill) are used for safety signals that
 must be checked every cycle without queue overhead.
 
 ### Events before telemetry
@@ -279,8 +279,14 @@ override orchestrator commands, including `stop`.
   - force return to dock at 15%: publish `battery_critical` and go to the dock,
     keeping the task (and the stop latch);
   - kill motors at about 5%.
-- **Obstacle:** the sensor task sets the obstacle flag and the motor task
-  hard-stops. The robot keeps its status (e.g. `en_route`) and publishes
+- **Obstacle:** two VL53L4CX sensors, front and rear, each on its own I2C bus
+  (they share one fixed address). The sensor task sets a front and a rear
+  obstacle flag, and the motor task hard-stops only on the flag for the side
+  it's driving toward, so the robot can still back away from an obstacle in
+  front. Telemetry `obstacle_cm` comes from the sensor on the side of the last
+  drive direction: front, or rear after reversing (kept while stopped). Note
+  this is the drive direction, not `heading`, which doesn't change when the
+  robot reverses. The robot keeps its status (e.g. `en_route`) and publishes
   `obstacle_detected` once. If it is still blocked after a timeout, it publishes
   `path_blocked` and keeps waiting. The orchestrator only raises alerts for
   these.

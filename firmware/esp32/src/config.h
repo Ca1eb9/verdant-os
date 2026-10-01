@@ -50,10 +50,14 @@ constexpr int PIN_SPI_MISO = 13;
 constexpr int PIN_SPI_MOSI = 11;
 constexpr int PIN_RFID_SS = 10;
 
-// I2C - VL53L4CX time-of-flight sensor
-constexpr int PIN_I2C_SDA = 8;
-constexpr int PIN_I2C_SCL = 9;
-constexpr int PIN_TOF_XSHUT = -1;  // set to a GPIO (e.g. 5) if XSHUT is wired, else -1
+// I2C - VL53L4CX time-of-flight sensors. Both have the same fixed address,
+// so each gets its own I2C bus. XSHUT: set a GPIO if wired, else -1.
+constexpr int PIN_I2C_FRONT_SDA = 8;   // front sensor (Wire)
+constexpr int PIN_I2C_FRONT_SCL = 9;
+constexpr int PIN_TOF_FRONT_XSHUT = -1;
+constexpr int PIN_I2C_REAR_SDA = 17;   // rear sensor (Wire1)
+constexpr int PIN_I2C_REAR_SCL = 18;
+constexpr int PIN_TOF_REAR_XSHUT = -1;
 
 // Battery voltage divider tap
 constexpr int PIN_BATTERY_ADC = 4;
@@ -66,7 +70,7 @@ constexpr uint32_t RFID_REINIT_MS = 5000;       // retry a dead reader this ofte
 
 // ---- Obstacle sensor (VL53L4CX) --------------------------------------------------
 
-constexpr float OBSTACLE_STOP_CM = 15.0f;       // set g_obstacle_flag below this
+constexpr float OBSTACLE_STOP_CM = 15.0f;       // set that side's obstacle flag below this
 constexpr float OBSTACLE_CLEAR_CM = 20.0f;      // must read above this to clear
 constexpr uint8_t OBSTACLE_CLEAR_COUNT = 3;     // consecutive clear readings needed
 constexpr uint32_t TOF_TIMING_BUDGET_US = 33000;

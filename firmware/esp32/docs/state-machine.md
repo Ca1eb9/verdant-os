@@ -101,8 +101,8 @@ stateDiagram-v2
   - warn at 20% [`battery_low`];
   - forced return at 15% [`battery_critical`], keeping the task and stop latch;
   - motor cutoff at about 5%.
-- **Obstacle:** motors hard-stop while the flag is set. The status doesn't
-  change. `[obstacle_detected]` is sent once, then `[path_blocked]` if still
+- **Obstacle:** motors hard-stop while the flag on the side they're driving
+  toward is set (front or rear sensor). The status doesn't change. `[obstacle_detected]` is sent once, then `[path_blocked]` if still
   blocked after a timeout.
 - **Telemetry** is sent every 1 s and on every status or node change, and always
   reports the current `task_id` and `last_completed_task_id`. The robot never
