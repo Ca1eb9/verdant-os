@@ -127,6 +127,8 @@ export interface RobotCommand {
   direction?: "forward" | "backward";
   priority: TaskPriority;
   source: CommandSource;
+  /** Skip the queue (dashboard sends it here); the robot ignores it */
+  immediate?: boolean;
 }
 
 /** Published by robot to farm/robot/{id}/events */

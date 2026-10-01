@@ -466,7 +466,7 @@ function onRemoteCommand(raw: unknown, topic: string) {
   }
 
   // Accept immediate on the message or inside the command (dashboard rows)
-  msg.immediate = msg.immediate ?? (msg.command as { immediate?: boolean }).immediate === true;
+  msg.immediate = msg.immediate ?? msg.command.immediate === true;
   console.log(
     `[REMOTE] from ${msg.issued_by}: ${msg.command.command}` +
     (msg.robot_id ? ` -> ${msg.robot_id}` : "") +
