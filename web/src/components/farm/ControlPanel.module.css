@@ -49,10 +49,6 @@
   overflow-wrap: anywhere;
 }
 
-.wide {
-  grid-column: 1 / -1;
-}
-
 .pill {
   display: inline-flex;
   align-items: center;
@@ -65,7 +61,8 @@
 }
 
 .offline,
-.st_lost {
+.st_lost,
+.st_initializing {
   color: var(--muted);
 }
 
@@ -85,6 +82,7 @@
 }
 
 .st_manual,
+.st_stopped,
 .cmd_pending {
   color: var(--amber);
   border-color: rgb(var(--amber-rgb) / 0.4);
@@ -145,6 +143,45 @@
 .primary:hover:not(:disabled) {
   border-color: var(--teal);
   background: rgb(var(--teal-rgb) / 0.2);
+}
+
+.caution {
+  border-color: rgb(var(--amber-rgb) / 0.45);
+  background: rgb(var(--amber-rgb) / 0.08);
+}
+
+.caution:hover:not(:disabled) {
+  border-color: var(--amber);
+  background: rgb(var(--amber-rgb) / 0.14);
+}
+
+.jog {
+  min-height: 3.2rem;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.jogActive,
+.jogActive:hover:not(:disabled) {
+  border-color: var(--cyan);
+  background: rgb(var(--cyan-rgb) / 0.18);
+}
+
+.tip {
+  display: grid;
+}
+
+/* let the wrapper receive hover so its tooltip shows on a disabled button */
+.tip .btn:disabled {
+  pointer-events: none;
+}
+
+.taskText {
+  margin: 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
 }
 
 .confirm {

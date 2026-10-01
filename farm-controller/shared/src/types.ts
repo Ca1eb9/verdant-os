@@ -11,9 +11,11 @@ export enum RobotStatus {
   RETURNING_TO_DOCK = "returning_to_dock",
   DOCKING = "docking",
   CHARGING = "charging",
+  STOPPED = "stopped",
   LOST = "lost",
   ERROR = "error",
   MANUAL = "manual",
+  INITIALIZING = "initializing"
 }
 
 // --- Robot event types (discrete, one-time signals)
@@ -65,6 +67,7 @@ export enum TaskStatus {
   IN_PROGRESS = "in_progress",
   COMPLETED = "completed",
   FAILED = "failed",
+  CANCELLED = "cancelled",
 }
 
 export enum CommandSource {
@@ -97,9 +100,15 @@ export enum GrowthStage {
 export interface RobotTelemetry {
   robot_id: string;
   status: RobotStatus;
-  current_node: string;
+  /** Node id (not RFID tag id); null until the first tag is read */
+  current_node: string | null;
+  /** Task the robot is carrying out; null when it has none */
+  task_id: string | null;
+  /** Last task the robot completed successfully; null if none since boot */
+  last_completed_task_id: string | null;
   battery_pct: number;
-  heading: Heading;
+  heading: Heading | null;
+  /** Distance ahead in the robot's drive direction (front, or rear after reversing) */
   obstacle_cm?: number | null;
   temperature_c?: number;
   humidity_pct?: number;
@@ -109,14 +118,18 @@ export interface RobotTelemetry {
 
 /** Published to farm/robot/{id}/command */
 export interface RobotCommand {
-  command: "navigate" | "return_to_dock" | "stop" | "resume";
+  command: "navigate" | "return_to_dock" | "stop" | "resume" | "cancel" | "jog";
   task_id?: string;
   path?: string[];
   target_node?: string;
   action_at_target?: "water" | "grow" | "harvest" | "charge" | "idle";
   duration_ms?: number;
+  /** jog only: drive for a fixed pulse (robot side) in this direction */
+  direction?: "forward" | "backward";
   priority: TaskPriority;
   source: CommandSource;
+  /** Skip the queue (dashboard sends it here); the robot ignores it */
+  immediate?: boolean;
 }
 
 /** Published by robot to farm/robot/{id}/events */
@@ -174,38 +187,63 @@ export interface FarmAlert {
 /** Published to farm/commands/remote by Supabase bridge */
 export interface RemoteCommand {
   id: string;
+  robot_id?: string;
+  immediate?: boolean;
+  include_path?: boolean;
   command: RobotCommand;
   issued_by: string;
   issued_at: number;
 }
 
-// --- Orchestrator internal types --------
+/** Published (retained) by the orchestrator to farm/robot/{id}/state */
+export interface RobotStateUpdate {
+  robot_id: string;
+  /** Orchestrator's view, e.g. "lost" while the robot is silent */
+  status: RobotStatus;
+  /** Task the orchestrator has assigned to this robot */
+  task: Pick<FarmTask, "task_id" | "type" | "target_node" | "status"> | null;
+  expected_path: string[];
+  timestamp: number;
+}
 
+/////////////
+// --- Orchestrator internal types --------
+/////////////
 export interface FarmTask {
   task_id: string;
-  type: "water" | "grow" | "harvest" | "custom";
-  target_node: string;
+  type: "water" | "grow" | "harvest" | "custom" | "stop" | "return_to_dock";
+  /** Required for navigate task types; unused for stop / return_to_dock */
+  target_node?: string;
   duration_ms?: number;
   priority: TaskPriority;
   source: CommandSource;
   created_at: number;
   status: TaskStatus;
+  /** Only this robot may take the task; survives requeue */
+  pinned_robot?: string;
   assigned_robot?: string;
   assigned_at?: number;
   completed_at?: number;
   error?: string;
+  include_path?: boolean;
+  /** Times requeued because the robot dropped it */
+  retries?: number;
+  /** Not assignable before this time (retry delay) */
+  not_before?: number;
 }
 
 export interface RobotState {
   id: string;
   status: RobotStatus;
-  current_node: string;
-  heading: Heading;
+  current_node: string | null;
+  heading: Heading | null;
   battery_pct: number;
   assigned_task: FarmTask | null;
   expected_path: string[];
   waypoints_hit: string[];
   last_seen: number;
+  /** When the orchestrator last sent a low-battery return_to_dock */
+  dock_requested_at: number | null;
   plant?: PlantRecord;
 }
 
@@ -278,7 +316,13 @@ export interface OrchestratorConfig {
   heartbeat_timeout_ms: number;
   battery_low_pct: number;
   battery_critical_pct: number;
+  /** Extra charge above battery_low_pct required before assigning a task */
+  battery_assign_margin_pct: number;
   charge_complete_pct: number;
+  /** Grace period for the robot to act on a command before reconciling */
+  command_ack_timeout_ms: number;
+  /** Max finished tasks kept in memory */
+  completed_task_limit: number;
   max_task_retries: number;
   task_retry_delay_ms: number;
   plant_schedules: PlantSchedule[];

@@ -1,8 +1,1 @@
-{
-  "command": "return_to_dock",
-  "path": ["0x2A02", "0x3C10", "0x2A01", "0x1D5E"],
-  "target_node": "dock-1",
-  "action_at_target": "charge",
-  "priority": "critical",
-  "source": "alert"
-}
+{ "command": "navigate", "task_id": "7a1c", "target_node": "cp-12", "action_at_target": "grow", "priority": "normal", "source": "remote" }

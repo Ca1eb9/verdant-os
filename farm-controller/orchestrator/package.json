@@ -1,5 +1,5 @@
 {
-  "name": "@farm/ingester",
+  "name": "@farm/orchestrator",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -10,13 +10,11 @@
   },
   "dependencies": {
     "@farm/shared": "*",
-    "better-sqlite3": "^11.0.0",
     "mqtt": "^5.0.0"
   },
   "devDependencies": {
     "tsx": "^4.0.0",
     "typescript": "^5.5.0",
-    "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^22.0.0"
   }
 }

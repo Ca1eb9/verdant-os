@@ -5,13 +5,16 @@
 // Runs the real sensor_task and comms_task, plus a stand-in for the nav
 // task that:
 //   - turns SensorData into a TelemetryMsg once a second
-//   - publishes an "arrived" event for each new RFID tag
-//   - publishes "obstacle_detected" when the obstacle flag goes up
+//   - logs each new RFID tag UID (copy these into topology.json)
+//   - publishes "obstacle_detected" when a front or rear obstacle flag goes up
 //   - prints every command that arrives from the Pi
 //
+// It has no flash graph, so it can't map tags to nodes: it reports
+// "initializing" with no node until you set one from the serial monitor.
+//
 // Serial monitor commands (115200 baud, newline line ending):
-//   tag 0x2A01      pretend that tag was just read (no RFID reader needed)
-//   status          print link state, heartbeat age, stack headroom
+//   node cp-01      pretend the robot is at that node (sends "arrived")
+//   status          print link state, last command age, stack headroom
 //
 // Watch it on the Pi / laptop with:
 //   mosquitto_sub -h <broker> -t 'farm/robot/#' -v
@@ -45,14 +48,15 @@ static void print_command(const Command& c) {
       c.action_at_target == TargetAction::None ? "-" : to_wire(c.action_at_target),
       c.has_duration ? "" : "-", c.has_duration ? (unsigned long)c.duration_ms : 0UL,
       to_wire(c.priority), to_wire(c.source));
+  if (c.direction != JogDirection::None) LOG("bench", "    direction = %s", to_wire(c.direction));
   for (uint8_t i = 0; i < c.path_len; i++) LOG("bench", "    path[%u] = %s", i, c.path[i]);
 }
 
 static void print_status() {
-  uint32_t hb = g_last_pi_msg_ms;
-  LOG("bench", "mqtt=%s  last Pi msg=%s%lu ms ago  obstacle=%d",
+  uint32_t hb = g_last_command_ms;
+  LOG("bench", "mqtt=%s  last command=%s%lu ms ago  obstacle front=%d rear=%d",
       g_mqtt_connected ? "up" : "down", hb ? "" : "never/", hb ? (unsigned long)(millis() - hb) : 0UL,
-      (int)g_obstacle_flag);
+      (int)g_obstacle_front_flag, (int)g_obstacle_rear_flag);
   LOG("bench", "stack free (bytes): sensor=%u comms=%u nav=%u",
       (unsigned)uxTaskGetStackHighWaterMark(s_sensor_handle),
       (unsigned)uxTaskGetStackHighWaterMark(s_comms_handle),
@@ -76,11 +80,13 @@ static bool read_serial_line(char* buf, size_t cap, size_t& len) {
 
 static void bench_nav_task(void*) {
   SensorData latest = {};
-  latest.obstacle_cm = NAN;
+  latest.obstacle_front_cm = NAN;
+  latest.obstacle_rear_cm = NAN;
   latest.battery_pct = NAN;
-  char current_node[TAG_ID_LEN] = "";
+  char current_node[NODE_ID_LEN] = "";
   uint32_t seen_seq = 0;
-  bool obstacle_was = false;
+  bool front_was = false;
+  bool rear_was = false;
   uint32_t last_telemetry = 0;
   char line[64];
   size_t line_len = 0;
@@ -92,21 +98,23 @@ static void bench_nav_task(void*) {
       latest = d;
       if (d.tag_seq != seen_seq) {
         seen_seq = d.tag_seq;
-        strncpy(current_node, d.tag_uid, sizeof(current_node));
-        send_event(RobotEventType::Arrived, current_node, "bench: RFID read");
+        LOG("bench", "tag %s (no graph on the bench: set the node with 'node <id>')", d.tag_uid);
       }
       if (uxQueueMessagesWaiting(g_sensor_queue) == 0) break;
     }
 
-    // Obstacle rising edge -> event.
-    bool obstacle = g_obstacle_flag;
-    if (obstacle && !obstacle_was) {
-      char details[32];
-      if (isnan(latest.obstacle_cm)) snprintf(details, sizeof(details), "sensor fault");
-      else snprintf(details, sizeof(details), "%.1f cm", latest.obstacle_cm);
-      send_event(RobotEventType::ObstacleDetected, current_node, details);
-    }
-    obstacle_was = obstacle;
+    // Obstacle rising edge on either side -> event.
+    auto obstacle_edge = [&](bool now_set, bool& was, const char* side, float cm) {
+      if (now_set && !was) {
+        char details[32];
+        if (isnan(cm)) snprintf(details, sizeof(details), "%s sensor fault", side);
+        else snprintf(details, sizeof(details), "%s %.1f cm", side, cm);
+        send_event(RobotEventType::ObstacleDetected, current_node, details);
+      }
+      was = now_set;
+    };
+    obstacle_edge(g_obstacle_front_flag, front_was, "front", latest.obstacle_front_cm);
+    obstacle_edge(g_obstacle_rear_flag, rear_was, "rear", latest.obstacle_rear_cm);
 
     // Commands from the Pi.
     Command cmd;
@@ -114,17 +122,14 @@ static void bench_nav_task(void*) {
 
     // Serial test commands.
     if (read_serial_line(line, sizeof(line), line_len)) {
-      if (strncmp(line, "tag ", 4) == 0) {
-        char tag[TAG_ID_LEN];
-        if (canonical_tag_id(line + 4, tag, sizeof(tag))) {
-          strncpy(current_node, tag, sizeof(current_node));
-          LOG("bench", "fake tag %s", tag);
-          send_event(RobotEventType::Arrived, current_node, "bench: fake tag");
-        }
+      if (strncmp(line, "node ", 5) == 0 && line[5]) {
+        strncpy(current_node, line + 5, sizeof(current_node) - 1);
+        LOG("bench", "at node %s", current_node);
+        send_event(RobotEventType::Arrived, current_node, "bench: set by hand");
       } else if (strcmp(line, "status") == 0) {
         print_status();
       } else if (line[0]) {
-        LOG("bench", "commands: 'tag 0x2A01', 'status'");
+        LOG("bench", "commands: 'node cp-01', 'status'");
       }
     }
 
@@ -134,11 +139,12 @@ static void bench_nav_task(void*) {
       last_telemetry = now;
       TelemetryMsg t = {};
       t.uptime_ms = now;
-      t.status = RobotStatus::Idle;
+      // idle needs a known node (docs/firmware-architecture.md, boot rule)
+      t.status = current_node[0] ? RobotStatus::Idle : RobotStatus::Initializing;
       strncpy(t.current_node, current_node, sizeof(t.current_node));
-      t.battery_pct = isnan(latest.battery_pct) ? 0.0f : latest.battery_pct;
-      t.heading = Heading::East;
-      t.obstacle_cm = latest.obstacle_cm;
+      t.battery_pct = latest.battery_pct;  // NAN until the first sample: comms skips it
+      t.heading_known = false;
+      t.obstacle_cm = latest.obstacle_front_cm;  // the bench never drives, so always front
       t.temperature_c = NAN;  // no environment sensors on the robot
       t.humidity_pct = NAN;
       t.light_lux = NAN;

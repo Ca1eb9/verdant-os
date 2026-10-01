@@ -1,16 +1,30 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { CommandError, type CommandRecord, type CommandRequest, type FarmDataSource } from "@/lib/farm/data-source";
 import type { Scene } from "@/lib/farm/map/layout";
 import { resolveNode, type NavGraph } from "@/lib/farm/navigation";
-import { isStale, statusLabel, type RobotView } from "@/lib/farm/robots";
-import type { ActionAtTarget, FarmTopology, GraphNode, NodeType, RobotCommand } from "@/lib/farm/types";
+import { describeTask, isStale, statusLabel, type RobotView } from "@/lib/farm/robots";
+import type {
+  ActionAtTarget,
+  FarmTopology,
+  GraphNode,
+  JogDirection,
+  NodeType,
+  RobotCommand,
+  RobotStatus,
+} from "@/lib/farm/types";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import styles from "@/components/farm/ControlPanel.module.css";
 
 const KEY_STORAGE = "verdantos:operator-key";
 const POLL_MS = 5_000;
+/** Resend while a jog button is held; under the robot's 500 ms pulse so it drives smoothly */
+const JOG_REPEAT_MS = 400;
+/** Same as MANUAL_TIMEOUT_MS on the robot: a session ends after this long without a jog */
+const MANUAL_TIMEOUT_S = 5;
+/** States the robot accepts a jog in */
+const JOGGABLE: RobotStatus[] = ["idle", "en_route", "working", "stopped", "error", "manual"];
 
 const ACTIONS: Record<NodeType, ActionAtTarget[]> = {
   water: ["water", "idle"],
@@ -32,6 +46,8 @@ const COMMAND_LABEL: Record<RobotCommand["command"], string> = {
   return_to_dock: "Return to dock",
   stop: "Stop",
   resume: "Resume",
+  cancel: "Cancel task",
+  jog: "Jog",
 };
 
 function readKey() {
@@ -95,6 +111,11 @@ export function ControlPanel({
   const [durationMin, setDurationMin] = useState("");
   const [goImmediate, setGoImmediate] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [confirmingManual, setConfirmingManual] = useState(false);
+  const [manualArmed, setManualArmed] = useState(false);
+  const [jogging, setJogging] = useState<JogDirection | null>(null);
+  const jogTimer = useRef<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [recent, setRecent] = useState<CommandRecord[]>([]);
@@ -109,9 +130,16 @@ export function ControlPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetNodeId]);
 
+  const task = robot?.task ?? null;
+  const taskText = task ? robot?.taskLabel ?? describeTask(task) : null;
+  // a new robot or task needs a fresh confirmation
+  useEffect(() => setConfirmingCancel(false), [selectedRobotId, task?.id]);
+
   const refreshRecent = useCallback(async () => {
     try {
-      setRecent(await source.listRecentCommands(selectedRobotId ?? undefined));
+      // jogs repeat while held; they'd flood the log
+      const commands = await source.listRecentCommands(selectedRobotId ?? undefined);
+      setRecent(commands.filter((cmd) => cmd.command.command !== "jog"));
     } catch {
       setRecent([]);
     }
@@ -171,7 +199,18 @@ export function ControlPanel({
   const status = robot?.status;
   const canStop = online;
   const canDock = online && status !== "docking" && status !== "charging" && Boolean(dockNode);
-  const canResume = online && (status === "manual" || status === "idle");
+  const canResume = online && (status === "stopped" || status === "manual" || status === "idle");
+  // Cancel works offline too: the orchestrator resends it when the robot reconnects.
+  // A stop can't be cancelled; Resume releases the robot instead.
+  const stopActive = task?.type === "stop";
+  const canCancel = Boolean(task) && !stopActive;
+  const cancelTitle = !task
+    ? "This robot has no task to cancel."
+    : stopActive
+      ? "A stop is in progress and can't be cancelled. Use Resume to release the robot."
+      : online
+        ? `Cancels "${taskText}". The robot drops it right away.`
+        : `Cancels "${taskText}". The robot is offline and drops it when it reconnects.`;
   const canGo = online && Boolean(target) && target?.id !== node?.id && Boolean(action);
 
   const sendStop = () =>
@@ -189,6 +228,106 @@ export function ControlPanel({
 
   const sendResume = () =>
     robot && send({ robot_id: robot.id, command: { command: "resume", priority: "critical", immediate: true } });
+
+  // --- Manual control (farm network only) ---
+  const localMode = source.mode === "local";
+  const inManual = status === "manual";
+  const canJog = localMode && online && Boolean(status && JOGGABLE.includes(status));
+  const manualTitle = !online
+    ? "The robot is offline."
+    : canJog
+      ? "Drive the robot with Forward and Back until you press Resume."
+      : `Not available while the robot is ${statusLabel(status ?? "idle").toLowerCase()}.`;
+
+  const stopJog = useCallback(() => {
+    if (jogTimer.current !== null) {
+      window.clearInterval(jogTimer.current);
+      jogTimer.current = null;
+    }
+    setJogging(null);
+  }, []);
+
+  const sendJog = (robotId: string, direction: JogDirection) =>
+    source
+      .sendCommand({ robot_id: robotId, command: { command: "jog", direction, priority: "critical", immediate: true } }, operatorKey)
+      .catch((err) => {
+        stopJog();
+        if (err instanceof CommandError && err.status === 401) setShowKey(true);
+        setMessage({ tone: "error", text: err instanceof Error ? err.message : "Could not send the command." });
+      });
+
+  const startJog = (direction: JogDirection) => {
+    if (!robot || !canJog || jogTimer.current !== null) return;
+    if (!operatorKey) {
+      setShowKey(true);
+      setMessage({ tone: "error", text: "Enter the operator key to send commands." });
+      return;
+    }
+    setMessage(null);
+    const robotId = robot.id;
+    void sendJog(robotId, direction);
+    jogTimer.current = window.setInterval(() => void sendJog(robotId, direction), JOG_REPEAT_MS);
+    setJogging(direction);
+  };
+
+  // stop sending when the robot changes, can't be jogged, or the window loses focus
+  useEffect(() => {
+    stopJog();
+    setManualArmed(false);
+    setConfirmingManual(false);
+  }, [selectedRobotId, stopJog]);
+  useEffect(() => {
+    if (!canJog) stopJog();
+  }, [canJog, stopJog]);
+  useEffect(() => {
+    window.addEventListener("blur", stopJog);
+    return () => {
+      window.removeEventListener("blur", stopJog);
+      stopJog();
+    };
+  }, [stopJog]);
+
+  // once the robot leaves manual, the next session needs a fresh confirmation
+  const wasManual = useRef(false);
+  useEffect(() => {
+    if (wasManual.current && !inManual) setManualArmed(false);
+    wasManual.current = inManual;
+  }, [inManual]);
+
+  const holdProps = (direction: JogDirection) => ({
+    onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
+      if (event.button !== 0) return;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      startJog(direction);
+    },
+    onPointerUp: stopJog,
+    onPointerCancel: stopJog,
+    onLostPointerCapture: stopJog,
+    onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => {
+      if ((event.key === " " || event.key === "Enter") && !event.repeat) {
+        event.preventDefault();
+        startJog(direction);
+      }
+    },
+    onKeyUp: (event: KeyboardEvent<HTMLButtonElement>) => {
+      if (event.key === " " || event.key === "Enter") stopJog();
+    },
+    onBlur: stopJog,
+    onContextMenu: (event: { preventDefault: () => void }) => event.preventDefault(),
+  });
+
+  const sendCancel = () => {
+    if (!robot || !task || !canCancel) return;
+    if (!confirmingCancel) {
+      setConfirmingCancel(true);
+      return;
+    }
+    setConfirmingCancel(false);
+    void send(
+      { robot_id: robot.id, command: { command: "cancel", task_id: task.id, priority: "critical", immediate: true } },
+      () => onRouteClear(robot.id),
+    );
+  };
 
   const sendGo = () => {
     if (!robot || !target || !action) return;
@@ -271,12 +410,6 @@ export function ControlPanel({
             <dt>Last seen</dt>
             <dd>{robot ? fmt.time(robot.lastSeen) : "—"}</dd>
           </div>
-          {robot?.taskLabel ? (
-            <div className={styles.wide}>
-              <dt>Task</dt>
-              <dd>{robot.taskLabel}</dd>
-            </div>
-          ) : null}
         </dl>
       </section>
 
@@ -306,6 +439,101 @@ export function ControlPanel({
           </span>
         </label>
       </section>
+
+      <section className={styles.section}>
+        <div className={styles.sectionHead}>
+          <span className="eyebrow">Current task</span>
+          {task ? <span className={styles.count}>{task.id.slice(0, 8)}</span> : null}
+        </div>
+        <p className={task ? styles.taskText : styles.muted}>{robot ? taskText ?? "No task" : "—"}</p>
+        {/* the wrapper carries the tooltip, since disabled buttons don't get hover events everywhere */}
+        <span className={styles.tip} title={cancelTitle}>
+          <button
+            type="button"
+            className={`${styles.btn} ${confirmingCancel ? styles.confirm : styles.caution}`}
+            disabled={!canCancel || busy}
+            onClick={sendCancel}
+          >
+            {confirmingCancel ? "Confirm: cancel current task" : "Cancel task"}
+          </button>
+        </span>
+        {stopActive ? <p className={styles.muted}>Stop in progress. Use Resume to release the robot.</p> : null}
+        {confirmingCancel ? (
+          <button type="button" className={styles.linkBtn} onClick={() => setConfirmingCancel(false)}>
+            Keep task
+          </button>
+        ) : null}
+      </section>
+
+      {localMode ? (
+        <section className={styles.section}>
+          <div className={styles.sectionHead}>
+            <span className="eyebrow">Manual control</span>
+            {inManual ? <span className={`${styles.pill} ${styles.st_manual}`}>Manual</span> : null}
+          </div>
+          {inManual || manualArmed ? (
+            <>
+              <div className={styles.pair}>
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.jog} ${jogging === "backward" ? styles.jogActive : ""}`}
+                  disabled={!canJog}
+                  aria-pressed={jogging === "backward"}
+                  {...holdProps("backward")}
+                >
+                  ◀ Back
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.jog} ${jogging === "forward" ? styles.jogActive : ""}`}
+                  disabled={!canJog}
+                  aria-pressed={jogging === "forward"}
+                  {...holdProps("forward")}
+                >
+                  Forward ▶
+                </button>
+              </div>
+              <p className={styles.muted}>
+                Hold to drive; the robot stops within half a second of letting go. After {MANUAL_TIMEOUT_S} s without
+                input, or on Resume, it takes back control{task ? ` and continues ${taskText}` : ""}.
+              </p>
+            </>
+          ) : confirmingManual ? (
+            <>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.confirm}`}
+                disabled={!canJog}
+                onClick={() => {
+                  setManualArmed(true);
+                  setConfirmingManual(false);
+                }}
+              >
+                Confirm: take manual control
+              </button>
+              <p className={styles.muted}>
+                {task
+                  ? `Pauses ${taskText} while you drive. It continues ${MANUAL_TIMEOUT_S} s after your last input, or on Resume.`
+                  : `The robot stays in manual until ${MANUAL_TIMEOUT_S} s after your last input, or until Resume.`}
+              </p>
+              <button type="button" className={styles.linkBtn} onClick={() => setConfirmingManual(false)}>
+                Not now
+              </button>
+            </>
+          ) : (
+            <span className={styles.tip} title={manualTitle}>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.caution}`}
+                disabled={!canJog}
+                onClick={() => setConfirmingManual(true)}
+              >
+                Take manual control
+              </button>
+            </span>
+          )}
+        </section>
+      ) : null}
 
       <section className={styles.section}>
         <span className="eyebrow">Send to node</span>
@@ -417,6 +645,7 @@ export function ControlPanel({
                 <span className={styles.logText}>
                   {COMMAND_LABEL[cmd.command.command] ?? cmd.command.command}
                   {cmd.command.target_node ? ` ${cmd.command.target_node}` : ""}
+                  {cmd.command.command === "cancel" && cmd.command.task_id ? ` ${cmd.command.task_id.slice(0, 8)}` : ""}
                   {cmd.command.immediate ? " · immediate" : ""}
                 </span>
                 <time>{fmt.time(cmd.issued_at, { date: false })}</time>

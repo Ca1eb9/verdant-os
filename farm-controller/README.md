@@ -51,7 +51,7 @@ npm install
 npm -w @farm/shared run build
 ```
 
-> **Important:** Rebuild shared after any changes to `packages/shared/src/`:
+> **Important:** Rebuild shared after any changes to `farm-controller/shared/src/`:
 > ```bash
 > npm -w @farm/shared run build
 > ```
@@ -84,7 +84,26 @@ Subscribes to all telemetry topics and writes to a local SQLite database.
 npm run ingest
 ```
 
-The database file is created at `packages/ingester/farm_telemetry.db`.
+The database file is created at `farm-controller/ingester/farm_telemetry.db`.
+
+### Orchestrator
+
+Tracks each robot's state from telemetry and events, queues and assigns tasks,
+and sends commands. Start it alongside the simulator in non-autonomous mode:
+
+```bash
+AUTONOMOUS=false npm run sim
+npm run orch
+```
+
+- Settings load from `orchestrator-config.json` at startup.
+- Queued, assigned and finished tasks are saved to
+  `farm-controller/orchestrator-state.json` (gitignored) and restored on restart.
+- Environment overrides: `BROKER_URL`, `CONFIG_PATH`, `TOPOLOGY_PATH`, `STATE_PATH`.
+- It exits if the broker isn't reachable at startup; on the Pi, run it under
+  systemd with `Restart=on-failure` (or start it after Mosquitto).
+- State machine diagrams: `orchestrator/docs/state-machine.md`. The robot-side
+  contract is in `docs/firmware-architecture.md`.
 
 ### Other services
 
@@ -102,14 +121,13 @@ npm -w @farm/<package-name> run dev
 
 ```
 farm-controller/
-├── packages/
-│   ├── shared/          # Types, topics, MQTT client, navigation utils
-│   ├── simulator/       # Fake ESP32 robot for testing
-│   ├── ingester/        # Telemetry → SQLite recorder
-│   ├── orchestrator/    # (to be built) Robot brain + task scheduler
-│   ├── alert-engine/    # (to be built) Threshold monitoring
-│   ├── supabase-bridge/ # (to be built) Cloud sync
-│   └── dashboard-api/   # (to be built) REST API for dashboard
+├── shared/              # Types, topics, MQTT client, navigation utils
+├── simulator/           # Fake ESP32 robot for testing
+├── ingester/            # Telemetry → SQLite recorder
+├── orchestrator/        # Robot state, task queue, commands
+├── alert-engine/        # (to be built) Threshold monitoring
+├── supabase-bridge/     # (to be built) Cloud sync
+├── dashboard-api/       # (to be built) REST API for dashboard
 ├── topology.json        # Farm layout (nodes + edges)
 ├── orchestrator-config.json  # Tunable orchestrator settings
 └── package.json         # Workspace root
@@ -117,7 +135,7 @@ farm-controller/
 
 ### Shared package
 
-`packages/shared/src/` contains everything services share:
+`shared/src/` contains everything services share:
 
 - **`types.ts`** — All MQTT message types, state enums, topology types, config types
 - **`topics.ts`** — MQTT topic constants and helper functions
@@ -153,7 +171,7 @@ mosquitto_pub -t 'farm/robot/robot-1/telemetry' -m '{"robot_id":"robot-1","statu
 
 ## Creating a new service
 
-1. Create `packages/<service-name>/` with `src/index.ts` and `package.json`
+1. Create `farm-controller/<service-name>/` with `src/index.ts` and `package.json`
 2. Use the ingester as a template for the package.json structure
 3. Add `@farm/shared` as a dependency
 4. Connect to MQTT using `createMqttClient()` from the shared package

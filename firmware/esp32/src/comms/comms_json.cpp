@@ -4,7 +4,6 @@
 #include "comms_json.h"
 
 #include <ArduinoJson.h>
-#include <ctype.h>
 #include <math.h>
 #include <string.h>
 
@@ -18,9 +17,10 @@ const char* to_wire(RobotStatus s) {
     case RobotStatus::ReturningToDock: return "returning_to_dock";
     case RobotStatus::Docking: return "docking";
     case RobotStatus::Charging: return "charging";
-    case RobotStatus::Lost: return "lost";
+    case RobotStatus::Stopped: return "stopped";
     case RobotStatus::Error: return "error";
     case RobotStatus::Manual: return "manual";
+    case RobotStatus::Initializing: return "initializing";
   }
   return "error";
 }
@@ -49,8 +49,19 @@ const char* to_wire(CommandType c) {
     case CommandType::ReturnToDock: return "return_to_dock";
     case CommandType::Stop: return "stop";
     case CommandType::Resume: return "resume";
+    case CommandType::Cancel: return "cancel";
+    case CommandType::Jog: return "jog";
   }
   return "stop";
+}
+
+const char* to_wire(JogDirection d) {
+  switch (d) {
+    case JogDirection::None: return nullptr;
+    case JogDirection::Forward: return "forward";
+    case JogDirection::Backward: return "backward";
+  }
+  return nullptr;
 }
 
 const char* to_wire(TargetAction a) {
@@ -106,7 +117,8 @@ const char* to_string(CommandParseResult r) {
     case CommandParseResult::NotAnObject: return "payload is not a JSON object";
     case CommandParseResult::MissingCommand: return "missing 'command'";
     case CommandParseResult::UnknownCommand: return "unknown 'command'";
-    case CommandParseResult::MissingPath: return "navigate needs a non-empty 'path'";
+    case CommandParseResult::MissingTaskId: return "cancel needs a 'task_id'";
+    case CommandParseResult::BadDirection: return "jog needs 'direction' forward or backward";
     case CommandParseResult::PathTooLong: return "'path' has too many waypoints";
     case CommandParseResult::BadPathEntry: return "bad entry in 'path'";
     case CommandParseResult::FieldTooLong: return "'task_id' or 'target_node' too long";
@@ -119,25 +131,6 @@ const char* to_string(CommandParseResult r) {
 }
 
 // ---- Tag ID helpers ----------------------------------------------------------------
-
-bool canonical_tag_id(const char* in, char* out, size_t cap) {
-  if (!in || !out || cap < 3) return false;
-  while (isspace((unsigned char)*in)) in++;
-  size_t n = strlen(in);
-  while (n > 0 && isspace((unsigned char)in[n - 1])) n--;
-
-  size_t o = 0;
-  size_t i = 0;
-  if (n >= 2 && in[0] == '0' && (in[1] == 'x' || in[1] == 'X')) i = 2;
-  out[o++] = '0';
-  out[o++] = 'x';
-  for (; i < n; i++) {
-    if (o + 1 >= cap) return false;
-    out[o++] = (char)toupper((unsigned char)in[i]);
-  }
-  out[o] = '\0';
-  return o > 2;  // "0x" alone is not a tag
-}
 
 bool format_tag_uid(const uint8_t* uid, uint8_t uid_len, char* out, size_t cap) {
   static const char HEX_DIGITS[] = "0123456789ABCDEF";
@@ -168,12 +161,23 @@ static size_t finish(JsonDocument& doc, char* out, size_t cap) {
 
 size_t build_telemetry_json(const TelemetryMsg& m, const char* robot_id,
                             int64_t timestamp_ms, char* out, size_t cap) {
+  if (isnan(m.battery_pct)) return 0;  // required field; wait for a reading
+
+  // Empty strings mean "none" and go out as null.
+  auto str_or_null = [](const char* s) -> const char* { return s[0] ? s : nullptr; };
+
   JsonDocument doc;
   doc["robot_id"] = robot_id;
   doc["status"] = to_wire(m.status);
-  doc["current_node"] = m.current_node;
-  doc["battery_pct"] = isnan(m.battery_pct) ? 0.0 : round1(m.battery_pct);
-  doc["heading"] = static_cast<uint8_t>(m.heading);
+  doc["current_node"] = str_or_null(m.current_node);
+  doc["task_id"] = str_or_null(m.task_id);
+  doc["last_completed_task_id"] = str_or_null(m.last_completed_task_id);
+  doc["battery_pct"] = round1(m.battery_pct);
+  if (m.heading_known) {
+    doc["heading"] = static_cast<uint8_t>(m.heading);
+  } else {
+    doc["heading"] = nullptr;
+  }
 
   // obstacle_cm?: number | null  -> always present, null when no target
   if (isnan(m.obstacle_cm)) {
@@ -230,7 +234,7 @@ CommandParseResult parse_command_json(const char* json, size_t len, Command& out
   // command (required)
   JsonVariantConst cmd = o["command"];
   if (!cmd.is<const char*>()) return CommandParseResult::MissingCommand;
-  if (!from_wire(cmd.as<const char*>(), CommandType::Navigate, CommandType::Resume, out.type))
+  if (!from_wire(cmd.as<const char*>(), CommandType::Navigate, CommandType::Jog, out.type))
     return CommandParseResult::UnknownCommand;
 
   // task_id, target_node (optional strings)
@@ -238,21 +242,30 @@ CommandParseResult parse_command_json(const char* json, size_t len, Command& out
       !copy_optional_str(o["target_node"], out.target_node, sizeof(out.target_node)))
     return CommandParseResult::FieldTooLong;
 
-  // path (optional array of tag IDs; required for navigate)
+  if (out.type == CommandType::Cancel && !out.task_id[0]) return CommandParseResult::MissingTaskId;
+
+  // path (optional array of node ids; without one the robot plans its own route)
   JsonVariantConst path = o["path"];
   if (!path.isNull()) {
     if (!path.is<JsonArrayConst>()) return CommandParseResult::BadPathEntry;
     JsonArrayConst arr = path.as<JsonArrayConst>();
     if (arr.size() > MAX_PATH_LEN) return CommandParseResult::PathTooLong;
-    for (JsonVariantConst tag : arr) {
-      if (!tag.is<const char*>()) return CommandParseResult::BadPathEntry;
-      if (!canonical_tag_id(tag.as<const char*>(), out.path[out.path_len], TAG_ID_LEN))
+    for (JsonVariantConst node : arr) {
+      if (!node.is<const char*>() || !node.as<const char*>()[0] ||
+          !copy_optional_str(node, out.path[out.path_len], NODE_ID_LEN))
         return CommandParseResult::BadPathEntry;
       out.path_len++;
     }
   }
-  if (out.type == CommandType::Navigate && out.path_len == 0)
-    return CommandParseResult::MissingPath;
+
+  // direction (jog only)
+  out.direction = JogDirection::None;
+  JsonVariantConst dir = o["direction"];
+  if (!dir.isNull() &&
+      !from_wire(dir.as<const char*>(), JogDirection::Forward, JogDirection::Backward, out.direction))
+    return CommandParseResult::BadDirection;
+  if (out.type == CommandType::Jog && out.direction == JogDirection::None)
+    return CommandParseResult::BadDirection;
 
   // action_at_target (optional)
   out.action_at_target = TargetAction::None;

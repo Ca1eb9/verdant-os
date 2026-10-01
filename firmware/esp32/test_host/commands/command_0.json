@@ -1,7 +1,7 @@
 {
   "command": "navigate",
   "task_id": "3f2b8c1e-9a4d-4e6f-b1c2-7d8e9f0a1b2c",
-  "path": ["0x1D5E", "0x2A01", "0x3C10"],
+  "path": ["dock-1", "cp-01", "water-01"],
   "target_node": "water-01",
   "action_at_target": "water",
   "duration_ms": 900000,

@@ -97,6 +97,8 @@ export function dijkstra(
   startId: string,
   endId: string
 ): string[] | null {
+  if (!graph.nodes.has(startId) || !graph.nodes.has(endId)) return null;
+
   const dist = new Map<string, number>();
   const prev = new Map<string, string | null>();
   const visited = new Set<string>();

@@ -1,7 +1,14 @@
 import type { NavGraph } from "@/lib/farm/navigation";
 import { resolveNode } from "@/lib/farm/navigation";
 import type { RobotDraw } from "@/lib/farm/map/renderer";
-import type { GraphNode, GrowthStage, Heading, PlantRecord, RobotStatus } from "@/lib/farm/types";
+import type { GraphNode, GrowthStage, Heading, PlantRecord, RobotStatus, TaskType } from "@/lib/farm/types";
+
+/** The orchestrator's assigned task, from farm/robot/{id}/state */
+export interface RobotTask {
+  id: string;
+  type: TaskType;
+  targetNode?: string;
+}
 
 /** Robot state as the dashboard sees it (telemetry + orchestrator extras) */
 export interface RobotView {
@@ -17,6 +24,8 @@ export interface RobotView {
   /** Planned path from the orchestrator (node ids), when it provides one */
   expectedPath?: string[];
   taskLabel?: string;
+  /** Assigned task from the orchestrator; null or missing when it has none */
+  task?: RobotTask | null;
 }
 
 /** Same as orchestrator-config.json heartbeat_timeout_ms */
@@ -36,10 +45,27 @@ const STATUS_LABEL: Record<RobotStatus, string> = {
   returning_to_dock: "Returning",
   docking: "Docking",
   charging: "Charging",
+  stopped: "Stopped",
   lost: "Lost",
   error: "Error",
-  manual: "Stopped",
+  manual: "Manual",
+  initializing: "Starting",
 };
+
+const TASK_ACTION: Partial<Record<TaskType, string>> = {
+  water: "Water",
+  grow: "Grow",
+  harvest: "Harvest",
+};
+
+/** Short description of a task, e.g. "Water at water-01" */
+export function describeTask(task: RobotTask) {
+  if (task.type === "stop") return "Stop";
+  if (task.type === "return_to_dock") return "Return to dock";
+  const action = TASK_ACTION[task.type];
+  const target = task.targetNode ?? "target";
+  return action ? `${action} at ${target}` : `Go to ${target}`;
+}
 
 export function statusLabel(status: RobotStatus) {
   return STATUS_LABEL[status] ?? status;

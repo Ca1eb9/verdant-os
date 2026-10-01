@@ -69,6 +69,10 @@ coverage/
 *.db-wal
 *.db-shm
 
+# Orchestrator task state
+orchestrator-state.json
+orchestrator-state.json.tmp
+
 # ──────────────────────────────────────────
 # PlatformIO
 # ──────────────────────────────────────────
@@ -77,5 +81,5 @@ coverage/
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
-# Firmware secrets (WiFi password)
+# Firmware secrets
 firmware/esp32/src/secrets.h

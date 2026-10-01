@@ -38,7 +38,7 @@ firmware/
 │   │   ├── nav_helpers.cpp        # On-board pathfinding
 │   │   └── nav_helpers.h
 │   └── config.h                # WiFi creds, MQTT broker IP, pin definitions,
-│                               # battery thresholds, robot ID, dock tag ID
+│                               # battery thresholds, robot ID, dock node ID
 │   └── types.h                 # Shared structs: SensorData, DriveCommand,
 │                               # Command, TelemetryMsg, RobotEvent
 │   ├── graph.cpp               # Farm topology stored in flash
@@ -67,7 +67,7 @@ Managed by PlatformIO in `platformio.ini`. Core libraries:
 
 - **PubSubClient** — MQTT client
 - **ArduinoJson** (v7) — JSON serialization for telemetry/commands
-- **Adafruit PN532** / **MFRC522** — RFID reader (pick one in `config.h`)
+- **Adafruit PN532** — RFID reader
 - **STM32duino VL53L4CX** — time-of-flight obstacle sensor
 
 PlatformIO downloads these automatically on first build.

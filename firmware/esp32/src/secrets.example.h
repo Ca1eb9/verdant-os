@@ -10,4 +10,3 @@
 // Optional overrides, e.g. to test against Mosquitto on your laptop:
 // #define MQTT_BROKER_IP "192.168.1.50"
 // #define MQTT_PORT 1883
-// #define NTP_SERVER "pool.ntp.org"   // only works on a network with internet
