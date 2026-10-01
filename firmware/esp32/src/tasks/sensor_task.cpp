@@ -70,6 +70,10 @@ struct ObstacleState {
   uint32_t last_data_ms = 0;
   uint32_t last_reinit_ms = 0;
   bool fault_logged = false;
+
+  // Needed because the toolchain builds as C++11, where default member
+  // initializers stop this struct being brace-initializable as an aggregate.
+  ObstacleState(TofSensor* t, volatile bool* f) : tof(t), flag(f) {}
 };
 ObstacleState s_front{&s_tof_front, &g_obstacle_front_flag};
 ObstacleState s_rear{&s_tof_rear, &g_obstacle_rear_flag};
