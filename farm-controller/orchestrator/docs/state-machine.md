@@ -75,15 +75,29 @@ stateDiagram-v2
     pending --> failed : navigate dispatched<br/>with no path to the target
     pending --> cancelled : cancel with this task_id
 
-    assigned --> completed : task_complete event (matching task_id),<br/>or telemetry last_completed_task_id = task,<br/>or stop task and robot stopped,<br/>or dock task and robot docking / charging
-    assigned --> failed : task_failed event (matching task_id),<br/>or dropped more than max_task_retries times
-    assigned --> pending : robot reports task_id null after command_ack_timeout_ms<br/>(retry counted, and non stop/dock tasks wait task_retry_delay_ms),<br/>or replaced by an immediate navigate (not counted)
-    assigned --> cancelled : cancel (not allowed for stop tasks)<br/>[cancel sent to robot, resent while it reports the task]
+    state "Held by a robot" as Held {
+        assigned --> in_progress : telemetry - robot working<br/>with this task_id
+    }
 
-    completed --> [*]
-    failed --> [*]
-    cancelled --> [*]
+    Held --> pending : dropped or replaced
+    Held --> Finished : completed, failed<br/>or cancelled (see table)
+
+    state "Finished" as Finished {
+        completed
+        failed
+        cancelled
+    }
+    Finished --> [*]
 ```
+
+Leaving "Held by a robot" (from `assigned` or `in_progress`):
+
+| To | When |
+|---|---|
+| `completed` | `task_complete` event with this `task_id`; or telemetry `last_completed_task_id` equals it; or a stop task and the robot reports `stopped`; or a dock task and the robot reports `docking` / `charging` |
+| `failed` | `task_failed` event with this `task_id`; or dropped more than `max_task_retries` times |
+| `pending` | The robot reports `task_id: null` after `command_ack_timeout_ms` (retry counted; non stop/dock tasks wait `task_retry_delay_ms`); or replaced by an immediate navigate (not counted) |
+| `cancelled` | `cancel` (not allowed for stop tasks). The robot is sent `cancel`, and again whenever it still reports the task |
 
 Notes:
 
@@ -95,7 +109,9 @@ Notes:
   so none of those requeue a task by themselves; only a `null` `task_id` does.
 - An immediate navigate goes through the same dispatch, so an immediate
   "charge" (a dock task) at a dock node completes straight away.
-- `in_progress` exists in `TaskStatus` but is not used.
+- A task becomes `in_progress` the first time the robot reports `working` on it,
+  and stays `in_progress` through dock trips and pauses until it finishes. A
+  requeue puts it back to `pending`.
 - Queued, assigned and finished tasks are saved to `orchestrator-state.json` and
   restored on restart; restored assigned tasks are reconciled by the robot's
   next telemetry.
@@ -124,7 +140,10 @@ flowchart TD
     K -- no --> M
     L --> M{Assigned task?}
     M -- no --> Q
-    M -- yes --> N{last_completed_task_id matches,<br/>or stop task and stopped,<br/>or dock task and docking/charging?}
+    M -- yes --> M2{working on it and<br/>still assigned?}
+    M2 -- yes --> M3[Mark in_progress]
+    M2 -- no --> N
+    M3 --> N{last_completed_task_id matches,<br/>or stop task and stopped,<br/>or dock task and docking/charging?}
     N -- yes --> O[Complete task]
     N -- no --> P{task_id null and<br/>grace period over?}
     P -- yes --> P2[Requeue, or fail after<br/>max_task_retries]

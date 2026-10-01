@@ -20,6 +20,7 @@ import {
   AlertSeverity,
   TaskPriority,
   CommandSource,
+  TaskStatus,
 } from "@farm/shared";
 
 // --- Side effect types ---------------------------------------
@@ -101,6 +102,11 @@ export function processTelemetry(
   // only requeue when it reports no task after the grace period.
   const task = state.assigned_task;
   if (task) {
+    // The robot is doing the work at the target
+    if (state.status === RobotStatus.WORKING && msg.task_id === task.task_id &&
+        task.status === TaskStatus.ASSIGNED) {
+      task.status = TaskStatus.IN_PROGRESS;
+    }
     if (
       // Robot finished it but the task_complete event was lost
       msg.last_completed_task_id === task.task_id ||
