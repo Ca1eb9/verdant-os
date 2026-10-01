@@ -6,7 +6,7 @@ reports in telemetry. The simulator (`farm-controller/simulator`) implements the
 same behaviour and is the reference when in doubt.
 
 Events are shown in `[brackets]` and are always pushed **before** the status
-changes (single outbound FIFO). Thresholds are the proposed `config.h` values.
+changes (comms publishes queued events before telemetry). Thresholds are the proposed `config.h` values.
 
 ## 1. Normal operation
 

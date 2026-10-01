@@ -31,15 +31,27 @@ const telemetry = load(outDir, "telemetry_");
 const events = load(outDir, "event_");
 const commands = load(cmdDir, "command_");
 
+// Node ids on the wire must exist in the farm topology.
+const topology = JSON.parse(
+  readFileSync(join(here, "../../../farm-controller/topology.json"), "utf8")
+);
+const nodeIds = new Set(topology.nodes.map((n) => n.id));
+
 // Runtime checks TypeScript can't express.
 const problems = [];
+const checkNode = (file, field, id) => {
+  if (id != null && !nodeIds.has(id)) problems.push(`${file}: ${field} "${id}" is not a node id in topology.json`);
+};
 for (const { file, value } of [...telemetry, ...events]) {
-  if (!(value.timestamp > 1e12 && value.timestamp < 1e13))
-    problems.push(`${file}: timestamp ${value.timestamp} is not Unix milliseconds`);
+  // Robot uptime in ms; the Pi uses its own receive time.
+  if (!Number.isInteger(value.timestamp) || value.timestamp < 0)
+    problems.push(`${file}: timestamp ${value.timestamp} is not a non-negative integer`);
 }
-for (const { file, value } of telemetry) {
-  if (!/^0x[0-9A-F]+$/.test(value.current_node))
-    problems.push(`${file}: current_node "${value.current_node}" is not a tag ID like 0x2A01`);
+for (const { file, value } of telemetry) checkNode(file, "current_node", value.current_node);
+for (const { file, value } of events) checkNode(file, "node_id", value.node_id);
+for (const { file, value } of commands) {
+  checkNode(file, "target_node", value.target_node);
+  for (const id of value.path ?? []) checkNode(file, "path entry", id);
 }
 
 // Wire<T>: string enums arrive as their string values ("en_route"), so map

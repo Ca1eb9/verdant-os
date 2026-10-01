@@ -15,7 +15,7 @@ QueueHandle_t g_event_queue = nullptr;
 volatile bool g_obstacle_flag = false;
 volatile bool g_motor_kill_flag = false;
 volatile bool g_mqtt_connected = false;
-volatile uint32_t g_last_pi_msg_ms = 0;
+volatile uint32_t g_last_command_ms = 0;
 
 bool create_queues() {
   g_sensor_queue = xQueueCreate(SENSOR_QUEUE_LEN, sizeof(SensorData));

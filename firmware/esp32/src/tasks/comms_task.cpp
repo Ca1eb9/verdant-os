@@ -6,8 +6,7 @@
 #include <Arduino.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
-#include <sys/time.h>
-#include <time.h>
+#include <math.h>
 
 #include "../comms/comms_json.h"
 #include "../config.h"
@@ -27,32 +26,11 @@ char s_client_id[40];
 // Scratch buffer for outgoing JSON; only this task touches it.
 char s_json[1024];
 
-// ---- Time ----------------------------------------------------------------------
-// FarmNet has no internet, so SNTP talks to the Pi (NTP_SERVER). Until the
-// clock syncs, timestamps are sent as 0 and Pi services should fall back to
-// their own receive time.
-
-bool s_sntp_started = false;
-bool s_time_synced_logged = false;
-
-bool time_synced() { return time(nullptr) > 1700000000; }  // after Nov 2023
-
-int64_t epoch_ms_for(uint32_t uptime_ms) {
-  if (!time_synced()) return 0;
-  struct timeval tv;
-  gettimeofday(&tv, nullptr);
-  int64_t now_ms = (int64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
-  uint32_t age_ms = millis() - uptime_ms;  // unsigned math survives wraparound
-  return now_ms - (int64_t)age_ms;
-}
-
 // ---- Inbound -----------------------------------------------------------------
 
 void on_message(char* topic, uint8_t* payload, unsigned int len) {
-  // Any message from the Pi proves it is alive; the nav watchdog reads this.
-  g_last_pi_msg_ms = millis();
-
-  if (strcmp(topic, s_topic_command) != 0) return;  // heartbeat: done
+  if (strcmp(topic, s_topic_command) != 0) return;
+  g_last_command_ms = millis();
 
   Command cmd;
   CommandParseResult r = parse_command_json((const char*)payload, len, cmd);
@@ -106,7 +84,6 @@ bool try_mqtt_connect() {
     return false;
   }
   s_mqtt.subscribe(s_topic_command, 1);
-  s_mqtt.subscribe(ORCHESTRATOR_HEARTBEAT_TOPIC, 0);
   LOG("comms", "MQTT connected, subscribed to %s", s_topic_command);
   return true;
 }
@@ -128,15 +105,6 @@ Link service_link() {
     s_mqtt_backoff = MQTT_RETRY_MIN_MS;
     s_mqtt_ever_tried = false;  // try MQTT right away on a fresh WiFi link
     LOG("comms", "WiFi up, IP %s, RSSI %d dBm", WiFi.localIP().toString().c_str(), WiFi.RSSI());
-    if (!s_sntp_started) {
-      configTime(0, 0, NTP_SERVER);  // UTC; keeps syncing in the background
-      s_sntp_started = true;
-    }
-  }
-
-  if (!s_time_synced_logged && time_synced()) {
-    s_time_synced_logged = true;
-    LOG("comms", "clock synced via NTP (%s)", NTP_SERVER);
   }
 
   if (s_mqtt.connected()) {
@@ -162,7 +130,7 @@ Link service_link() {
 void publish_events() {
   RobotEventMsg ev;
   while (xQueuePeek(g_event_queue, &ev, 0) == pdTRUE) {
-    size_t n = build_event_json(ev, ROBOT_ID, epoch_ms_for(ev.uptime_ms), s_json, sizeof(s_json));
+    size_t n = build_event_json(ev, ROBOT_ID, ev.uptime_ms, s_json, sizeof(s_json));
     if (n == 0) {
       LOG("comms", "event too large to serialise, dropped");
     } else if (!s_mqtt.publish(s_topic_events, (const uint8_t*)s_json, n)) {
@@ -178,7 +146,8 @@ void publish_telemetry(bool online) {
   TelemetryMsg t;
   while (xQueueReceive(g_telemetry_queue, &t, 0) == pdTRUE) {
     if (!online) continue;
-    size_t n = build_telemetry_json(t, ROBOT_ID, epoch_ms_for(t.uptime_ms), s_json, sizeof(s_json));
+    if (isnan(t.battery_pct)) continue;  // no battery reading yet: battery_pct is required
+    size_t n = build_telemetry_json(t, ROBOT_ID, t.uptime_ms, s_json, sizeof(s_json));
     if (n == 0) {
       LOG("comms", "telemetry too large to serialise, dropped");
       continue;

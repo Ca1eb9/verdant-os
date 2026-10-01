@@ -1,1 +1,1 @@
-{ "command": "resume", "priority": "normal", "source": "local" }
+{ "command": "stop", "priority": "critical", "source": "remote", "immediate": true }

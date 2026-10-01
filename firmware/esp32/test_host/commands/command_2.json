@@ -1,1 +1,1 @@
-{ "command": "stop", "priority": "high", "source": "remote" }
+{ "command": "return_to_dock", "task_id": "d-42", "priority": "critical", "source": "remote" }

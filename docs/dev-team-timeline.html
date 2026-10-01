@@ -389,7 +389,7 @@ alt="Timeline Gantt Chart" style="width: 900px; height: auto; border-radius: 10p
     <summary>Requirements</summary>
     <ul>
       <li>Connect to the farm's WiFi network and the Mosquitto broker</li>
-      <li>Read from the single outbound queue (telemetry and events, in order, populated by the nav task) and publish each message as JSON to the robot's telemetry or events topic. Review the shared types to understand the expected message format and field names — the JSON fields must match exactly so Pi services can parse them.</li>
+      <li>Read the telemetry and event queues (populated by the nav task) and publish each message as JSON to the robot's telemetry or events topic, always sending queued events before queued telemetry. Review the shared types to understand the expected message format and field names — the JSON fields must match exactly so Pi services can parse them.</li>
             <li>Subscribe to the robot's command topic. Parse incoming JSON into a command struct and push it onto the command queue for the nav task to process.</li>
       <li>Handle disconnects gracefully — reconnect to WiFi and MQTT without blocking other tasks or using <code>delay()</code></li>
     </ul>
