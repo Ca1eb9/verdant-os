@@ -68,7 +68,7 @@ orchestrator uses it, for a robot that has gone silent.
 
 | Status | Meaning | `task_id` |
 |---|---|---|
-| `initializing` | Booted, position unknown, looking for a tag | kept from NVS if any, else `null` |
+| `initializing` | Booted, position unknown, looking for a tag | always `null` |
 | `idle` | Stopped with no task | always `null` |
 | `en_route` | Driving to its task's target | the task |
 | `working` | Doing the action at the target | the task |
@@ -96,7 +96,12 @@ The navigation task holds:
 - **Stop latch:** set by `stop`, cleared by `resume` or a new `navigate`. It
   survives a trip to the dock: after charging, a latched robot reports `stopped`
   instead of resuming.
-- **`last_completed_task_id`:** see below. Store it in NVS.
+- **`last_completed_task_id`:** see below.
+
+The task context lives in RAM only: the robot writes nothing to flash. It
+survives a lost network or a Pi outage, but not a reboot. A rebooted robot
+starts with no task, and the orchestrator requeues the task it had assigned
+(see [Telemetry `task_id`](#telemetry-task_id)).
 
 ## Transitions and events
 
@@ -105,7 +110,7 @@ pushed first, then the status changes.
 
 | From | Trigger | Events | To |
 |---|---|---|---|
-| `initializing` | First known tag read | — | `idle`, or `en_route` for a task restored from NVS |
+| `initializing` | First known tag read | — | `idle` |
 | `idle` | `navigate` accepted | — | `en_route` |
 | `en_route` | Tag read (not the target) | — | `en_route` (update `current_node`, heading) |
 | `en_route` | Target reached (including already there) | `arrived`, `task_started` | `working` |
@@ -210,8 +215,9 @@ since boot. It is set at the same moment `task_id` is cleared and the
 marks the task complete instead of requeuing it. A failed or cancelled task does
 not set it, so a lost `task_failed` results in a retry.
 
-Keep this value in NVS (Preferences) if possible. Otherwise a reboot right after
-a lost `task_complete` makes the orchestrator redo that task.
+It is not kept across a reboot, so a reboot right after a lost `task_complete`
+makes the orchestrator redo that task. This is accepted to keep the robot from
+writing to flash.
 
 ## Commands
 
@@ -364,3 +370,5 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
 - Elevator moves (how the robot rides between levels and confirms arrival)
 - `harvest` action
 - Bluetooth controller pairing and input mapping
+- Graph updates from the orchestrator (the only case where the robot would
+  write to flash)

@@ -1,7 +1,10 @@
 // task_context.h
 // What the nav task holds about its work (docs/firmware-architecture.md,
-// "Task context"). Pure C++ with no Arduino or FreeRTOS calls, so the nav
-// state machine and the NVS store share it and test_host can build it.
+// "Task context"). Pure C++ with no Arduino or FreeRTOS calls, so test_host
+// can build it.
+//
+// RAM only: it survives a lost network or Pi outage, not a reboot. A rebooted
+// robot starts with no task and the orchestrator requeues it.
 
 #pragma once
 
@@ -42,7 +45,6 @@ struct TaskContext {
   // manual timeouts.
   bool stop_latched;
 
-  // Last task completed successfully, "" if none. Kept in NVS so a reboot
-  // after a lost task_complete doesn't make the orchestrator redo the task.
+  // Last task completed successfully, "" if none since boot.
   char last_completed_task_id[TASK_ID_LEN];
 };

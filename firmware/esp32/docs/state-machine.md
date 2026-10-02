@@ -15,7 +15,6 @@ stateDiagram-v2
     [*] --> initializing : boot
 
     initializing --> idle : first known tag read
-    initializing --> en_route : first known tag read,<br/>task restored from NVS
 
     idle --> en_route : navigate
     en_route --> en_route : tag read - update node and heading
