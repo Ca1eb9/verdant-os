@@ -75,6 +75,14 @@ sudo nmcli connection up FarmNet
 
 ### 3. DHCP + DNS — `/etc/dnsmasq.d/farmnet.conf`
 
+This file doesn't exist yet; create it. dnsmasq reads every file in `/etc/dnsmasq.d/`, so its own `/etc/dnsmasq.conf` stays untouched.
+
+```bash
+sudo nano /etc/dnsmasq.d/farmnet.conf
+```
+
+Paste in:
+
 ```
 interface=wlan0
 bind-dynamic
@@ -89,9 +97,15 @@ address=/farmnet/192.168.4.1
 - `no-resolv` — without this dnsmasq forwards unknown names to the Pi's own upstream DNS, and FarmNet devices would resolve external domains. With it, only `farmnet` resolves. The Pi itself is unaffected: it uses the DNS server it gets over Ethernet, not dnsmasq.
 - `dhcp-option=3` with no value — don't hand out a default gateway. By default dnsmasq advertises the Pi as the gateway, and a laptop on both Ethernet and FarmNet may then send its internet traffic to the Pi and lose internet.
 
+Check that dnsmasq reads the folder and the file has no errors, then restart it:
+
 ```bash
+grep -rs "dnsmasq.d" /etc/default/dnsmasq /etc/dnsmasq.conf
+sudo dnsmasq --test
 sudo systemctl restart dnsmasq
 ```
+
+The `grep` should print a line mentioning `dnsmasq.d`. If it prints nothing, add `conf-dir=/etc/dnsmasq.d/,*.conf` to the end of `/etc/dnsmasq.conf`. `dnsmasq --test` should print `syntax check OK`.
 
 ### 4. Keep forwarding off
 
@@ -108,6 +122,14 @@ Do **not** add any iptables/nftables NAT or MASQUERADE rules. No traffic should 
 
 ### 5. Mosquitto — `/etc/mosquitto/conf.d/farmnet.conf`
 
+This file doesn't exist yet either; create it. Mosquitto's main config includes every `.conf` file in `/etc/mosquitto/conf.d/`.
+
+```bash
+sudo nano /etc/mosquitto/conf.d/farmnet.conf
+```
+
+Paste in:
+
 ```
 listener 1883
 listener 9001
@@ -121,7 +143,10 @@ allow_anonymous true
 ```bash
 sudo systemctl enable mosquitto
 sudo systemctl restart mosquitto
+systemctl status mosquitto
 ```
+
+`status` should show `active (running)`. If it failed, `journalctl -u mosquitto -n 20` shows the config error.
 
 ## Enable and reboot
 
