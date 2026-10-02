@@ -59,13 +59,18 @@ the same for the orchestrator):
 # /etc/systemd/system/shelf-bridge.service
 [Unit]
 Description=VerdantOS shelf bridge
+Wants=mosquitto.service
 After=mosquitto.service
 
 [Service]
 User=<pi user>
 WorkingDirectory=/home/<pi user>/verdant-os
+# Use the path from `which npm` (it differs under nvm)
 ExecStart=/usr/bin/npm run shelf
 Restart=on-failure
+# The bridge exits if the broker isn't up yet; without a delay, systemd's
+# start limit (5 restarts in 10 s) would give up on it for good
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
@@ -112,9 +117,13 @@ Restart the bridge after editing the config.
 | One sensor unplugged or dead | Logs `# <sensor> failed` once, prints `null` for it | Publishes `null`; other readings unaffected |
 | pH board or probe unplugged | Reports whatever A0 floats to | pH outside 0–14 becomes `null` |
 | Level switch unplugged | The pull-down reads it as "low" | `water_level_ok: false`, the safe direction |
+| Light sensor reset by a power glitch | Re-sends its mode every report, so at most one wrong reading | — |
 | Node hangs (I2C, firmware bug) | Watchdog resets it within 8 s | Logs the restart (`seq` went back) |
+| Port open but silent (node hung past its watchdog, wedged USB) | Reset by the reopen (DTR) | After 20 s closes and reopens the port, and keeps doing so every 20 s until readings return |
 | USB unplugged / node rebooting | — | Reopens the port every 3 s; one alert after 20 s of silence, logs when readings resume |
-| Garbage or partial lines | — | Dropped and logged, never published |
+| Pi reboots or loses power | Powered by the Pi's USB, so it restarts with it | systemd starts the bridge; it waits for the port and broker, readings resume within about 10 s |
+| Pi clock jumps (no RTC; NTP syncs late or never) | — | Silence is timed on a monotonic clock, so no false alerts; published `timestamp` follows the Pi's clock like every other service |
+| Garbage, partial or library error lines | — | Never published; non-JSON lines are logged as node output, repeats once |
 | Broker down | — | The shared MQTT client reconnects and sends readings queued while it was offline |
 
 The dashboard doesn't show shelf data yet: it still reads the old Supabase

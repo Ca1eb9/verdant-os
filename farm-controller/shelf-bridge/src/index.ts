@@ -10,6 +10,7 @@
 
 import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
+import { performance } from "perf_hooks";
 import { SerialPort } from "serialport";
 import {
   type FarmAlert,
@@ -42,10 +43,14 @@ interface ShelfLink {
   reopenTimer: NodeJS.Timeout | null;
   /** Open failures log once per outage, not every retry */
   openFailing: boolean;
-  /** Last valid reading; startup time until the first one */
+  /** Monotonic ms (performance.now) of the last valid reading; startup until the first */
   lastReadingAt: number;
+  /** Monotonic ms the port last opened; a node needs time to boot before it's silent */
+  openedAt: number;
   lastSeq: number | null;
   silent: boolean;
+  /** Last non-reading line, so a sensor library repeating its error logs once */
+  lastNodeLog: string;
 }
 
 const links: ShelfLink[] = config.shelves.map((shelf) => ({
@@ -54,9 +59,11 @@ const links: ShelfLink[] = config.shelves.map((shelf) => ({
   buffer: "",
   reopenTimer: null,
   openFailing: false,
-  lastReadingAt: Date.now(),
+  lastReadingAt: performance.now(),
+  openedAt: 0,
   lastSeq: null,
   silent: false,
+  lastNodeLog: "",
 }));
 
 let mqtt: TypedMqttClient;
@@ -69,13 +76,18 @@ const tag = (link: ShelfLink) => `[${link.shelf.shelf_id}]`;
 function onLine(link: ShelfLink, raw: string) {
   const line = raw.trim();
   if (!line) return;
-  if (line.startsWith("#")) {
-    console.log(`${tag(link)} node: ${line.slice(1).trim()}`);
+  // Readings are JSON objects; anything else is the node's '#' logs, a sensor
+  // library's own error prints, or boot noise
+  if (!line.startsWith("{")) {
+    if (line !== link.lastNodeLog) console.log(`${tag(link)} node: ${line.replace(/^#\s*/, "")}`);
+    link.lastNodeLog = line;
     return;
   }
 
-  const now = Date.now();
-  const reading = parseLine(line, link.shelf, now);
+  // Wall clock only for the published timestamp; the Pi's clock can jump
+  // (no RTC, NTP may sync late), so silence is measured on a monotonic clock
+  const reading = parseLine(line, link.shelf, Date.now());
+  const now = performance.now();
   if (!reading) {
     console.warn(`${tag(link)} dropped invalid line: ${line}`);
     return;
@@ -129,11 +141,14 @@ function openPort(link: ShelfLink) {
   });
   link.port = port;
   link.buffer = "";
+  link.lastNodeLog = "";
+  // Set before open() so the silence check never sees an open port with a stale time
+  link.openedAt = performance.now();
 
   port.on("data", (chunk: Buffer) => onData(link, chunk));
   port.on("error", (err) => console.error(`${tag(link)} serial error: ${err.message}`));
   port.on("close", () => {
-    link.port = null;
+    if (link.port === port) link.port = null;
     if (shuttingDown) return;
     console.warn(`${tag(link)} ${link.shelf.port} closed, reopening`);
     scheduleReopen(link);
@@ -157,8 +172,15 @@ function openPort(link: ShelfLink) {
 // --- Silence watchdog ----------------------------------------
 
 function checkSilence() {
-  const now = Date.now();
+  const now = performance.now();
   for (const link of links) {
+    // An open port that stays quiet may be wedged, or the node hung past its
+    // watchdog. Reopening it toggles DTR, which also resets the Uno.
+    if (link.port?.isOpen && now - Math.max(link.lastReadingAt, link.openedAt) > config.silence_timeout_ms) {
+      console.warn(`${tag(link)} open but silent, reopening ${link.shelf.port}`);
+      link.port.close();
+    }
+
     const silence = now - link.lastReadingAt;
     if (link.silent || silence <= config.silence_timeout_ms) continue;
     link.silent = true;
@@ -173,7 +195,7 @@ function checkSilence() {
       metric: "silence_s",
       value: Math.round(silence / 1000),
       threshold: Math.round(config.silence_timeout_ms / 1000),
-      timestamp: now,
+      timestamp: Date.now(),
     };
     mqtt.publish(TOPICS.alerts, alert);
     console.warn(`[ALERT] ${link.shelf.shelf_id}: ${alert.message}`);
