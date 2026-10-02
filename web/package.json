@@ -11,8 +11,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "check": "npm run lint && npm run typecheck && npm run build",
-    "bridge:serial": "node scripts/serial-bridge.mjs"
+    "check": "npm run lint && npm run typecheck && npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.0",
@@ -21,8 +20,7 @@
     "next": "^15.5.14",
     "react": "19.0.0",
     "react-dom": "19.0.0",
-    "recharts": "^2.15.1",
-    "serialport": "^13.0.0"
+    "recharts": "^2.15.1"
   },
   "devDependencies": {
     "@types/node": "^22.13.4",

@@ -11,9 +11,6 @@ interface ConfigStatus {
     supabaseUrl: boolean;
     readKey: boolean;
     serviceRoleKey: boolean;
-    serialPort: string;
-    serialBaud: string;
-    deviceId: string;
   };
   supabase: {
     configured: boolean;
@@ -32,9 +29,6 @@ interface ConfigStatus {
 }
 
 const setupCommands = [
-  "lsusb",
-  "ls /dev/ttyACM* /dev/ttyUSB*",
-  "npm run bridge:serial",
   "npm run dev",
 ];
 
@@ -132,8 +126,7 @@ export function ConfigView() {
           <span className="eyebrow">Deployment configuration</span>
           <h1 className="pageTitle">Config</h1>
           <p className="pageLead">
-            Arduino Uno R3 serial bridge, Supabase ingestion, and dashboard read path are wired
-            here for the production deployment.
+            Supabase configuration and the dashboard read path for the production deployment.
           </p>
         </div>
 
@@ -172,36 +165,7 @@ export function ConfigView() {
             </div>
             <div className={styles.checkRow}>
               <span>SUPABASE_SERVICE_ROLE_KEY</span>
-              <strong>{status?.env.serviceRoleKey ? "Set for inserts" : "Local bridge only"}</strong>
-            </div>
-            <div className={styles.checkRow}>
-              <span>DEVICE_ID</span>
-              <strong>{status?.env.deviceId ?? "arduino-uno-r3-1"}</strong>
-            </div>
-          </div>
-        </article>
-
-        <article className={`glassPanel ${styles.moduleCard}`}>
-          <div className={styles.moduleHead}>
-            <div>
-              <span className="eyebrow">Serial bridge</span>
-              <h2 className={styles.moduleTitle}>Arduino Uno R3</h2>
-            </div>
-            <span className={`${styles.badge} ${styles.good}`}>9600 baud</span>
-          </div>
-
-          <div className={styles.checkList}>
-            <div className={styles.checkRow}>
-              <span>Primary port</span>
-              <strong>{status?.env.serialPort ?? "/dev/ttyACM0"}</strong>
-            </div>
-            <div className={styles.checkRow}>
-              <span>Alternate port</span>
-              <strong>/dev/ttyUSB0</strong>
-            </div>
-            <div className={styles.checkRow}>
-              <span>Bridge command</span>
-              <strong>npm run bridge:serial</strong>
+              <strong>{status?.env.serviceRoleKey ? "Set for inserts" : "Not set"}</strong>
             </div>
           </div>
         </article>

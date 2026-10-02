@@ -2,6 +2,10 @@
 
 Mermaid diagrams below match current code shape in this repo.
 
+`sensor_events` no longer has a writer: the laptop serial bridge was retired in
+favour of the Pi's `shelf-bridge` service, which publishes shelf readings over
+MQTT (see `docs/shelf-sensors.md` at the repo root).
+
 ## Component UML
 
 ```mermaid
@@ -48,11 +52,6 @@ flowchart LR
         end
     end
 
-    subgraph Ingestion[Live Ingestion]
-        Arduino["Arduino Uno R3"]
-        Bridge["scripts/serial-bridge.mjs"]
-    end
-
     DB[(Supabase\nsensor_events)]
 
     User --> DashboardPage
@@ -92,9 +91,6 @@ flowchart LR
     LatestRoute --> DB
     StatusRoute --> DB
 
-    Arduino --> Bridge
-    Bridge --> DB
-
     User -. install/offline .-> ServiceWorker
 ```
 
@@ -103,19 +99,12 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     autonumber
-    participant A as Arduino Uno R3
-    participant B as serial-bridge.mjs
     participant D as Supabase sensor_events
     participant R as /api/sensor-events/latest
     participant H as useFarmTelemetry
     participant L as localStorage
     participant V as DashboardView
     participant U as User
-
-    A->>B: Emit sensor block over USB serial
-    B->>B: Parse lines, map fields, derive PPFD
-    B->>D: Insert sensor_events row
-    D-->>B: Insert result
 
     U->>V: Open dashboard
     V->>H: Initialize telemetry hook
