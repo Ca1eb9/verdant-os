@@ -163,11 +163,16 @@ export interface ElevatorCommand {
 export interface ShelfSensorData {
   shelf_id: string;
   level: number;
-  temperature_c: number;
-  humidity_pct: number;
-  light_lux: number;
-  soil_moisture_pct: number;
-  ph: number;
+  /** Each reading is null when its sensor failed to read */
+  temperature_c: number | null;
+  humidity_pct: number | null;
+  light_lux: number | null;
+  /** Hydroponic reservoir water temperature */
+  water_temp_c: number | null;
+  /** False when the reservoir is below the level sensor */
+  water_level_ok: boolean | null;
+  ph: number | null;
+  /** Receive time on the Pi (the node has no clock) */
   timestamp: number;
 }
 
