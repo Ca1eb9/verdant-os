@@ -46,3 +46,12 @@ NAV_SRC=(nav_test.cpp ../src/utils/nav_helpers.cpp)
 ./out/nav_test_tie out/nav_tie.json
 node check_nav.mjs out/nav_farm.json ../../../farm-controller/topology.json \
   out/nav_tie.json fixtures/tie_topology.json
+
+# Robot state machine, against the farm and (unreachable targets) the fixture.
+CORE_SRC=(nav_core_test.cpp ../src/nav/nav_core.cpp ../src/utils/nav_helpers.cpp
+  ../src/comms/comms_json.cpp)
+CORE_FLAGS=(-std=c++17 -Wall -Wextra -DARDUINOJSON_USE_LONG_LONG=1 -I../src -I"$AJ")
+"$CXX" "${CORE_FLAGS[@]}" "${CORE_SRC[@]}" ../src/graph.cpp -o out/nav_core_test
+"$CXX" "${CORE_FLAGS[@]}" -DTIE_FIXTURE "${CORE_SRC[@]}" out/tie_graph.cpp -o out/nav_core_test_tie
+./out/nav_core_test
+./out/nav_core_test_tie

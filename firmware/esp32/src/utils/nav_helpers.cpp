@@ -22,6 +22,15 @@ NodeIndex node_by_tag(const char* tag_id) {
   return NO_NODE;
 }
 
+bool has_edge(NodeIndex from, NodeIndex to) {
+  for (uint16_t e = 0; e < GRAPH_EDGE_COUNT; e++) {
+    const GraphEdge& edge = GRAPH_EDGES[e];
+    if (edge.from == from && edge.to == to) return true;
+    if (edge.bidirectional && edge.to == from && edge.from == to) return true;
+  }
+  return false;
+}
+
 // Step for step the same as dijkstra() in navigation.ts. Scanning the edge
 // list in order and taking both directions of a bidirectional edge visits
 // neighbours in the same order as its adjacency lists. Tie-breaks must stay

@@ -19,6 +19,9 @@
 NodeIndex node_by_id(const char* id);
 NodeIndex node_by_tag(const char* tag_id);
 
+// True if the graph lets the robot drive from `from` straight to `to`.
+bool has_edge(NodeIndex from, NodeIndex to);
+
 // Shortest path from `start` to `goal`, both ends included, written to `out`.
 // Returns the number of nodes (1 when start == goal), or 0 if there's no
 // path, either index is invalid, or the path doesn't fit in `cap`.
