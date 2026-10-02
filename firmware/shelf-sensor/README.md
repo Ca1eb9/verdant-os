@@ -38,11 +38,16 @@ line; power it from 5V, not 12–24V, so its output stays safe for D4.
 ```
 
 - Lines starting with `#` are logs. A sensor's failure and recovery are each
-  logged once.
+  logged once. The BH1750 library also prints its own `[BH1750] ERROR: ...`
+  lines while that sensor is missing; the bridge treats every line that isn't
+  a JSON object as a log.
 - A sensor that fails to read prints `null`; the rest still report.
 - `ph_mv` is the pH board's output in millivolts. The bridge converts it with
   per-shelf calibration, so recalibrating never needs a reflash.
 - `seq` restarts at 0 when the board reboots (the Pi opening the port also
   resets an Uno).
 - A hardware watchdog resets the board if the loop hangs for 8 s, and I2C
-  calls time out instead of hanging on a stuck bus.
+  calls time out instead of hanging on a stuck bus. The watchdog needs the
+  Optiboot bootloader that genuine Uno R3s ship with; some clones have an
+  older one that reset-loops after a watchdog reset (fix: burn the Uno
+  bootloader from the Arduino IDE).
