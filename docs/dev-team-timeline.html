@@ -248,7 +248,7 @@ alt="Timeline Gantt Chart" style="width: 900px; height: auto; border-radius: 10p
 
 <div class="task">
   <div class="task-header"><h3>Survival overrides</h3></div>
-  <p class="what">Safety behaviors in firmware that protect the robot regardless of whether the Pi is online. These override all other logic. Joint work with <span class="name-tag jameson">Jameson</span>.</p>
+  <p class="what">Safety behaviors in firmware that protect the robot regardless of whether the Pi is online. These override all other logic except a stop. Joint work with <span class="name-tag jameson">Jameson</span>.</p>
   <details>
     <summary>Requirements</summary>
     <ul>
@@ -501,7 +501,7 @@ alt="Timeline Gantt Chart" style="width: 900px; height: auto; border-radius: 10p
     <ul>
       <li><strong>Battery:</strong> Calibrate the ADC-to-percentage conversion against the actual battery's discharge behavior. The percentage in published telemetry should reflect reality.</li>
       <li><strong>Dock:</strong> When the robot reaches the dock node, execute an alignment sequence (slow approach with mechanical guides). Detect charging contact through a voltage change. Publish appropriate events for docking and charge completion.</li>
-      <li><strong>Overrides:</strong> Place the survival checks at the very top of the navigation task's loop so they run before any other logic. They must preempt everything — if the battery is critically low, the robot goes to dock regardless of what the orchestrator says.</li>
+      <li><strong>Overrides:</strong> Place the survival checks at the very top of the navigation task's loop so they run before any other logic. They must preempt everything except a stop — if the battery is critically low, the robot goes to dock regardless of what the orchestrator says, unless an operator has stopped it (then only the motor cutoff applies).</li>
     </ul>
   </details>
   <p class="deps">Depends on: RFID navigation working, dock hardware from ME team</p>

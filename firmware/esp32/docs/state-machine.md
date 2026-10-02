@@ -50,7 +50,7 @@ stateDiagram-v2
     OnTask --> stopped : stop - hold action timer,<br/>keep task, set stop latch
     DockTrip --> stopped : stop
     stopped --> OnTask : resume - re-plan if moved,<br/>working continues its remaining time
-    stopped --> DockTrip : resume - was on a dock trip,<br/>or return_to_dock / battery 15% or less (latch kept)
+    stopped --> DockTrip : resume - was on a dock trip,<br/>or return_to_dock (latch kept)
     stopped --> idle : resume - no task
     DockTrip --> stopped : charged 95% [charge_complete]<br/>while stop latched
 
@@ -96,10 +96,11 @@ stateDiagram-v2
 - **`idle` never holds a task:** `task_id` is `null` in `idle`. In every other
   state the robot keeps its `task_id` until the task completes, fails or is
   cancelled.
-- **Survival overrides** run before everything else, except that in `manual`
-  only the motor cutoff (about 5%) applies:
+- **Survival overrides** run before everything else, except that in `stopped`
+  and `manual` only the motor cutoff (about 5%) applies: a stop beats the
+  forced return.
   - warn at 20% [`battery_low`];
-  - forced return at 15% [`battery_critical`], keeping the task and stop latch;
+  - forced return at 15% [`battery_critical`], keeping the task;
   - motor cutoff at about 5%.
 - **Obstacle:** motors hard-stop while the flag on the side they're driving
   toward is set (front or rear sensor). The status doesn't change. `[obstacle_detected]` is sent once, then `[path_blocked]` if still
