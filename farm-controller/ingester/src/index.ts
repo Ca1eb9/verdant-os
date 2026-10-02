@@ -44,6 +44,17 @@ if (migrateRobot) {
   `);
 }
 
+// Shelf tables from the soil-moisture contract are rebuilt for the reservoir sensors
+const shelfCols = db.prepare(`PRAGMA table_info(shelf_sensors)`).all() as { name: string }[];
+const migrateShelf = shelfCols.length > 0 && !shelfCols.some((c) => c.name === "water_temp_c");
+if (migrateShelf) {
+  db.exec(`
+    ALTER TABLE shelf_sensors RENAME TO shelf_sensors_old;
+    DROP INDEX IF EXISTS idx_shelf_ts;
+    DROP INDEX IF EXISTS idx_shelf_id;
+  `);
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS robot_telemetry (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,7 +80,8 @@ db.exec(`
     temperature_c REAL,
     humidity_pct REAL,
     light_lux REAL,
-    soil_moisture_pct REAL,
+    water_temp_c REAL,
+    water_level_ok INTEGER,
     ph REAL,
     timestamp INTEGER NOT NULL,
     received_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000)
@@ -120,6 +132,16 @@ if (migrateRobot) {
   console.log("Migrated robot_telemetry table");
 }
 
+if (migrateShelf) {
+  db.exec(`
+    INSERT INTO shelf_sensors (shelf_id, level, temperature_c, humidity_pct, light_lux, ph, timestamp, received_at)
+      SELECT shelf_id, level, temperature_c, humidity_pct, light_lux, ph, timestamp, received_at
+      FROM shelf_sensors_old;
+    DROP TABLE shelf_sensors_old;
+  `);
+  console.log("Migrated shelf_sensors table");
+}
+
 // Prepared statements for fast inserts
 const insertRobot = db.prepare(`
   INSERT INTO robot_telemetry (robot_id, status, current_node, task_id, last_completed_task_id, battery_pct, heading, obstacle_cm, temperature_c, humidity_pct, light_lux, timestamp)
@@ -127,8 +149,8 @@ const insertRobot = db.prepare(`
 `);
 
 const insertShelf = db.prepare(`
-  INSERT INTO shelf_sensors (shelf_id, level, temperature_c, humidity_pct, light_lux, soil_moisture_pct, ph, timestamp)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO shelf_sensors (shelf_id, level, temperature_c, humidity_pct, light_lux, water_temp_c, water_level_ok, ph, timestamp)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 const insertElevator = db.prepare(`
@@ -200,20 +222,25 @@ async function main() {
   // --- Shelf sensors ---
   mqtt.subscribe<ShelfSensorData>(TOPICS.shelf.sensorsAll, (msg, topic) => {
     const id = extractIdFromTopic(topic) ?? msg.shelf_id;
+    // SQLite has no boolean type
+    const levelOk = msg.water_level_ok == null ? null : msg.water_level_ok ? 1 : 0;
     insertShelf.run(
-      msg.shelf_id,
+      id,
       msg.level,
-      msg.temperature_c,
-      msg.humidity_pct,
-      msg.light_lux,
-      msg.soil_moisture_pct,
-      msg.ph,
+      msg.temperature_c ?? null,
+      msg.humidity_pct ?? null,
+      msg.light_lux ?? null,
+      msg.water_temp_c ?? null,
+      levelOk,
+      msg.ph ?? null,
       msg.timestamp
     );
     counts.shelf++;
 
+    const waterLevel = msg.water_level_ok == null ? "-" : msg.water_level_ok ? "ok" : "LOW";
     console.log(
-      `Shelf: ${id} L${msg.level} | ${msg.temperature_c}°F | Water: ${msg.humidity_pct}% | Light: ${msg.light_lux} lux`
+      `Shelf: ${id} L${msg.level} | Air: ${msg.temperature_c ?? "-"}°C ${msg.humidity_pct ?? "-"}% | ` +
+      `Water: ${msg.water_temp_c ?? "-"}°C level ${waterLevel} pH ${msg.ph ?? "-"} | Light: ${msg.light_lux ?? "-"} lux`
     );
   });
 
