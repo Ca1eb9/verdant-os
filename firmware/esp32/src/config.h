@@ -125,12 +125,15 @@ constexpr float CHARGE_COMPLETE_PCT = 95.0f;    // matches orchestrator charge_c
 // ---- Manual control -----------------------------------------------------------------
 
 constexpr uint32_t JOG_PULSE_MS = 500;          // each jog drives this long from receipt
+constexpr int16_t JOG_SPEED = 120;              // TBD: tune on the robot (0..255)
 constexpr uint32_t MANUAL_TIMEOUT_MS = 5000;    // leave manual after this long without input
 
 // ---- Queue depths ------------------------------------------------------------------
 
 constexpr uint8_t SENSOR_QUEUE_LEN = 8;
-constexpr uint8_t DRIVE_QUEUE_LEN = 4;
+// The motor task only runs the newest command, so the drive queue is a
+// one-slot mailbox (xQueueOverwrite): a halt can never be dropped as full.
+constexpr uint8_t DRIVE_QUEUE_LEN = 1;
 constexpr uint8_t COMMAND_QUEUE_LEN = 4;
 constexpr uint8_t TELEMETRY_QUEUE_LEN = 5;
 constexpr uint8_t EVENT_QUEUE_LEN = 16;         // events wait here while offline

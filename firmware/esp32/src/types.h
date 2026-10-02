@@ -185,7 +185,7 @@ struct RobotEventMsg {
 #include <freertos/queue.h>
 
 extern QueueHandle_t g_sensor_queue;     // SensorData    sensor -> nav
-extern QueueHandle_t g_drive_queue;      // DriveCommand  nav    -> motor
+extern QueueHandle_t g_drive_queue;      // DriveCommand  nav    -> motor (mailbox)
 extern QueueHandle_t g_command_queue;    // Command       comms  -> nav
 // Comms always publishes queued events before queued telemetry, so a status
 // change can never reach the Pi ahead of the event that caused it.
