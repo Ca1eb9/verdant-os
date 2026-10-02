@@ -1,0 +1,48 @@
+{
+  "_comment": "These thresholds are example values only. Exact production values must be confirmed by the team before deployment.",
+  "cooldown_ms": 60000,
+  "thresholds": [
+    {
+      "metric": "battery_pct",
+      "min": 15,
+      "max": 100,
+      "severity": "critical",
+      "message_template": "{source} battery is {value}% (acceptable range: {min}-{max}%)"
+    },
+    {
+      "metric": "temperature_c",
+      "min": 15,
+      "max": 35,
+      "severity": "warning",
+      "message_template": "{source} temperature is {value} C (acceptable range: {min}-{max} C)"
+    },
+    {
+      "metric": "humidity_pct",
+      "min": 30,
+      "max": 85,
+      "severity": "warning",
+      "message_template": "{source} humidity is {value}% (acceptable range: {min}-{max}%)"
+    },
+    {
+      "metric": "light_lux",
+      "min": 100,
+      "max": 2000,
+      "severity": "warning",
+      "message_template": "{source} light level is {value} lux (acceptable range: {min}-{max} lux)"
+    },
+    {
+      "metric": "soil_moisture_pct",
+      "min": 25,
+      "max": 80,
+      "severity": "warning",
+      "message_template": "{source} soil moisture is {value}% (acceptable range: {min}-{max}%)"
+    },
+    {
+      "metric": "ph",
+      "min": 5.5,
+      "max": 7.5,
+      "severity": "critical",
+      "message_template": "{source} pH is {value} (acceptable range: {min}-{max})"
+    }
+  ]
+}
