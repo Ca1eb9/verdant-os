@@ -74,7 +74,7 @@ class Rig : public NavOutput {
   std::vector<Event> events;
   std::vector<std::string> motion;  // "halt", "edge a>b", "creep", "jog f", "dock"
 
-  Rig() { core.on_sensors(true, 80.0f); }
+  Rig() { core.on_battery(80.0f); }
 
   // Boots and localizes at `node`.
   void boot_at(const char* node) {
@@ -116,7 +116,7 @@ class Rig : public NavOutput {
     core.tick(now);
     after_step();
   }
-  void battery(float pct) { core.on_sensors(true, pct); }
+  void battery(float pct) { core.on_battery(pct); }
   void contact() {
     core.on_charge_contact();
     after_step();
@@ -548,14 +548,11 @@ static void test_manual() {
   TelemetryMsg t = {};
   r.core.snapshot(t);
   CHECK(t.heading == Heading::East);
-  // Timeout off a tag: creep to one, then re-plan and continue the task.
-  r.core.on_sensors(false, 80);
+  // Timeout: re-plan from the last tag read and continue the task, even if
+  // the robot was left a little past it.
   r.advance(1);
-  CHECK(r.status() == RobotStatus::Manual && r.last_motion() == "creep");
-  r.core.on_sensors(true, 80);
-  r.tag("cp-01");
-  CHECK(r.status() == RobotStatus::EnRoute && r.task() == "t1");
-  CHECK(r.last_motion() == "edge cp-01>water-01");
+  CHECK(r.status() == RobotStatus::EnRoute && r.task() == "t1" && r.node() == "dock-1");
+  CHECK(r.last_motion() == "edge dock-1>cp-01");
 
   // From working: the action restarts on arrival.
   r.drive({"water-01", "cp-02"});
@@ -616,7 +613,8 @@ static void test_fault_recovery() {
   CHECK(r.last_event().status_at_emit == RobotStatus::Error);
   CHECK(r.status() == RobotStatus::EnRoute && r.last_motion() == "edge water-01>cp-02");
 
-  // No task: recovers to idle. Manual from error: recovery after re-localizing.
+  // Manual from error: recovery on leaving manual, then the interrupted dock
+  // trip continues from the last tag.
   Rig r2;
   r2.boot_at("cp-01");
   r2.command(make(CommandType::ReturnToDock));
@@ -637,19 +635,12 @@ static void test_fault_recovery() {
   r3.tag("cp-01");
   CHECK(r3.status() == RobotStatus::Idle);
 
-  // No tag found while leaving manual: error, then continue the task.
+  // An operator is driving: no fault applies.
   r3.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
   r3.command(jog(JogDirection::Forward));
-  r3.core.on_sensors(false, 80);
-  r3.command(make(CommandType::Resume));
-  CHECK(r3.status() == RobotStatus::Manual && r3.last_motion() == "creep");
   r3.clear();
-  r3.core.fault("no tag found");
-  CHECK(r3.emitted({RobotEventType::Error}) && r3.status() == RobotStatus::Error);
-  r3.core.fault("again");
-  CHECK(r3.events.size() == 1);
-  r3.tag("water-01");
-  CHECK(r3.status() == RobotStatus::EnRoute && r3.task() == "t1");
+  r3.core.fault("missed tag");
+  CHECK(r3.status() == RobotStatus::Manual && r3.events.empty());
 }
 
 int main() {

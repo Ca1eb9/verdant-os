@@ -126,7 +126,7 @@ pushed first, then the status changes.
 | `error` | Fault cleared (e.g. known tag read again) | `recovery` | re-plan and continue the task, else `idle` |
 | `idle`, `en_route`, `working`, `stopped`, `error` | `jog` | — | `manual` |
 | any but `initializing` | Bluetooth controller input | — | `manual` |
-| `manual` | `resume`, or manual timeout | — | re-localize, then continue (see [Manual control](#manual-control)) |
+| `manual` | `resume`, or manual timeout | `recovery` if it was in `error` | continue from `current_node` (see [Manual control](#manual-control)) |
 
 Battery events (`battery_low`, `battery_critical`) are published once per
 discharge and re-armed after `charge_complete`.
@@ -337,10 +337,11 @@ dashboard asks for confirmation again before the next session.
 
 **Leaving manual** (`resume` or the timeout):
 
-1. Re-localize: if the robot isn't on a tag, creep forward slowly until one is
-   read. If it was in `error` for a lost position, publish `recovery` then.
+1. Take `current_node`, the last tag read, as the robot's position, even if
+   the operator left it a little past that tag. It doesn't look for a tag
+   first. If it was in `error`, publish `recovery`.
 2. Go back to what it was doing:
-   - a task (`task_id`, or a kept task): re-plan from the current node and
+   - a task (`task_id`, or a kept task): re-plan from `current_node` and
      continue (`en_route`). If it was `working`, the action restarts on arrival.
      If the target can't be reached any more, publish `task_failed` and go
      `idle`, since `idle` never holds a task.

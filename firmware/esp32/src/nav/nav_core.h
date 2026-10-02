@@ -72,16 +72,17 @@ class NavCore {
   // A new tag arrival (SensorData.tag_seq changed). NO_NODE for a tag that
   // isn't in the graph: ignored.
   void on_tag(NodeIndex node, uint32_t now);
-  // Latest sensor readings, every nav loop. battery_pct may be NAN.
-  void on_sensors(bool tag_in_field, float battery_pct);
+  // Latest battery reading, every nav loop. NAN until the first one.
+  void on_battery(float battery_pct);
   // Timers: action duration, manual timeout, charge complete. Every nav loop.
   void tick(uint32_t now);
 
   // Dock sequence: the charger contacts closed while `docking`.
   void on_charge_contact();
   // RFID navigation: can't continue (e.g. missed tag, or no tag found while
-  // creeping). Reports `error`, keeping the task, until a known tag is read
-  // again. While initializing it only halts and publishes the event.
+  // creeping after boot). Reports `error`, keeping the task, until a known
+  // tag is read again. While initializing it only halts and publishes the
+  // event.
   void fault(const char* details);
   // Survival overrides: forced return to dock, keeping the task and the stop
   // latch. Publishes battery_critical. Ignored while already on a dock trip,
@@ -129,7 +130,6 @@ class NavCore {
   void continue_from(RobotStatus from, uint32_t now);
   void go_idle(const char* details);
   void exit_manual(bool timed_out, uint32_t now);
-  void finish_manual(uint32_t now);
 
   NavOutput& out_;
   RobotStatus status_ = RobotStatus::Initializing;
@@ -139,7 +139,6 @@ class NavCore {
   bool reversing_ = false;
   TaskContext ctx_ = {};
 
-  bool tag_in_field_ = false;
   float battery_pct_ = NAN;
 
   // Status `error` interrupted, continued after recovery.
@@ -148,6 +147,4 @@ class NavCore {
   // Manual control
   RobotStatus manual_from_ = RobotStatus::Idle;
   uint32_t last_manual_input_ms_ = 0;
-  bool relocalizing_ = false;      // leaving manual: creeping to a tag
-  bool manual_timed_out_ = false;  // why it's leaving
 };

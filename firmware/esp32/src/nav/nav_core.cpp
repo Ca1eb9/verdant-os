@@ -61,10 +61,7 @@ void NavCore::begin() {
   out_.creep();
 }
 
-void NavCore::on_sensors(bool tag_in_field, float battery_pct) {
-  tag_in_field_ = tag_in_field;
-  battery_pct_ = battery_pct;
-}
+void NavCore::on_battery(float battery_pct) { battery_pct_ = battery_pct; }
 
 void NavCore::on_command(const Command& cmd, uint32_t now) {
   // No position yet: no path can be planned, and the orchestrator never
@@ -102,9 +99,6 @@ void NavCore::on_tag(NodeIndex node, uint32_t now) {
       out_.halt();
       status_ = RobotStatus::Idle;
       break;
-    case RobotStatus::Manual:
-      if (relocalizing_) finish_manual(now);
-      break;
     case RobotStatus::Error:
       emit(RobotEventType::Recovery, "known tag read");
       continue_from(error_from_, now);
@@ -135,7 +129,7 @@ void NavCore::tick(uint32_t now) {
       if (now - ctx_.action_started_ms >= ctx_.current.duration_ms) complete_task();
       break;
     case RobotStatus::Manual:
-      if (!relocalizing_ && now - last_manual_input_ms_ >= MANUAL_TIMEOUT_MS) {
+      if (now - last_manual_input_ms_ >= MANUAL_TIMEOUT_MS) {
         exit_manual(true, now);
       }
       break;
@@ -185,20 +179,12 @@ void NavCore::fault(const char* details) {
     out_.halt();
     return;
   }
-  bool relocalizing = status_ == RobotStatus::Manual && relocalizing_;
   if (status_ == RobotStatus::Error || status_ == RobotStatus::Stopped ||
-      (status_ == RobotStatus::Manual && !relocalizing)) {
+      status_ == RobotStatus::Manual) {
     out_.note("ignored: fault while not driving on its own");
     return;
   }
-  if (relocalizing) {
-    // Leaving manual without finding a tag: recover into what manual
-    // interrupted.
-    relocalizing_ = false;
-    if (manual_from_ != RobotStatus::Error) error_from_ = manual_from_;
-  } else {
-    error_from_ = status_;
-  }
+  error_from_ = status_;
   emit(RobotEventType::Error, details);
   out_.halt();
   status_ = RobotStatus::Error;
@@ -241,7 +227,6 @@ void NavCore::navigate(const Command& cmd, uint32_t now) {
   }
 
   // Replaces everything: task, kept task, paused status, stop latch, manual.
-  relocalizing_ = false;
   clear_task(ctx_.kept);
   ctx_.dock_task = false;
   ctx_.has_paused_status = false;
@@ -267,7 +252,6 @@ void NavCore::stop(uint32_t now) {
   RobotStatus from = status_;
   if (from == RobotStatus::Manual) {
     // Stop ends the manual session and pauses what manual interrupted.
-    relocalizing_ = false;
     from = manual_from_;
   }
   ctx_.stop_latched = true;
@@ -323,7 +307,6 @@ void NavCore::return_to_dock(const char* dock_task_id, uint32_t now) {
     ctx_.dock_task = true;
   }
   // The stop latch stays: after charging the robot reports stopped.
-  relocalizing_ = false;
   ctx_.has_paused_status = false;
   go_to_dock(now);
 }
@@ -376,7 +359,6 @@ void NavCore::jog(JogDirection direction, uint32_t now) {
     manual_from_ = status_;
     status_ = RobotStatus::Manual;
   }
-  relocalizing_ = false;  // an operator input cancels leaving manual
   last_manual_input_ms_ = now;
   reversing_ = direction == JogDirection::Backward;
   out_.jog(direction);
@@ -573,36 +555,24 @@ void NavCore::go_idle(const char* details) {
     clear_task(ctx_.kept);
   }
   ctx_.dock_task = false;
-  relocalizing_ = false;
   out_.halt();
   status_ = RobotStatus::Idle;
 }
 
+// Re-plans from current_node, the last tag read. The robot may have been
+// left a little past it; that doesn't change the route.
 void NavCore::exit_manual(bool timed_out, uint32_t now) {
-  manual_timed_out_ = timed_out;
-  if (tag_in_field_) {
-    finish_manual(now);
-    return;
-  }
-  // Off a tag: find one before re-planning. Still reports manual meanwhile.
-  relocalizing_ = true;
-  reversing_ = false;
-  out_.creep();
-}
-
-void NavCore::finish_manual(uint32_t now) {
-  relocalizing_ = false;
   RobotStatus from = manual_from_;
   // A timeout gives a stopped robot back stopped (latch kept); resume
   // releases the stop and continues instead.
-  if (manual_timed_out_ && from == RobotStatus::Stopped) {
+  if (timed_out && from == RobotStatus::Stopped) {
     out_.halt();
     status_ = RobotStatus::Stopped;
     return;
   }
-  if (!manual_timed_out_) ctx_.stop_latched = false;
+  if (!timed_out) ctx_.stop_latched = false;
   if (from == RobotStatus::Error) {
-    emit(RobotEventType::Recovery, "re-localized after manual control");
+    emit(RobotEventType::Recovery, "position taken from the last tag after manual control");
     from = error_from_;
   }
   if (from == RobotStatus::Stopped) {
