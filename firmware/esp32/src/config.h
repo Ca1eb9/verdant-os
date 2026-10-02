@@ -118,7 +118,8 @@ constexpr uint32_t DEFAULT_IDLE_MS = 0;
 // ---- Survival overrides -------------------------------------------------------------
 // Each level applies at or below its value. The forced return sits below the
 // orchestrator's battery_low_pct (20), so the orchestrator handles normal
-// charging and a pending stop can win above it.
+// charging. A stop beats the forced return; only the motor cutoff applies
+// to a stopped robot.
 
 constexpr float BATTERY_WARN_PCT = 20.0f;       // battery_low
 constexpr float BATTERY_RETURN_PCT = 15.0f;     // battery_critical, go to dock

@@ -84,9 +84,10 @@ class NavCore {
   // tag is read again. While initializing it only halts and publishes the
   // event.
   void fault(const char* details);
-  // Survival overrides: forced return to dock, keeping the task and the stop
-  // latch. Publishes battery_critical. Ignored while already on a dock trip,
-  // in manual (only the motor cutoff applies there) and while initializing.
+  // Survival overrides: forced return to dock, keeping the task. Publishes
+  // battery_critical. Ignored while stopped (a stop beats it), in manual
+  // (only the motor cutoff applies in both), while already on a dock trip
+  // and while initializing.
   void survival_return(const char* details, uint32_t now);
 
   // ---- State ----

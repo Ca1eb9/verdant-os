@@ -282,6 +282,15 @@ static void test_navigate_edge_cases() {
   r.advance(1);
   CHECK(r.status() == RobotStatus::Idle);
 
+  // A navigate without a task_id: last_completed_task_id stays.
+  r.command(navigate("", "cp-01", TargetAction::Idle));
+  CHECK(r.status() == RobotStatus::EnRoute && r.task().empty());
+  r.tag("cp-01");
+  CHECK(r.status() == RobotStatus::Idle && r.last_completed() == "t5");
+  r.command(navigate("t5b", "cp-02", TargetAction::Idle));
+  r.tag("water-01");
+  r.tag("cp-02");
+
   // A navigate replaces a task in hand (no event for the old one).
   r.command(navigate("t6", "dock-1", TargetAction::Water, 1000));
   r.clear();
@@ -458,12 +467,14 @@ static void test_stop_latch_through_dock_trip() {
   r.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
   r.command(make(CommandType::Stop));
   r.clear();
+  // A stop beats the battery's forced return.
   r.core.survival_return("14.0%", r.now);
-  CHECK(r.emitted({RobotEventType::BatteryCritical}));
-  CHECK(r.last_event().status_at_emit == RobotStatus::Stopped);
+  CHECK(r.status() == RobotStatus::Stopped && r.events.empty());
+  // An operator's return_to_dock still goes, keeping the stop latched.
+  r.command(make(CommandType::ReturnToDock));
   CHECK(r.status() == RobotStatus::ReturningToDock && r.latched() && r.task() == "t1");
   r.core.survival_return("13.0%", r.now);  // already returning: nothing
-  CHECK(r.events.size() == 1);
+  CHECK(r.events.empty());
   r.tag("dock-1");
   r.contact();
   r.battery(96);
@@ -477,7 +488,7 @@ static void test_stop_latch_through_dock_trip() {
   r2.boot_at("cp-01");
   r2.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
   r2.command(make(CommandType::Stop));
-  r2.core.survival_return("14.0%", r2.now);
+  r2.command(make(CommandType::ReturnToDock));
   r2.command(make(CommandType::Resume));
   CHECK(r2.status() == RobotStatus::ReturningToDock && !r2.latched());
   r2.tag("dock-1");
@@ -485,6 +496,29 @@ static void test_stop_latch_through_dock_trip() {
   r2.battery(96);
   r2.advance(10);
   CHECK(r2.status() == RobotStatus::EnRoute && r2.task() == "t1");
+}
+
+static void test_survival_return() {
+  SCENARIO("survival return");
+  Rig r;
+  r.boot_at("cp-01");
+  r.command(navigate("t1", "cp-02", TargetAction::Water, 100000));
+  r.drive({"water-01", "cp-02"});
+  r.clear();
+  // From working: battery_critical, then to the dock with the task kept.
+  r.core.survival_return("15.0%", r.now);
+  CHECK(r.emitted({RobotEventType::BatteryCritical}));
+  CHECK(r.last_event().status_at_emit == RobotStatus::Working);
+  CHECK(r.status() == RobotStatus::ReturningToDock && r.task() == "t1" && !r.latched());
+
+  // Stopped anywhere, including mid-return: stays stopped.
+  Rig r2;
+  r2.boot_at("water-01");
+  r2.command(make(CommandType::ReturnToDock));
+  r2.command(make(CommandType::Stop));
+  r2.clear();
+  r2.core.survival_return("10.0%", r2.now);
+  CHECK(r2.status() == RobotStatus::Stopped && r2.events.empty());
 }
 
 static void test_cancel() {
@@ -635,6 +669,15 @@ static void test_fault_recovery() {
   r3.tag("cp-01");
   CHECK(r3.status() == RobotStatus::Idle);
 
+  // Stopped: nothing is driving, so no fault applies.
+  Rig r4;
+  r4.boot_at("cp-01");
+  r4.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  r4.command(make(CommandType::Stop));
+  r4.clear();
+  r4.core.fault("missed tag");
+  CHECK(r4.status() == RobotStatus::Stopped && r4.events.empty());
+
   // An operator is driving: no fault applies.
   r3.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
   r3.command(jog(JogDirection::Forward));
@@ -653,6 +696,7 @@ int main() {
   test_dock_trip_keeps_task();
   test_dock_task();
   test_stop_latch_through_dock_trip();
+  test_survival_return();
   test_cancel();
   test_manual();
   test_fault_recovery();

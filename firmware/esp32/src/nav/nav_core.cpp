@@ -191,9 +191,10 @@ void NavCore::fault(const char* details) {
 }
 
 void NavCore::survival_return(const char* details, uint32_t now) {
-  RobotStatus active = paused_or_current();
-  if (status_ == RobotStatus::Initializing || status_ == RobotStatus::Manual ||
-      is_dock_trip(status_) || is_dock_trip(active)) {
+  // A stop beats it: an operator stopped the robot on purpose. So does an
+  // operator driving it by hand.
+  if (status_ == RobotStatus::Initializing || status_ == RobotStatus::Stopped ||
+      status_ == RobotStatus::Manual || is_dock_trip(status_)) {
     return;
   }
   emit(RobotEventType::BatteryCritical, details);
@@ -457,7 +458,8 @@ void NavCore::complete_task() {
   snprintf(details, sizeof(details), "%s at %s", to_wire(ctx_.current.action),
            GRAPH_NODES[node_].id);
   emit(RobotEventType::TaskComplete, details);
-  copy_id(ctx_.last_completed_task_id, ctx_.current.task_id);
+  // A navigate without a task_id has nothing to report: keep the last one.
+  if (ctx_.current.task_id[0]) copy_id(ctx_.last_completed_task_id, ctx_.current.task_id);
   clear_task(ctx_.current);
   go_idle("");
 }
