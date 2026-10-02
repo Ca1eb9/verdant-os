@@ -1,0 +1,39 @@
+{
+  "version": "test",
+  "name": "Tie-break fixture: equal-cost routes, one-way and zero-cost edges, float costs",
+  "nodes": [
+    { "id": "b2",     "tag_id": "0xB2",   "x": 1, "y": 1, "z": 0, "type": "checkpoint" },
+    { "id": "dock",   "tag_id": "0xD0",   "x": 0, "y": 0, "z": 0, "type": "dock" },
+    { "id": "a1",     "tag_id": "0xA1",   "x": 0, "y": 1, "z": 0, "type": "checkpoint" },
+    { "id": "c3",     "tag_id": "0xC3",   "x": 2, "y": 2, "z": 0, "type": "water" },
+    { "id": "a3",     "tag_id": "0xA3",   "x": 0, "y": 2, "z": 0, "type": "checkpoint" },
+    { "id": "b1",     "tag_id": "0xB1",   "x": 1, "y": 0, "z": 0, "type": "checkpoint" },
+    { "id": "c1",     "tag_id": "0xC1",   "x": 2, "y": 0, "z": 0, "type": "checkpoint" },
+    { "id": "b3",     "tag_id": "0xB3",   "x": 1, "y": 2, "z": 0, "type": "checkpoint" },
+    { "id": "c2",     "tag_id": "0xC2",   "x": 2, "y": 1, "z": 0, "type": "elevator" },
+    { "id": "c2-up",  "tag_id": "0xC2F1", "x": 2, "y": 1, "z": 1, "type": "elevator" },
+    { "id": "d2-up",  "tag_id": "0xD2F1", "x": 2.5, "y": 1, "z": 1, "type": "water" },
+    { "id": "oneway", "tag_id": "0xE0",   "x": 3, "y": 0, "z": 0, "type": "checkpoint" },
+    { "id": "far",    "tag_id": "0xFF00", "x": 5, "y": 5, "z": 0, "type": "checkpoint" }
+  ],
+  "edges": [
+    { "from": "b2",   "to": "c2",  "cost": 1 },
+    { "from": "a1",   "to": "b2",  "cost": 1 },
+    { "from": "dock", "to": "a1",  "cost": 1 },
+    { "from": "b1",   "to": "b2",  "cost": 1 },
+    { "from": "dock", "to": "b1",  "cost": 0.1 },
+    { "from": "b1",   "to": "c1",  "cost": 0.2 },
+    { "from": "dock", "to": "c1",  "cost": 0.3 },
+    { "from": "c1",   "to": "c2",  "cost": 1 },
+    { "from": "a3",   "to": "b3",  "cost": 0 },
+    { "from": "a1",   "to": "a3",  "cost": 1 },
+    { "from": "b3",   "to": "c3",  "cost": 1 },
+    { "from": "b2",   "to": "b3",  "cost": 1 },
+    { "from": "c2",   "to": "c3",  "cost": 1 },
+    { "from": "b2",   "to": "c2",  "cost": 1 },
+    { "from": "c3",   "to": "c3",  "cost": 1 },
+    { "from": "c2",   "to": "c2-up", "cost": 3 },
+    { "from": "c2-up", "to": "d2-up", "cost": 1 },
+    { "from": "c1",   "to": "oneway", "cost": 1, "bidirectional": false }
+  ]
+}
