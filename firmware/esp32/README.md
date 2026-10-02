@@ -75,6 +75,32 @@ Hooks and inputs still owned by later work (placeholders for now):
 
 Task state is RAM only: the robot never writes to flash. A rebooted robot starts with no task and the orchestrator requeues it.
 
+## Status LED
+
+The onboard NeoPixel (GPIO38) shows the robot's state: colour is the status, the animation is the detail, and short flashes show what just happened. `show_status_led()` in `tasks/nav_task.cpp`; timings and brightness in `config.h`.
+
+| Status | LED |
+|---|---|
+| `initializing` | White, slow breathe |
+| `idle` | Green, dim |
+| `en_route` | Blue |
+| `working` | Cyan (water), magenta (grow), yellow (harvest), green (wait); dim to full over the action |
+| `returning_to_dock` | Amber |
+| `docking` | Amber, fast blink |
+| `charging` | Breathes, red to green with battery % |
+| `stopped` | Red, dim |
+| `error` | Red, fast blink |
+| `manual` | Purple, bright flash on each jog |
+
+| Flash | Meaning |
+|---|---|
+| White blip | Known tag read |
+| Red blip | Tag not in `topology.json` |
+| Two dim white blips | Command ignored (the serial log says why) |
+| Dark gap every 2 s | MQTT offline |
+| Orange blink while moving | Obstacle flag set |
+| Amber blip every 5 s | Battery at or below 20% |
+
 ## Flash graph
 
 `src/graph.cpp` is generated from `farm-controller/topology.json`, keeping node and edge order exactly so on-board routes match the orchestrator's, ties included. After changing `topology.json`:

@@ -60,6 +60,9 @@ constexpr int PIN_TOF_REAR_XSHUT = -1;
 // Battery voltage divider tap
 constexpr int PIN_BATTERY_ADC = 4;
 
+// Onboard NeoPixel (GPIO38 on DevKitC-1 v1.1 boards)
+constexpr int PIN_STATUS_LED = 38;
+
 // ---- RFID (PN532) ---------------------------------------------------------------
 
 constexpr uint16_t RFID_READ_TIMEOUT_MS = 30;   // max time one poll may block
@@ -127,6 +130,15 @@ constexpr float CHARGE_COMPLETE_PCT = 95.0f;    // matches orchestrator charge_c
 constexpr uint32_t JOG_PULSE_MS = 500;          // each jog drives this long from receipt
 constexpr int16_t JOG_SPEED = 120;              // TBD: tune on the robot (0..255)
 constexpr uint32_t MANUAL_TIMEOUT_MS = 5000;    // leave manual after this long without input
+
+// ---- Status LED (README "Status LED") ----------------------------------------------
+
+constexpr uint8_t STATUS_LED_BRIGHTNESS = 40;   // 0-255 cap, so it isn't blinding on the bench
+constexpr uint32_t LED_BREATHE_MS = 2000;       // one breath (initializing, charging)
+constexpr uint32_t LED_BLINK_MS = 125;          // half a blink: 4 Hz (docking, error, obstacle)
+constexpr uint32_t LED_FLASH_MS = 100;          // one blip (tag read, jog, ignored command)
+constexpr uint32_t LED_OFFLINE_EVERY_MS = 2000; // MQTT down: dark gap this often
+constexpr uint32_t LED_BATTERY_WARN_EVERY_MS = 5000;  // battery low: amber blip this often
 
 // ---- Queue depths ------------------------------------------------------------------
 
