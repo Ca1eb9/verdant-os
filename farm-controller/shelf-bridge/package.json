@@ -1,0 +1,21 @@
+{
+  "name": "@farm/shelf-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit --strict --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck src/*.ts"
+  },
+  "dependencies": {
+    "@farm/shared": "*",
+    "mqtt": "^5.0.0",
+    "serialport": "^13.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0",
+    "@types/node": "^22.0.0"
+  }
+}
