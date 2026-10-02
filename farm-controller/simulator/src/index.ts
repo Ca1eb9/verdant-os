@@ -100,6 +100,15 @@ const robot = {
   lastJogAt: 0,
 };
 
+/** Used when a navigate has no duration_ms (firmware config.h DEFAULT_*_MS) */
+const DEFAULT_DURATION_MS: Record<typeof robot.currentAction, number> = {
+  water: 60000,
+  grow: 600000,
+  harvest: 0,
+  charge: 0,
+  idle: 0,
+};
+
 // --- MQTT client (set in main) -------------------------------
 
 let mqtt: TypedMqttClient;
@@ -171,11 +180,25 @@ function buildTelemetry(): RobotTelemetry {
   };
 }
 
+let sentStatus: RobotStatus | null = null;
+let sentNode: string | null = null;
+
+function publishTelemetry() {
+  mqtt.publish(TOPICS.robot.telemetry(ROBOT_ID), buildTelemetry());
+  sentStatus = robot.status;
+  sentNode = robot.currentNodeId;
+}
+
+/** Telemetry goes out right away on a status or node change, like the robot */
+function publishTelemetryIfChanged() {
+  if (robot.status !== sentStatus || robot.currentNodeId !== sentNode) publishTelemetry();
+}
+
 function checkBatteryThresholds() {
-  if (robot.battery < BATTERY_CRITICAL_THRESHOLD && !robot.batteryCriticalPublished) {
+  if (robot.battery <= BATTERY_CRITICAL_THRESHOLD && !robot.batteryCriticalPublished) {
     robot.batteryCriticalPublished = true;
     publishEvent(RobotEventType.BATTERY_CRITICAL, `${robot.battery.toFixed(1)}%`);
-  } else if (robot.battery < BATTERY_LOW_THRESHOLD && !robot.batteryLowPublished) {
+  } else if (robot.battery <= BATTERY_LOW_THRESHOLD && !robot.batteryLowPublished) {
     robot.batteryLowPublished = true;
     publishEvent(RobotEventType.BATTERY_LOW, `${robot.battery.toFixed(1)}%`);
   }
@@ -186,13 +209,35 @@ function resetBatteryFlags() {
   robot.batteryCriticalPublished = false;
 }
 
+const hasEdge = (from: string, to: string) =>
+  (graph.adjacency.get(from) ?? []).some((n) => n.neighborId === to);
+
+/**
+ * The orchestrator's path from the robot's current node on, if it can be
+ * driven and ends at the target. Otherwise null: plan on board (same route).
+ */
+function followablePath(path: string[], targetNode: string): string[] | null {
+  if (!path.every((id) => graph.nodes.has(id))) return null;
+  const route = path.slice(Math.max(0, path.indexOf(robot.currentNodeId)));
+  if (route[0] !== robot.currentNodeId || route[route.length - 1] !== targetNode) return null;
+  return route.every((id, i) => i === 0 || hasEdge(route[i - 1], id)) ? route : null;
+}
+
+/** Face the next node, as the robot does when it starts an edge (elevator: heading kept) */
+function faceNextNode() {
+  const next = robot.path[robot.pathIndex + 1];
+  if (next) robot.heading = computeHeading(currentNode(), graph.nodes.get(next)!) ?? robot.heading;
+}
+
 function startNavigation(targetNode: string, path?: string[]): boolean {
-  const route = path ?? dijkstra(graph, robot.currentNodeId, targetNode);
+  const route = (path && followablePath(path, targetNode)) ??
+    dijkstra(graph, robot.currentNodeId, targetNode);
   if (!route || route.length < 1) return false;
   robot.path = route;
   robot.pathIndex = 0;
   robot.targetNode = targetNode;
   robot.status = RobotStatus.EN_ROUTE;
+  faceNextNode();
   return true;
 }
 
@@ -207,7 +252,12 @@ const ON_TASK = [RobotStatus.EN_ROUTE, RobotStatus.WORKING];
 function startReturnToDock(dockTaskId?: string) {
   if (DOCK_TRIP.includes(robot.status)) return;
   const path = dijkstra(graph, robot.currentNodeId, DOCK_NODE);
-  if (!path) return;
+  if (!path) {
+    if (!robot.taskId && dockTaskId) {
+      publishEvent(RobotEventType.TASK_FAILED, "no path to the dock", dockTaskId);
+    }
+    return;
+  }
   const active =
     robot.status === RobotStatus.STOPPED ? robot.pausedStatus
     : robot.status === RobotStatus.MANUAL ? robot.manualFrom
@@ -231,7 +281,22 @@ function startReturnToDock(dockTaskId?: string) {
   robot.pathIndex = 0;
   robot.targetNode = DOCK_NODE;
   robot.currentAction = "charge";
-  robot.status = RobotStatus.RETURNING_TO_DOCK;
+  // Already there but not charging: run the dock sequence again
+  robot.status = robot.currentNodeId === DOCK_NODE
+    ? RobotStatus.DOCKING
+    : RobotStatus.RETURNING_TO_DOCK;
+  faceNextNode();
+}
+
+/**
+ * Survival override: forced return to dock at or below the critical level,
+ * keeping the task. A stop beats it, and so does an operator driving by hand.
+ */
+function checkSurvival() {
+  if (robot.battery > BATTERY_CRITICAL_THRESHOLD) return;
+  if (robot.status !== RobotStatus.IDLE && !ON_TASK.includes(robot.status)) return;
+  console.log(`[NAV] battery critical (${robot.battery.toFixed(1)}%), forced return to dock`);
+  startReturnToDock();
 }
 
 // --- Simulation loop -----------------------------------------
@@ -263,7 +328,7 @@ async function main() {
         } else if (startNavigation(cmd.target_node, cmd.path)) {
           robot.taskId = cmd.task_id ?? null;
           robot.currentAction = cmd.action_at_target ?? "idle";
-          robot.actionDurationMs = cmd.duration_ms ?? 0;
+          robot.actionDurationMs = cmd.duration_ms ?? DEFAULT_DURATION_MS[robot.currentAction];
           robot.resumeTask = null;
           robot.pausedStatus = null;
           robot.stopLatched = false;
@@ -280,11 +345,19 @@ async function main() {
       }
 
       // Stop pauses in place and keeps the task; resume continues it
+      // In manual it ends the session and pauses what manual interrupted
       if (cmd.command === "stop" && robot.status !== RobotStatus.STOPPED) {
-        robot.pausedStatus = robot.status;
+        const from = robot.status === RobotStatus.MANUAL ? robot.manualFrom : robot.status;
+        robot.manualFrom = null;
+        robot.jogUntil = 0;
+        robot.jogDirection = null;
+        // manual from a stop: that stop's paused status still applies
+        if (from !== RobotStatus.STOPPED) {
+          robot.pausedStatus = from;
+          robot.pausedAt = Date.now();
+        }
         robot.status = RobotStatus.STOPPED;
         robot.stopLatched = true;
-        robot.pausedAt = Date.now();
       }
 
       // Jog: take manual control and drive a short pulse (deadman)
@@ -310,20 +383,7 @@ async function main() {
         exitManual();
       } else if (cmd.command === "resume" && robot.stopLatched) {
         robot.stopLatched = false;
-        if (robot.status === RobotStatus.STOPPED) {
-          const paused = robot.pausedStatus;
-          robot.pausedStatus = null;
-          // stopped at the dock after a detour: head back to the kept task
-          if (!paused && robot.resumeTask) resumeKeptTask();
-          // manual control may have moved it while stopped: re-plan unless still working at the target
-          else if (paused && ON_TASK.includes(paused) && robot.targetNode &&
-                   !(paused === RobotStatus.WORKING && robot.currentNodeId === robot.targetNode)) {
-            startNavigation(robot.targetNode);
-          }
-          else robot.status = paused ?? RobotStatus.IDLE;
-          // the action timer doesn't run while stopped
-          if (paused === RobotStatus.WORKING) robot.actionStartedAt += Date.now() - robot.pausedAt;
-        }
+        if (robot.status === RobotStatus.STOPPED) resumeFromStop();
       }
 
       // Cancel drops the task only if it's ours. A dock detour (task paused
@@ -347,19 +407,24 @@ async function main() {
           console.log(`[TASK] ${cmd.task_id} cancelled`);
         }
       }
+
+      publishTelemetryIfChanged();
     }
   );
 
   // Publish telemetry on interval
-  setInterval(() => {
-    mqtt.publish(TOPICS.robot.telemetry(ROBOT_ID), buildTelemetry());
-  }, TELEMETRY_INTERVAL_MS);
+  setInterval(publishTelemetry, TELEMETRY_INTERVAL_MS);
 
   // Manual driving tick: move one node per MOVE_INTERVAL_MS of driving
-  setInterval(handleManual, MANUAL_TICK_MS);
+  setInterval(() => {
+    handleManual();
+    publishTelemetryIfChanged();
+  }, MANUAL_TICK_MS);
 
   // Main simulation tick
   setInterval(() => {
+    // Survival before anything else
+    checkSurvival();
     switch (robot.status) {
       case RobotStatus.IDLE:
         handleIdle();
@@ -378,6 +443,7 @@ async function main() {
         handleDocking();
         break;
     }
+    publishTelemetryIfChanged();
   }, MOVE_INTERVAL_MS);
 
   // Graceful shutdown
@@ -391,13 +457,6 @@ async function main() {
 // --- State handlers ------------------------------------------
 
 function handleIdle() {
-  // Survival override: forced return to dock (always active, even in non-autonomous mode)
-  if (robot.battery < BATTERY_CRITICAL_THRESHOLD) {
-    console.log(`[NAV] battery low (${robot.battery.toFixed(1)}%), returning to dock`);
-    startReturnToDock();
-    return;
-  }
-
   // In non-autonomous mode, wait for orchestrator commands
   if (!AUTONOMOUS) return;
 
@@ -464,19 +523,13 @@ function handleMoving() {
   const prevNodeId = robot.currentNodeId;
   robot.currentNodeId = robot.path[robot.pathIndex];
 
-  const prevNode = graph.nodes.get(prevNodeId)!;
   const currNode = currentNode();
-  robot.heading = computeHeading(prevNode, currNode) ?? robot.heading;
+  faceNextNode();
   robot.battery = Math.max(0, robot.battery - BATTERY_DRAIN_PER_MOVE);
 
   // Check battery thresholds after drain
   checkBatteryThresholds();
-
-  // Survival override: forced return to dock mid-task, task kept
-  if (robot.battery < BATTERY_CRITICAL_THRESHOLD && robot.status === RobotStatus.EN_ROUTE) {
-    console.log(`[NAV] battery critical (${robot.battery.toFixed(1)}%), forced return to dock`);
-    startReturnToDock();
-  }
+  checkSurvival();
 
   console.log(
     `[MOV] ${prevNodeId} -> ${robot.currentNodeId} ` +
@@ -496,7 +549,7 @@ function handleWorking() {
     console.log(`[DONE] ${robot.currentAction} complete at ${robot.currentNodeId}`);
     robot.status = RobotStatus.IDLE;
     robot.targetNode = null;
-    robot.lastCompletedTaskId = robot.taskId;
+    if (robot.taskId) robot.lastCompletedTaskId = robot.taskId;
     robot.taskId = null;
     robot.currentAction = "idle";
     robot.actionDurationMs = 0;
@@ -571,9 +624,15 @@ function exitManual(timedOut = false) {
   robot.manualFrom = null;
   robot.jogUntil = 0;
   robot.jogDirection = null;
-  if (timedOut && from === RobotStatus.STOPPED) {
-    robot.status = RobotStatus.STOPPED; // pausedStatus and the latch are kept
+  if (from === RobotStatus.STOPPED) {
+    robot.status = RobotStatus.STOPPED;
     robot.path = [];
+    // On a timeout pausedStatus and the latch are kept; resume releases the
+    // stop and continues what it paused (e.g. a task kept through charging)
+    if (!timedOut) {
+      robot.stopLatched = false;
+      resumeFromStop();
+    }
     return;
   }
   robot.stopLatched = false;
@@ -589,6 +648,22 @@ function exitManual(timedOut = false) {
   }
 }
 
+/** Continue what stop paused; the stop latch is already cleared */
+function resumeFromStop() {
+  const paused = robot.pausedStatus;
+  robot.pausedStatus = null;
+  // stopped at the dock after a detour: head back to the kept task
+  if (!paused && robot.resumeTask) resumeKeptTask();
+  // manual control may have moved it while stopped: re-plan unless still working at the target
+  else if (paused && ON_TASK.includes(paused) && robot.targetNode &&
+           !(paused === RobotStatus.WORKING && robot.currentNodeId === robot.targetNode)) {
+    startNavigation(robot.targetNode);
+  }
+  else robot.status = paused ?? RobotStatus.IDLE;
+  // the action timer doesn't run while stopped
+  if (paused === RobotStatus.WORKING) robot.actionStartedAt += Date.now() - robot.pausedAt;
+}
+
 /** Pick an interrupted task back up after charging, or go idle */
 function resumeKeptTask() {
   const resume = robot.resumeTask;
@@ -599,6 +674,10 @@ function resumeKeptTask() {
     robot.actionDurationMs = resume.durationMs;
     console.log(`[TASK] resuming ${resume.taskId} at ${resume.targetNode}`);
   } else {
+    // idle never holds a task: report it so it's retried now, not after the grace period
+    if (resume) {
+      publishEvent(RobotEventType.TASK_FAILED, `can't reach ${resume.targetNode}`, resume.taskId);
+    }
     robot.status = RobotStatus.IDLE;
     robot.taskId = null;
   }
