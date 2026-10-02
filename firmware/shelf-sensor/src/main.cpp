@@ -42,10 +42,13 @@ static float readLight() {
   if (!lightReady) return NAN;
   float lux = lightMeter.readLightLevel();
   if (lux < 0) {
-    // Bus error or sensor reset: configure it again on the next report
+    // Bus error: configure it again on the next report
     lightReady = false;
     return NAN;
   }
+  // A BH1750 that browns out restarts powered down and keeps answering with
+  // a stale value; re-sending the mode each report recovers it by the next one
+  lightReady = lightMeter.configure(BH1750::CONTINUOUS_HIGH_RES_MODE);
   return lux;
 }
 
@@ -78,7 +81,8 @@ static void printField(const __FlashStringHelper* key, float v, uint8_t decimals
   Serial.print(F(",\""));
   Serial.print(key);
   Serial.print(F("\":"));
-  if (isnan(v)) Serial.print(F("null"));
+  // Serial.print renders inf as "inf", which would break the JSON line
+  if (isnan(v) || isinf(v)) Serial.print(F("null"));
   else Serial.print(v, decimals);
 }
 
@@ -109,15 +113,13 @@ static void report() {
 }
 
 void setup() {
-  // Read and clear the reset cause first: a set WDRF keeps the watchdog
-  // running through the bootloader and can reset-loop the board
-  uint8_t resetCause = MCUSR;
+  // A set WDRF keeps the watchdog armed after a watchdog reset; clear it
+  // before the slow sensor setup below
   MCUSR = 0;
   wdt_disable();
 
   Serial.begin(SERIAL_BAUD);
   Serial.println(F("# shelf-sensor boot"));
-  if (resetCause & _BV(WDRF)) Serial.println(F("# reset by watchdog"));
 
   pinMode(PIN_WATER_LEVEL, INPUT);
   dht.begin();
