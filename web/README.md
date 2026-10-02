@@ -1,6 +1,6 @@
 # Vertical Farm Control PWA
 
-A production-oriented Next.js App Router Progressive Web App for monitoring and operating a vertical farm environment. The UI is designed as a premium dark industrial dashboard with offline-capable shell caching, and a code structure prepared for Arduino Uno R3 serial ingestion and persistent history.
+A production-oriented Next.js App Router Progressive Web App for monitoring and operating a vertical farm environment. The UI is designed as a premium dark industrial dashboard with offline-capable shell caching and persistent history.
 
 ## Stack
 
@@ -24,7 +24,7 @@ npm ci
 cp .env.example .env.local
 ```
 
-Fill in Supabase and serial values in `.env.local`.
+Fill in Supabase values in `.env.local`.
 
 3. Start the development server:
 
@@ -58,9 +58,9 @@ That runs lint, TypeScript, and production build validation.
 - `/api/sensor-events/latest` - latest Supabase sensor event
 - `/api/config/status` - server-side environment and ingestion status
 
-## Arduino Live Ingestion
+## Shelf Sensors
 
-For the Arduino Uno R3 USB serial to Supabase live ingestion flow, see [`docs/live-ingestion.md`](./docs/live-ingestion.md).
+The shelf sensor node (Arduino Uno R3) now publishes over MQTT on the Pi through the `shelf-bridge` service; see [`docs/shelf-sensors.md`](../docs/shelf-sensors.md). The old laptop serial bridge is retired, so `sensor_events` no longer has a writer; moving the dashboard onto shelf data is part of the dashboard data-flow work.
 
 ## Deploy To Vercel
 
