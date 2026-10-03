@@ -110,8 +110,9 @@ npm run orch
 - Queued, assigned and finished tasks are saved to
   `farm-controller/orchestrator-state.json` (gitignored) and restored on restart.
 - Environment overrides: `BROKER_URL`, `CONFIG_PATH`, `TOPOLOGY_PATH`, `STATE_PATH`.
-- It exits if the broker isn't reachable at startup; on the Pi, run it under
-  systemd with `Restart=on-failure` (or start it after Mosquitto).
+- It exits if the broker isn't reachable at startup. On the Pi it runs as a
+  systemd service that starts after Mosquitto and restarts on failure: see
+  [docs/PI-SERVICES.md](../docs/PI-SERVICES.md).
 - State machine diagrams: `orchestrator/docs/state-machine.md`. The robot-side
   contract is in `docs/firmware-architecture.md`.
 
