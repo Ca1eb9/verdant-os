@@ -15,6 +15,13 @@ Every service is a **systemd** unit. systemd is built into the OS, so there's no
 | Ingester | `farm-ingester` | Records telemetry to SQLite | `/var/lib/verdant/farm_telemetry.db` |
 | Dashboard | `farm-dashboard` | Web app on `http://farmnet.local:3000` | — |
 
+Networks (set up in [WIFI-SETUP.md](WIFI-SETUP.md)):
+
+- `wlan0`: FarmNet, for robots and laptops. Everything above is reachable here.
+- **Uplink** to the internet: `wlan1` (a USB WiFi adapter, the plan) or `eth0` (Ethernet). Only the Pi itself uses it, for `apt`, the clock and the Supabase bridge. The farm keeps running without it.
+
+This doc works with either uplink, or both.
+
 Where things live:
 
 - `/opt/verdant-os`: the repo, owned by the `farm` user the services run as
@@ -24,7 +31,7 @@ Where things live:
 
 ## One-time setup
 
-Run these on the Pi, logged in as your normal user.
+Run these on the Pi, logged in as your normal user, with the uplink connected (`ping google.com` works).
 
 ### 1. Packages
 
@@ -94,22 +101,24 @@ The first run takes several minutes, mostly the dashboard build. It installs the
 
 ### 7. Firewall
 
-Mosquitto listens on every network interface. Allow everything on FarmNet, but only SSH and mDNS (`farmnet.local`) on the Ethernet side:
+Mosquitto and the dashboard listen on every network interface. Allow everything on FarmNet (`wlan0`), but only SSH and mDNS (`farmnet.local`) on the uplink, so nothing on your home or school network can reach the broker:
 
 ```bash
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 sudo ufw allow in on wlan0
-sudo ufw allow in on eth0 to any port 22 proto tcp
-sudo ufw allow in on eth0 to any port 5353 proto udp
+for uplink in wlan1 eth0; do
+  sudo ufw allow in on $uplink to any port 22 proto tcp
+  sudo ufw allow in on $uplink to any port 5353 proto udp
+done
 sudo ufw enable
 ```
 
-Add the `eth0` SSH rule before `ufw enable`, or an SSH session over Ethernet drops.
+The rules cover both uplinks, so they keep working if you switch between the USB adapter and Ethernet; a rule for an interface that isn't there does nothing. Add the SSH rules before `ufw enable`, or an SSH session over the uplink drops.
 
 ### 8. SSH keys (recommended)
 
-From your laptop, copy your key, check that it logs in without a password, then turn passwords off:
+From your laptop (on FarmNet, or on the same network as the uplink), copy your key, check that it logs in without a password, then turn passwords off:
 
 ```bash
 ssh-copy-id <user>@farmnet.local
@@ -137,6 +146,7 @@ After it's back:
 5. `vcgencmd get_throttled`: `throttled=0x0` (anything else means the power supply is too weak)
 6. `timedatectl`: `System clock synchronized: yes`
 7. `sudo ufw status verbose`: the rules above
+8. `nmcli device`: `wlan0` on `FarmNet`, and the uplink (`wlan1` or `eth0`) connected; `ip route show default` goes out the uplink
 
 ## Day to day
 
@@ -184,7 +194,8 @@ SD cards fail from sudden power loss during a write and from wear. With this set
 
 ## Things to know
 
-- **No real-time clock.** The Pi sets its clock over the internet (Ethernet) at boot. Without Ethernet it restores the time it last saved, which can be behind. The orchestrator doesn't care (it uses receive times), but timestamps in the ingester's database can be off after a long outage without Ethernet.
+- **No real-time clock.** The Pi sets its clock over the uplink at boot. Without the uplink it restores the time it last saved, which can be behind. The orchestrator doesn't care (it uses receive times), but timestamps in the ingester's database can be off after a long time without the uplink.
+- **A WiFi uplink drops more often than Ethernet.** Nothing on the farm depends on it; only `apt`, the clock and the Supabase bridge do, and the bridge has to reconnect on its own when it comes back.
 - **Power.** Use the official 5 V / 5 A (Pi 5) or 5 V / 3 A (Pi 4) supply. Under-voltage causes random crashes; `vcgencmd get_throttled` shows it.
 - **Mosquitto** isn't a farm unit: it's the OS package's own `mosquitto.service`, configured in [WIFI-SETUP.md](WIFI-SETUP.md). The farm services wait for it and restart if it does.
 
@@ -198,5 +209,7 @@ SD cards fail from sudden power loss during a write and from wear. With this set
 | `EROFS: read-only file system` | A service tried to write outside its allowed folders. Data belongs in `/var/lib/verdant`; set the path in its env file. |
 | Ingester fails on `better-sqlite3` | It was built for a different Node version. Rerun the deploy script (it reinstalls), and check step 1's packages are installed. |
 | Dashboard shows old content | The deploy rebuilds it; make sure the script reached `== start`. |
-| `farmnet.local` doesn't resolve over Ethernet | The mDNS firewall rule (step 7) is missing. |
+| `farmnet.local` doesn't resolve over the uplink | The mDNS firewall rule (step 7) is missing. |
+| FarmNet missing after a reboot, or the uplink on the wrong radio | `wlan0` and `wlan1` swapped names. See step 4 of the USB adapter section in [WIFI-SETUP.md](WIFI-SETUP.md#no-ethernet-use-a-usb-wifi-adapter). |
+| Can't SSH over the uplink | The uplink's address changes with DHCP; use `farmnet.local`, or SSH over FarmNet at `192.168.4.1`. |
 | Robot commands fail with "Remote commands are turned off" | `OPERATOR_KEY` is empty in `/etc/verdant/dashboard.env`. Set it, then `sudo systemctl restart farm-dashboard`. |
