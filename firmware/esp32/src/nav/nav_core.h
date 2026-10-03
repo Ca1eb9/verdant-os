@@ -16,8 +16,8 @@
 //     (follow_edge, creep, jog, halt; fault()), see nav/motion
 //   - battery and obstacle checks: survival overrides (survival_return(),
 //     report(), fault()), see nav/survival
-//   - dock alignment and charge contact: dock sequence (start_docking,
-//     on_charge_contact())
+//   - backing onto the dock: see nav/motion (start_docking)
+//   - charge contact: dock sequence (on_charge_contact())
 
 #pragma once
 
@@ -63,7 +63,7 @@ class NavOutput {
   virtual void creep() = 0;
   // Drive one JOG_PULSE_MS pulse. Backward reverses without turning.
   virtual void jog(JogDirection direction) = 0;
-  // Run the dock alignment sequence; report contact with on_charge_contact().
+  // Back onto the dock; report contact with on_charge_contact(), which halts.
   virtual void start_docking() = 0;
 
   // Why a command or input was ignored, for the serial log.

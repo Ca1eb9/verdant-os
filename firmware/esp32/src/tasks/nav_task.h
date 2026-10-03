@@ -16,9 +16,9 @@
 //
 // nav/survival runs first in every loop: battery thresholds, obstacle events,
 // and g_motor_kill_flag at the motor cutoff. nav/motion turns the motion hooks
-// into DriveCommands and reports missed tags to the state machine. Docking is
-// a placeholder (logged, motors stopped) until the dock sequence card fills
-// it in.
+// into DriveCommands, reports missed tags to the state machine, and sets each
+// side's obstacle stop distance for the sensor task (lowered while creeping
+// into the elevator or dock).
 
 #pragma once
 

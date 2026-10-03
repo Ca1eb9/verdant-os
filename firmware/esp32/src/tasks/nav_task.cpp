@@ -54,11 +54,8 @@ class QueueOutput : public NavOutput {
   }
   void creep() override { motion.creep(millis()); }
 
-  // Placeholder for the dock sequence card.
-  void start_docking() override {
-    LOG("nav", "dock alignment: not implemented (dock sequence card)");
-    halt();
-  }
+  // Charge contact detection is the dock sequence card's.
+  void start_docking() override { motion.start_docking(millis()); }
 
   void note(const char* message) override {
     last_note_ms = millis();
@@ -224,8 +221,11 @@ void nav_task(void* /*param*/) {
     while (xQueueReceive(g_command_queue, &cmd, 0) == pdTRUE) core.on_command(cmd, now);
 
     core.tick(now);
-    const char* fault = out.motion.check(now, ahead_blocked || g_motor_kill_flag);
+    const char* fault = out.motion.check(now, sensors, g_motor_kill_flag);
     if (fault) core.fault(fault);
+    // For the sensor task's obstacle flags: lowered while creeping in.
+    g_obstacle_front_stop_cm = out.motion.stop_cm(false);
+    g_obstacle_rear_stop_cm = out.motion.stop_cm(true);
 
     // After the step's events are queued: comms sends those first.
     bool changed = core.status() != sent_status || core.current_node() != sent_node;

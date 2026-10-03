@@ -103,7 +103,9 @@ stateDiagram-v2
   - motor cutoff at about 5%, until back above 15%. Driving itself with the
     motors cut off is a fault [`error`].
 - **Obstacle:** motors hard-stop while the flag on the side they're driving
-  toward is set (front or rear sensor). The status doesn't change. `[obstacle_detected]` is sent once, then `[path_blocked]` if still
+  toward is set (front or rear sensor). The status doesn't change. After the
+  elevator or dock tag, the robot creeps in closer than that instead (ToF
+  approach). `[obstacle_detected]` is sent once, then `[path_blocked]` if still
   blocked after a timeout.
 - **Telemetry** is sent every 1 s and on every status or node change, and always
   reports the current `task_id` and `last_completed_task_id`. The robot never

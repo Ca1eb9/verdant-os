@@ -287,10 +287,38 @@ right turn) can't be driven yet: see Faults.
 An elevator ride (edges with no x/y change): the robot stays put while the
 elevator moves, for `ELEVATOR_WAIT_MS` (in `config.h`) per level, then drives
 off the opposite way to how it drove onto the elevator, until it reads the
-elevator's tag on the new level. A path through several levels (e.g.
+elevator's tag on the new level. Before the wait it creeps onto the platform
+to its end wall (see "ToF approach"). A path through several levels (e.g.
 `elev-1-L0` to `elev-1-L2`) is one ride: it only drives off at the last level.
 "How it drove on" is the drive direction when the robot read the elevator tag
 it's leaving from.
+
+### ToF approach
+
+The robot slows to `APPROACH_SPEED` once the obstacle sensor on the side it's
+driving toward reads inside `SLOW_ZONE_CM`, and stays slow until the next edge.
+That's for anything ahead, so it also stops more accurately at
+`OBSTACLE_STOP_CM` for a real obstruction.
+
+The elevator and the dock need it much closer: about 1–3 cm from the end wall.
+Only **after reading their tag**, the nav task lowers the stop distance for
+that side (`ELEVATOR_STOP_CM`, `DOCK_STOP_CM`) and creeps in at
+`APPROACH_SPEED` until the sensor reads it. Before the tag, anything inside
+`OBSTACLE_STOP_CM` is a real obstruction, so a person standing at the elevator
+isn't driven up to. That means each elevator and dock tag must be read while
+the end wall is still more than `OBSTACLE_STOP_CM` away; otherwise the robot
+stops short of the tag.
+
+- **Elevator:** it creeps onto the platform the way it drove on, then rides.
+- **Dock:** it backs on (it faces away from the dock) until `DOCK_STOP_CM`,
+  then waits for the charger contact, which stops the motors.
+- If the end wall isn't reached within `APPROACH_TIMEOUT_MS` of driving, the
+  robot faults (see Faults).
+
+The sensor task owns the obstacle flags; the nav task only sets each side's
+stop distance (`g_obstacle_front_stop_cm`, `g_obstacle_rear_stop_cm`). When it
+changes, the sensor task judges the next reading against it straight away, so
+a robot stopped a few cm from the wall can creep the rest of the way in.
 
 ## Survival overrides
 
@@ -326,6 +354,8 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
   `error` and report `error`, keeping `task_id` and the last known node. When a
   known tag is read again, publish `recovery`, re-plan from that node and
   continue.
+- **Approach not finished:** the elevator or dock end wall isn't reached
+  within a timeout. The robot faults the same way.
 - **Turn needed:** turns are a placeholder: an edge whose next node is to
   the side (neither ahead nor behind) faults the same way.
 - **Motor cutoff:** whenever the robot is driving itself with the motors cut
@@ -393,7 +423,8 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
 ## TBD
 
 - Missed-tag and path-blocked timeout values
-- Dock alignment sequence and charge-contact detection
+- Charge-contact detection
+- ToF approach distances and speeds, and where the elevator and dock tags go
 - Battery ADC calibration curve
 - Turns (single drive motor: an edge to the side faults for now)
 - `harvest` action

@@ -74,7 +74,9 @@ constexpr uint32_t RFID_REINIT_MS = 5000;       // retry a dead reader this ofte
 // ---- Obstacle sensor (VL53L4CX) --------------------------------------------------
 
 constexpr float OBSTACLE_STOP_CM = 15.0f;       // set that side's obstacle flag below this
-constexpr float OBSTACLE_CLEAR_CM = 20.0f;      // must read above this to clear
+// Must read above this to clear. During a dock or elevator approach the stop
+// distance is lower; the clear distance moves with it (same 5 cm gap).
+constexpr float OBSTACLE_CLEAR_CM = 20.0f;
 constexpr uint8_t OBSTACLE_CLEAR_COUNT = 3;     // consecutive clear readings needed
 constexpr uint32_t TOF_TIMING_BUDGET_US = 33000;
 constexpr uint32_t TOF_TIMEOUT_MS = 500;        // no data this long = sensor fault
@@ -113,6 +115,15 @@ constexpr uint32_t CREEP_TIMEOUT_MS = 15000;        // no tag this long while cr
 constexpr int16_t CRUISE_SPEED = 150;               // between tags (0..255)
 constexpr int16_t CREEP_SPEED = 90;                 // looking for a tag after boot (0..255)
 constexpr uint32_t ELEVATOR_WAIT_MS = 5000;         // per level ridden: stay put, then drive off
+
+// Approach (ToF): slow down near anything ahead. After reading the elevator
+// or dock tag, creep in until this close to the end wall instead of stopping
+// at OBSTACLE_STOP_CM. TBD: tune on the real farm.
+constexpr float SLOW_ZONE_CM = 40.0f;               // slow to APPROACH_SPEED inside this
+constexpr int16_t APPROACH_SPEED = 60;              // (0..255)
+constexpr float ELEVATOR_STOP_CM = 2.0f;            // stop this close to the elevator's end wall
+constexpr float DOCK_STOP_CM = 1.0f;                // stop this close to the dock
+constexpr uint32_t APPROACH_TIMEOUT_MS = 10000;     // not there after this long driving: error
 
 // The way the robot faces. It has a single drive motor, so it never turns:
 // set it down facing away from the dock (so it backs onto the charger). It

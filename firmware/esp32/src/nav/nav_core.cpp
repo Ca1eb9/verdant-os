@@ -169,6 +169,7 @@ void NavCore::on_charge_contact() {
     out_.note("ignored: charge contact while not docking");
     return;
   }
+  out_.halt();
   emit(RobotEventType::DockConnected);
   // A dock task is done once connected; a kept task waits for the charge.
   if (ctx_.dock_task) {
