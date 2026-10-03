@@ -50,8 +50,8 @@ When sources disagree, this order wins: **code contract > design docs > timeline
 - There is **no clock sync**. Pi services use their own receive time.
 - The orchestrator only requeues a task when the robot reports **no `task_id`**.
   Dock trips, stop, error and manual mode keep the task.
-- A **pending stop beats a low-battery return**. Only firmware survival
-  overrides beat a stop.
+- A **stop beats a low-battery return**, the firmware's survival override
+  included. Only the motor cutoff still applies to a stopped robot.
 - **Manual driving (`jog`) is local-network only.**
 
 If one of these blocks your task, raise it; don't work around it.

@@ -133,7 +133,8 @@ export function processTelemetry(
 
   // Battery preemption — only when idle or on a task. Idle robots use the
   // assignment threshold so a robot too low to take work still goes to charge.
-  // A pending stop wins; only firmware survival overrides can override it.
+  // A pending stop wins; the firmware's survival override doesn't beat a stop
+  // either.
   const dockThreshold = state.status === RobotStatus.IDLE
     ? config.battery_low_pct + config.battery_assign_margin_pct
     : config.battery_low_pct;

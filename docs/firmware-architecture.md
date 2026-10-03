@@ -109,9 +109,9 @@ pushed first, then the status changes.
 | `idle` | `navigate` accepted | — | `en_route` |
 | `en_route` | Tag read (not the target) | — | `en_route` (update `current_node`, heading) |
 | `en_route` | Target reached (including already there) | `arrived`, `task_started` | `working` |
-| `working` | `duration_ms` elapsed | `task_complete` | `idle` (clear `task_id`, set `last_completed_task_id`) |
+| `working` | `duration_ms` elapsed | `task_complete` | `idle` (clear `task_id`, set `last_completed_task_id`; a task without a `task_id` leaves it unchanged) |
 | any moving state | Target unreachable / path can't be followed | `task_failed` | `idle` (clear `task_id`) |
-| any | `return_to_dock`, survival return | `battery_critical` if survival | `returning_to_dock` |
+| any | `return_to_dock`, survival return (not while `stopped` or `manual`) | `battery_critical` if survival | `returning_to_dock` |
 | `returning_to_dock` | Dock node reached | `arrived` | `docking` |
 | `docking` | Charge contact detected | `dock_connected`, then `task_complete` if on a dock task | `charging` |
 | `charging` | Battery ≥ `charge_complete_pct` (95) | `charge_complete` | `stopped` if latched; else `en_route` for a kept task; else `idle` |
@@ -153,7 +153,9 @@ Telemetry:
 }
 ```
 
-`heading` is 0 N, 1 E, 2 S, 3 W, or `null` until known. `battery_pct` is 0–100.
+`heading` is 0 N, 1 E, 2 S, 3 W, or `null` until known: the way the robot
+faces. It changes when the robot starts driving an edge (an elevator move keeps
+it), not when it reaches the next tag. `battery_pct` is 0–100.
 
 Event:
 
@@ -220,10 +222,10 @@ The robot never queues commands: each one acts on the current state right away.
 
 | Command | Behaviour |
 |---|---|
-| `navigate` | Replaces the current task (and clears the stop latch, paused status and kept task). If `path` is included, follow it; otherwise compute the shortest path to `target_node` on board. Target already reached: `arrived` straight away. Unknown or unreachable target: publish `task_failed` with the command's `task_id` and stay as you were. **Ignore** a `navigate` whose `task_id` equals the current `task_id` or `last_completed_task_id` (a redelivered duplicate). |
+| `navigate` | Replaces the current task (and clears the stop latch, paused status and kept task). If `path` is included, follow it from the robot's current node; if it doesn't lead from there to `target_node` along graph edges, or there is no `path`, compute the shortest path on board. Target already reached: `arrived` straight away. Unknown or unreachable target: publish `task_failed` with the command's `task_id` and stay as you were. **Ignore** a `navigate` whose `task_id` equals the current `task_id` or `last_completed_task_id` (a redelivered duplicate). |
 | `stop` | Pause in place: halt motors, hold the action timer, report `stopped`, keep `task_id`, set the stop latch. Ignored if already stopped. |
 | `resume` | In `manual`: leave manual control (see [Manual control](#manual-control)) and clear the stop latch. Otherwise only acts if the stop latch is set: clear it and restore the paused status (the action timer continues with the remaining time). If it was on a task, re-plan from the current node first, since manual control may have moved it while stopped; a robot still at its target keeps working. If the robot is stopped at the dock with a kept task, re-plan and continue it. |
-| `return_to_dock` | Ignored if already returning, docking or charging. Otherwise head to the dock. A task in progress or paused is kept and resumed after charging. With no task and a `task_id` on the command, adopt it as a dock task and publish `task_complete` for it once connected to the charger. If already at the dock but not charging, run the dock sequence again. A latched stop stays latched. |
+| `return_to_dock` | Ignored if already returning, docking or charging. Otherwise head to the dock. A task in progress or paused is kept and resumed after charging. With no task and a `task_id` on the command, adopt it as a dock task and publish `task_complete` for it once connected to the charger. If already at the dock but not charging, run the dock sequence again (straight to `docking`, no `arrived`). No path to the dock: publish `task_failed` for a dock task's `task_id`, else ignore it. A latched stop stays latched. |
 | `jog` | Manual driving from the dashboard; `direction` is `forward` or `backward`. Accepted in `idle`, `en_route`, `working`, `stopped`, `error` and `manual`; ignored otherwise (dock trips, `initializing`) and below the motor cutoff. The first jog enters `manual`. Each jog drives for a fixed **500 ms** from when it is received (`JOG_PULSE_MS` in `config.h`); a jog arriving while driving restarts the 500 ms. When the window runs out, the motors stop by themselves. `backward` reverses without turning; the heading doesn't change. |
 | `cancel` | Drop the task with this `task_id` if it is the current, paused or kept task: clear it without setting `last_completed_task_id` and without an event. A cancelled task that was moving or working goes to `idle` (or stays `stopped`). Cancelling a dock task stops the trip to the dock. Cancelling a kept task leaves the dock trip running, so the robot still charges. Ignore it if the id doesn't match. The orchestrator resends it whenever telemetry still shows the cancelled task, e.g. after the robot was offline. |
 
@@ -270,14 +272,16 @@ current heading.
 ## Survival overrides
 
 Checked at the top of every navigation loop, before any other logic. They
-override orchestrator commands, including `stop`.
+override orchestrator commands except `stop`: an operator stopped the robot on
+purpose, so a stopped robot stays stopped and only the motor cutoff applies.
 
-- **Battery:** three levels, set **below** the orchestrator's `battery_low_pct`
-  (20%) so the orchestrator handles normal charging and a pending stop can win
-  above the firmware threshold (in `manual`, only the motor cutoff applies):
+- **Battery:** three levels, at or below the value. The forced return is set
+  **below** the orchestrator's `battery_low_pct` (20%) so the orchestrator
+  handles normal charging (in `stopped` and `manual`, only the motor cutoff
+  applies):
   - warn at 20%: publish `battery_low`;
   - force return to dock at 15%: publish `battery_critical` and go to the dock,
-    keeping the task (and the stop latch);
+    keeping the task;
   - kill motors at about 5%.
 - **Obstacle:** two VL53L4CX sensors, front and rear, each on its own I2C bus
   (they share one fixed address). The sensor task sets a front and a rear
