@@ -39,6 +39,7 @@ firmware/
 │   │   └── comms_task.*        # WiFi, MQTT pub/sub
 │   ├── nav/
 │   │   ├── nav_core.*          # Robot state machine (pure C++, host-tested)
+│   │   ├── motion.*            # Motion hooks -> DriveCommands, missed-tag faults
 │   │   └── task_context.h      # Current/kept task, stop latch, paused status
 │   ├── utils/nav_helpers.*     # Dijkstra, heading, turns (match navigation.ts)
 │   ├── comms/comms_json.*      # JSON <-> struct, matches @farm/shared types
@@ -62,15 +63,22 @@ firmware/
 
 ## Robot state machine
 
-The contract with the orchestrator is [docs/firmware-architecture.md](../../docs/firmware-architecture.md); the diagrams are in [docs/state-machine.md](docs/state-machine.md). `nav/nav_core` implements it. The nav task feeds it tags, battery readings, commands and the time, and it reports through a `NavOutput`: events, and motion hooks the nav task turns into `DriveCommand`s.
+The contract with the orchestrator is [docs/firmware-architecture.md](../../docs/firmware-architecture.md); the diagrams are in [docs/state-machine.md](docs/state-machine.md). `nav/nav_core` implements it. The nav task feeds it tags, battery readings, commands and the time, and it reports through a `NavOutput`: events, and motion hooks that `nav/motion` turns into `DriveCommand`s.
+
+The robot has a single drive motor and no encoder, so it never turns: it faces `ROBOT_HEADING`, away from the dock (so it backs onto the charger), and `heading` never changes. `NavCore` works out how to drive each edge (`EdgeDrive`): forward at `CRUISE_SPEED` toward the way it faces, backward otherwise, until the next tag. On an elevator ride it stays put for `ELEVATOR_WAIT_MS` per level (consecutive elevator edges are one ride), then drives off the opposite way to how it drove on, to the elevator tag on the last level. Turns to the side are a placeholder: the robot stops with a fault. `creep` drives forward at `CREEP_SPEED` until the first tag. The nav loop calls `Motion::check()` every cycle and passes any fault to `NavCore::fault()`:
+
+| Fault | When |
+|---|---|
+| `missed tag` | `MISSED_TAG_TIMEOUT_MS` of driving with no tag. Time with the motors held off (obstacle ahead, motor cutoff) doesn't count |
+| `no tag found` | `CREEP_TIMEOUT_MS` of creeping after boot (the robot stays `initializing`) |
+| `turn needed: not supported yet` | the next node is to the side (placeholder) |
 
 Hooks and inputs still owned by later work (placeholders for now):
 
 | Hook / input | Owner |
 |---|---|
-| `follow_edge`, `creep`, `fault()` (missed tag) | RFID navigation |
-| `survival_return()`, battery and obstacle events | Survival overrides |
 | `start_docking`, `on_charge_contact()` | Dock sequence |
+| `survival_return()`, battery and obstacle events | Survival overrides |
 | `motor_task` | Motor control |
 
 Task state is RAM only: the robot never writes to flash. A rebooted robot starts with no task and the orchestrator requeues it.
@@ -123,7 +131,8 @@ Needs g++ or clang++ (on Windows, MSYS2's `mingw-w64-ucrt-x86_64-gcc`). `run.sh`
 
 - the JSON the firmware sends and parses against `types.ts` (see [COMMS-SENSOR.md](COMMS-SENSOR.md));
 - every route, heading and turn against `navigation.ts`, on the farm and on a fixture full of equal-cost ties (`test_host/fixtures/`);
-- the state machine (`nav_core_test.cpp`): command and sensor sequences, with every event checked to go out before its status change.
+- the state machine (`nav_core_test.cpp`): command and sensor sequences, with every event checked to go out before its status change;
+- the motion hooks (`motion_test.cpp`): the drive commands they send and each fault.
 
 ## Libraries
 

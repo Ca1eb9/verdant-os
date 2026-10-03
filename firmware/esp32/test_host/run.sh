@@ -55,3 +55,8 @@ CORE_FLAGS=(-std=c++17 -Wall -Wextra -DARDUINOJSON_USE_LONG_LONG=1 -I../src -I"$
 "$CXX" "${CORE_FLAGS[@]}" -DTIE_FIXTURE "${CORE_SRC[@]}" out/tie_graph.cpp -o out/nav_core_test_tie
 ./out/nav_core_test
 ./out/nav_core_test_tie
+
+# Motion hooks: drive commands, elevator rides, missed tags.
+"$CXX" "${CORE_FLAGS[@]}" motion_test.cpp ../src/nav/motion.cpp "${CORE_SRC[@]:1}" \
+  ../src/graph.cpp -o out/motion_test
+./out/motion_test

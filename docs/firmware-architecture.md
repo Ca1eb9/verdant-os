@@ -112,7 +112,7 @@ pushed first, then the status changes.
 |---|---|---|---|
 | `initializing` | First known tag read | — | `idle` |
 | `idle` | `navigate` accepted | — | `en_route` |
-| `en_route` | Tag read (not the target) | — | `en_route` (update `current_node`, heading) |
+| `en_route` | Tag read (not the target) | — | `en_route` (update `current_node`) |
 | `en_route` | Target reached (including already there) | `arrived`, `task_started` | `working` |
 | `working` | `duration_ms` elapsed | `task_complete` | `idle` (clear `task_id`, set `last_completed_task_id`; a task without a `task_id` leaves it unchanged) |
 | any moving state | Target unreachable / path can't be followed | `task_failed` | `idle` (clear `task_id`) |
@@ -158,9 +158,8 @@ Telemetry:
 }
 ```
 
-`heading` is 0 N, 1 E, 2 S, 3 W, or `null` until known: the way the robot
-faces. It changes when the robot starts driving an edge (an elevator move keeps
-it), not when it reaches the next tag. `battery_pct` is 0–100.
+`heading` is 0 N, 1 E, 2 S, 3 W, or `null` if unknown: the way the robot
+faces. It never changes (see "Driving" below). `battery_pct` is 0–100.
 
 Event:
 
@@ -184,10 +183,12 @@ the node with `type: "dock"`.
 ### Boot and localization
 
 After boot the robot reports `initializing` until it knows its node. It must
-find a tag on its own (e.g. creep forward slowly until one is read, or be
-placed on a tag). The orchestrator never assigns work to a robot without a
-node, and the robot can't plan a path to the dock without one, so a robot that
-reported `idle` with a `null` node would never move again.
+find a tag on its own: it creeps forward slowly until one is read, or it can
+be placed on a tag. If no tag turns up within a timeout, it stops, publishes
+`error` and stays `initializing` until a tag is read. The orchestrator never
+assigns work to a robot without a node, and the robot can't plan a path to the
+dock without one, so a robot that reported `idle` with a `null` node would
+never move again.
 
 ### Telemetry `task_id`
 
@@ -275,6 +276,22 @@ Heading and turns follow `computeHeading()` / `computeTurn()` in the same file:
 +y is north, +x is east, and a move with no x/y change (elevator) keeps the
 current heading.
 
+### Driving
+
+The robot has a single drive motor, so it never turns. It is set down facing
+away from the dock (`ROBOT_HEADING` in `config.h`, east on our farm), so it can
+back onto the charger, and `heading` stays that way. To go the other way it drives
+backward (`computeTurn()` gives a U-turn). An edge to the side (a left or
+right turn) can't be driven yet: see Faults.
+
+An elevator ride (edges with no x/y change): the robot stays put while the
+elevator moves, for `ELEVATOR_WAIT_MS` (in `config.h`) per level, then drives
+off the opposite way to how it drove onto the elevator, until it reads the
+elevator's tag on the new level. A path through several levels (e.g.
+`elev-1-L0` to `elev-1-L2`) is one ride: it only drives off at the last level.
+"How it drove on" is the drive direction when the robot read the elevator tag
+it's leaving from.
+
 ## Survival overrides
 
 Checked at the top of every navigation loop, before any other logic. They
@@ -307,6 +324,8 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
   `error` and report `error`, keeping `task_id` and the last known node. When a
   known tag is read again, publish `recovery`, re-plan from that node and
   continue.
+- **Turn needed:** turns are a placeholder: an edge whose next node is to
+  the side (neither ahead nor behind) faults the same way.
 
 ### No Pi heartbeat watchdog
 
@@ -371,8 +390,7 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
 - Missed-tag and path-blocked timeout values
 - Dock alignment sequence and charge-contact detection
 - Battery ADC calibration curve
-- Turn calibration constants
-- Elevator moves (how the robot rides between levels and confirms arrival)
+- Turns (single drive motor: an edge to the side faults for now)
 - `harvest` action
 - Bluetooth controller pairing and input mapping
 - Graph updates from the orchestrator (the only case where the robot would

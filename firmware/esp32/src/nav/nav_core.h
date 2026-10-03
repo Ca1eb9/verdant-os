@@ -13,7 +13,7 @@
 // Physical work is behind the NavOutput motion hooks and a few inputs, for
 // the cards that own it:
 //   - driving between tags, turns, the missed-tag fault: RFID navigation
-//     (follow_edge, creep, jog, halt; fault())
+//     (follow_edge, creep, jog, halt; fault()), see nav/motion
 //   - battery and obstacle checks: survival overrides (survival_return())
 //   - dock alignment and charge contact: dock sequence (start_docking,
 //     on_charge_contact())
@@ -27,6 +27,21 @@
 #include "../types.h"
 #include "task_context.h"
 
+// How the robot drives an edge. It has a single drive motor, so it never
+// turns: it always faces ROBOT_HEADING (config.h), away from the dock so it
+// backs onto the charger, and drives backward to go the other way.
+enum class EdgeDrive : uint8_t {
+  Forward,
+  Backward,
+  // Elevator ride (no x/y change), over one or more levels: wait
+  // ELEVATOR_WAIT_MS per level, then drive off the opposite way it drove on,
+  // to the elevator tag on the last level.
+  ElevatorForward,
+  ElevatorBackward,
+  // The next node is to the side: it can't get there (placeholder).
+  Turn,
+};
+
 class NavOutput {
  public:
   // Queue an event. `node` is NO_NODE before the first tag.
@@ -38,12 +53,11 @@ class NavOutput {
 
   // Stop the motors now.
   virtual void halt() = 0;
-  // Face `to` and drive along the edge from `from` until the next tag.
-  // `heading_known`/`heading` is the way the robot faced before the call. It
-  // may be called while the robot is already between `from` and `to` (e.g.
-  // resuming after a stop), facing `to`.
-  virtual void follow_edge(NodeIndex from, NodeIndex to, bool heading_known,
-                           Heading heading) = 0;
+  // Drive along the edge from `from` to `to`, as `drive` says, until the
+  // next tag. It may be called while the robot is already between `from` and
+  // `to` (e.g. resuming after a stop). For an elevator ride, `to` is the
+  // level it drives off at, which may be several levels away.
+  virtual void follow_edge(NodeIndex from, NodeIndex to, EdgeDrive drive) = 0;
   // Drive forward slowly until a tag is read (localizing).
   virtual void creep() = 0;
   // Drive one JOG_PULSE_MS pulse. Backward reverses without turning.
@@ -59,10 +73,7 @@ class NavOutput {
 
 class NavCore {
  public:
-  explicit NavCore(NavOutput& out) : out_(out) {
-    ctx_.current.target = NO_NODE;
-    ctx_.kept.target = NO_NODE;
-  }
+  explicit NavCore(NavOutput& out);
 
   // Boot: reports `initializing` and creeps until the first tag.
   void begin();
@@ -93,7 +104,8 @@ class NavCore {
   // ---- State ----
   RobotStatus status() const { return status_; }
   NodeIndex current_node() const { return node_; }
-  // True after reversing (backward jog): obstacle_cm comes from the rear sensor.
+  // True while driving backward (a backward edge or jog), and after it until
+  // the next move: obstacle_cm comes from the rear sensor.
   bool reversing() const { return reversing_; }
   const TaskContext& context() const { return ctx_; }
   // The task_id telemetry reports: the current task, else the kept task.
@@ -120,6 +132,7 @@ class NavCore {
   void clear_task(TaskSpec& t);
   uint8_t command_path(const Command& cmd, NodeIndex goal, NodeIndex* out) const;
   bool set_path(NodeIndex goal);
+  EdgeDrive edge_drive(NodeIndex from, NodeIndex to) const;
   void follow_path(uint32_t now);
   void arrive(uint32_t now);
   void redock();
@@ -135,9 +148,10 @@ class NavCore {
   NavOutput& out_;
   RobotStatus status_ = RobotStatus::Initializing;
   NodeIndex node_ = NO_NODE;
-  bool heading_known_ = false;
-  Heading heading_ = Heading::North;
   bool reversing_ = false;
+  // Which way to drive off the elevator: opposite to the way it drove onto
+  // it, taken when the elevator tag was read.
+  bool elevator_exit_backward_ = false;
   TaskContext ctx_ = {};
 
   float battery_pct_ = NAN;

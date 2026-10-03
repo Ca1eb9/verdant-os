@@ -6,6 +6,8 @@
 
 #include <stdint.h>
 
+#include "types.h"
+
 // ---- Identity ----------------------------------------------------------------
 
 #define ROBOT_ID "robot-1"
@@ -107,6 +109,15 @@ constexpr uint32_t TELEMETRY_PERIOD_MS = 1000;
 // TBD: tune on the real farm.
 constexpr uint32_t MISSED_TAG_TIMEOUT_MS = 5000;   // no next tag this long while driving: error
 constexpr uint32_t PATH_BLOCKED_TIMEOUT_MS = 10000; // obstacle this long: path_blocked
+constexpr uint32_t CREEP_TIMEOUT_MS = 15000;        // no tag this long while creeping after boot
+constexpr int16_t CRUISE_SPEED = 150;               // between tags (0..255)
+constexpr int16_t CREEP_SPEED = 90;                 // looking for a tag after boot (0..255)
+constexpr uint32_t ELEVATOR_WAIT_MS = 5000;         // per level ridden: stay put, then drive off
+
+// The way the robot faces. It has a single drive motor, so it never turns:
+// set it down facing away from the dock (so it backs onto the charger). It
+// drives backward to go the other way. Matches the simulator.
+constexpr Heading ROBOT_HEADING = Heading::East;
 
 // Used when a navigate has no duration_ms. With no duration, idle completes
 // right after task_started.

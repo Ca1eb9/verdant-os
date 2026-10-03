@@ -17,7 +17,7 @@ stateDiagram-v2
     initializing --> idle : first known tag read
 
     idle --> en_route : navigate
-    en_route --> en_route : tag read - update node and heading
+    en_route --> en_route : tag read - update node
     en_route --> working : target reached<br/>[arrived, task_started]
     working --> idle : duration_ms elapsed [task_complete]<br/>clear task_id, set last_completed_task_id
     en_route --> idle : target unreachable [task_failed]

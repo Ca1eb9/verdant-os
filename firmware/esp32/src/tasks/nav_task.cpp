@@ -12,6 +12,7 @@
 #include "../config.h"
 #include "../graph.h"
 #include "../log.h"
+#include "../nav/motion.h"
 #include "../nav/nav_core.h"
 #include "../types.h"
 #include "../utils/nav_helpers.h"
@@ -37,25 +38,22 @@ class QueueOutput : public NavOutput {
     }
   }
 
-  void halt() override { drive(DriveMode::Stop, 0, 0); }
+  void halt() override { motion.halt(); }
 
   void jog(JogDirection direction) override {
     last_jog_ms = millis();
-    int16_t speed = direction == JogDirection::Backward ? -JOG_SPEED : JOG_SPEED;
-    drive(DriveMode::Drive, speed, JOG_PULSE_MS);
+    motion.jog(direction);
   }
 
-  // Placeholders for the RFID navigation and dock sequence cards. Until
-  // then the robot stays put: place it on a tag to localize it.
-  void follow_edge(NodeIndex from, NodeIndex to, bool, Heading) override {
-    LOG("nav", "follow %s -> %s: not implemented (RFID navigation card)", GRAPH_NODES[from].id,
-        GRAPH_NODES[to].id);
-    halt();
+  void follow_edge(NodeIndex from, NodeIndex to, EdgeDrive drive) override {
+    LOG("nav", "follow %s -> %s (%s)", GRAPH_NODES[from].id, GRAPH_NODES[to].id,
+        drive == EdgeDrive::Backward || drive == EdgeDrive::ElevatorBackward ? "backward"
+                                                                             : "forward");
+    motion.follow_edge(from, to, drive, millis());
   }
-  void creep() override {
-    LOG("nav", "creep to a tag: not implemented (RFID navigation card)");
-    halt();
-  }
+  void creep() override { motion.creep(millis()); }
+
+  // Placeholder for the dock sequence card.
   void start_docking() override {
     LOG("nav", "dock alignment: not implemented (dock sequence card)");
     halt();
@@ -71,18 +69,18 @@ class QueueOutput : public NavOutput {
   uint32_t last_note_ms = 0;
 
  private:
-  void drive(DriveMode mode, int16_t speed, uint32_t duration_ms) {
-    DriveCommand c = {};
-    c.seq = ++seq_;
-    c.mode = mode;
-    c.left_speed = speed;
-    c.right_speed = speed;
-    c.duration_ms = duration_ms;
-    // Mailbox: replaces a command the motor task hasn't picked up yet.
-    xQueueOverwrite(g_drive_queue, &c);
-  }
+  class MailboxSink : public DriveSink {
+   public:
+    void send(const DriveCommand& c) override {
+      // Mailbox: replaces a command the motor task hasn't picked up yet.
+      xQueueOverwrite(g_drive_queue, &c);
+    }
+  };
 
-  uint32_t seq_ = 0;
+  MailboxSink drive_;  // before motion, which holds it
+
+ public:
+  Motion motion{drive_};
 };
 
 // The status LED (README "Status LED"): colour = status, animation = the
@@ -220,6 +218,9 @@ void nav_task(void* /*param*/) {
     while (xQueueReceive(g_command_queue, &cmd, 0) == pdTRUE) core.on_command(cmd, now);
 
     core.tick(now);
+    bool ahead_blocked = core.reversing() ? g_obstacle_rear_flag : g_obstacle_front_flag;
+    const char* fault = out.motion.check(now, ahead_blocked || g_motor_kill_flag);
+    if (fault) core.fault(fault);
 
     // After the step's events are queued: comms sends those first.
     bool changed = core.status() != sent_status || core.current_node() != sent_node;

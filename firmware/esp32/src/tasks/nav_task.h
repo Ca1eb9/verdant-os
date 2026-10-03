@@ -14,9 +14,9 @@
 //
 // Priority PRIO_NAV on core 1. Runs every NAV_LOOP_MS.
 //
-// Driving between tags, creeping to the first tag and docking are
-// placeholders (logged, motors stopped) until the RFID navigation and dock
-// sequence cards fill them in.
+// nav/motion turns the motion hooks into DriveCommands and reports missed
+// tags to the state machine. Docking is a placeholder (logged, motors
+// stopped) until the dock sequence card fills it in.
 
 #pragma once
 
