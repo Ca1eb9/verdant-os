@@ -1,0 +1,27 @@
+# Dashboard: the Next.js app on http://farmnet.local:3000. See docs/PI-SERVICES.md.
+# Built by scripts/pi-deploy.sh; this only serves the build.
+[Unit]
+Description=VerdantOS dashboard
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+User=farm
+Group=farm
+WorkingDirectory=/opt/verdant-os/web
+EnvironmentFile=/etc/verdant/dashboard.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /opt/verdant-os/web/node_modules/next/dist/bin/next start -p 3000
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+# Next writes its runtime cache (e.g. optimized images) here
+ReadWritePaths=-/opt/verdant-os/web/.next/cache
+
+[Install]
+WantedBy=multi-user.target
