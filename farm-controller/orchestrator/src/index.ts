@@ -556,8 +556,14 @@ function onRemoteCommand(raw: unknown, topic: string) {
 
   // --- Navigate commands -------------------------------------
   if (msg.command.command === "navigate" && msg.command.target_node) {
-    if (!graph.nodes.has(msg.command.target_node)) {
+    const targetNode = graph.nodes.get(msg.command.target_node);
+    if (!targetNode) {
       console.log(`[REMOTE] Unknown target node: ${msg.command.target_node}`);
+      return;
+    }
+    // Robots only pass through elevators (docs/firmware-architecture.md)
+    if (targetNode.type === "elevator") {
+      console.log(`[REMOTE] ${msg.command.target_node} is an elevator, not a target`);
       return;
     }
     if (isKnownTask(msg.id)) {

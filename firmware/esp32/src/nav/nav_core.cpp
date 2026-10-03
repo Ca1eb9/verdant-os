@@ -227,6 +227,13 @@ void NavCore::navigate(const Command& cmd, uint32_t now) {
     emit_for(RobotEventType::TaskFailed, id, details);
     return;
   }
+  // The robot only passes through an elevator: stopping on its tag leaves it
+  // off the platform, with nothing to drive it back on.
+  if (GRAPH_NODES[goal].type == NodeType::Elevator) {
+    snprintf(details, sizeof(details), "%s is an elevator, not a target", cmd.target_node);
+    emit_for(RobotEventType::TaskFailed, id, details);
+    return;
+  }
   NodeIndex path[MAX_PATH_LEN];
   uint8_t len = command_path(cmd, goal, path);
   if (!len) len = dijkstra(node_, goal, path, MAX_PATH_LEN);

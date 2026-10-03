@@ -323,6 +323,12 @@ async function main() {
         // Path is node ids; plan our own when it isn't included
         if (duplicate) {
           console.log(`[CMD] duplicate navigate ${cmd.task_id}, ignored`);
+        } else if (graph.nodes.get(cmd.target_node)?.type === "elevator") {
+          publishEvent(
+            RobotEventType.TASK_FAILED,
+            `${cmd.target_node} is an elevator, not a target`,
+            cmd.task_id ?? null,
+          );
         } else if (startNavigation(cmd.target_node, cmd.path)) {
           robot.taskId = cmd.task_id ?? null;
           robot.currentAction = cmd.action_at_target ?? "idle";
