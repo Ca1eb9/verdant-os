@@ -14,9 +14,11 @@
 //
 // Priority PRIO_NAV on core 1. Runs every NAV_LOOP_MS.
 //
-// nav/motion turns the motion hooks into DriveCommands and reports missed
-// tags to the state machine. Docking is a placeholder (logged, motors
-// stopped) until the dock sequence card fills it in.
+// nav/survival runs first in every loop: battery thresholds, obstacle events,
+// and g_motor_kill_flag at the motor cutoff. nav/motion turns the motion hooks
+// into DriveCommands and reports missed tags to the state machine. Docking is
+// a placeholder (logged, motors stopped) until the dock sequence card fills
+// it in.
 
 #pragma once
 

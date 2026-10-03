@@ -100,7 +100,8 @@ stateDiagram-v2
   forced return.
   - warn at 20% [`battery_low`];
   - forced return at 15% [`battery_critical`], keeping the task;
-  - motor cutoff at about 5%.
+  - motor cutoff at about 5%, until back above 15%. Driving itself with the
+    motors cut off is a fault [`error`].
 - **Obstacle:** motors hard-stop while the flag on the side they're driving
   toward is set (front or rear sensor). The status doesn't change. `[obstacle_detected]` is sent once, then `[path_blocked]` if still
   blocked after a timeout.

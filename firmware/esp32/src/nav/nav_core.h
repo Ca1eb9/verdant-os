@@ -14,7 +14,8 @@
 // the cards that own it:
 //   - driving between tags, turns, the missed-tag fault: RFID navigation
 //     (follow_edge, creep, jog, halt; fault()), see nav/motion
-//   - battery and obstacle checks: survival overrides (survival_return())
+//   - battery and obstacle checks: survival overrides (survival_return(),
+//     report(), fault()), see nav/survival
 //   - dock alignment and charge contact: dock sequence (start_docking,
 //     on_charge_contact())
 
@@ -100,6 +101,9 @@ class NavCore {
   // (only the motor cutoff applies in both), while already on a dock trip
   // and while initializing.
   void survival_return(const char* details, uint32_t now);
+  // Survival overrides: an event that changes no status (battery_low,
+  // obstacle_detected, path_blocked).
+  void report(RobotEventType type, const char* details) { emit(type, details); }
 
   // ---- State ----
   RobotStatus status() const { return status_; }

@@ -302,10 +302,12 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
   **below** the orchestrator's `battery_low_pct` (20%) so the orchestrator
   handles normal charging (in `stopped` and `manual`, only the motor cutoff
   applies):
-  - warn at 20%: publish `battery_low`;
+  - warn at 20%: publish `battery_low`, once until the next charge complete
+    (not while docking or charging);
   - force return to dock at 15%: publish `battery_critical` and go to the dock,
     keeping the task;
-  - kill motors at about 5%.
+  - kill motors at about 5%, in every status. They stay off until the battery
+    is back above 15%, so noise near the cutoff can't toggle them.
 - **Obstacle:** two VL53L4CX sensors, front and rear, each on its own I2C bus
   (they share one fixed address). The sensor task sets a front and a rear
   obstacle flag, and the motor task hard-stops only on the flag for the side
@@ -326,6 +328,9 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
   continue.
 - **Turn needed:** turns are a placeholder: an edge whose next node is to
   the side (neither ahead nor behind) faults the same way.
+- **Motor cutoff:** whenever the robot is driving itself with the motors cut
+  off (battery at or below about 5%), it faults the same way, rather than
+  waiting forever. Not while charging.
 
 ### No Pi heartbeat watchdog
 

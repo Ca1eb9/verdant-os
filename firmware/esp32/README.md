@@ -40,6 +40,7 @@ firmware/
 │   ├── nav/
 │   │   ├── nav_core.*          # Robot state machine (pure C++, host-tested)
 │   │   ├── motion.*            # Motion hooks -> DriveCommands, missed-tag faults
+│   │   ├── survival.*          # Battery thresholds, motor cutoff, obstacle events
 │   │   └── task_context.h      # Current/kept task, stop latch, paused status
 │   ├── utils/nav_helpers.*     # Dijkstra, heading, turns (match navigation.ts)
 │   ├── comms/comms_json.*      # JSON <-> struct, matches @farm/shared types
@@ -73,12 +74,20 @@ The robot has a single drive motor and no encoder, so it never turns: it faces `
 | `no tag found` | `CREEP_TIMEOUT_MS` of creeping after boot (the robot stays `initializing`) |
 | `turn needed: not supported yet` | the next node is to the side (placeholder) |
 
+`nav/survival` runs at the top of every nav loop, before anything else (thresholds in `config.h`, "Survival overrides"):
+
+| Check | What happens |
+|---|---|
+| battery at or below `BATTERY_WARN_PCT` | `battery_low`, once until the next charge complete; not while docking or charging |
+| battery at or below `BATTERY_RETURN_PCT` | `NavCore::survival_return()`: `battery_critical` and back to the dock, keeping the task. Ignored while stopped, in manual and on a dock trip |
+| battery at or below `BATTERY_CUTOFF_PCT` | `g_motor_kill_flag` set in every status, until the battery is back above `BATTERY_RETURN_PCT`. Whenever the robot is driving itself, `error` ("motor cutoff"), so it doesn't wait forever with the motors off. Not while charging |
+| obstacle flag ahead while `en_route` or `returning_to_dock` | `obstacle_detected` once, then `path_blocked` after `PATH_BLOCKED_TIMEOUT_MS`; status kept |
+
 Hooks and inputs still owned by later work (placeholders for now):
 
 | Hook / input | Owner |
 |---|---|
 | `start_docking`, `on_charge_contact()` | Dock sequence |
-| `survival_return()`, battery and obstacle events | Survival overrides |
 | `motor_task` | Motor control |
 
 Task state is RAM only: the robot never writes to flash. A rebooted robot starts with no task and the orchestrator requeues it.
@@ -132,7 +141,8 @@ Needs g++ or clang++ (on Windows, MSYS2's `mingw-w64-ucrt-x86_64-gcc`). `run.sh`
 - the JSON the firmware sends and parses against `types.ts` (see [COMMS-SENSOR.md](COMMS-SENSOR.md));
 - every route, heading and turn against `navigation.ts`, on the farm and on a fixture full of equal-cost ties (`test_host/fixtures/`);
 - the state machine (`nav_core_test.cpp`): command and sensor sequences, with every event checked to go out before its status change;
-- the motion hooks (`motion_test.cpp`): the drive commands they send and each fault.
+- the motion hooks (`motion_test.cpp`): the drive commands they send and each fault;
+- the survival overrides (`survival_test.cpp`): each battery threshold in each status, and the obstacle events.
 
 ## Libraries
 

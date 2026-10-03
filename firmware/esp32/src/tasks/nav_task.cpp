@@ -14,6 +14,7 @@
 #include "../log.h"
 #include "../nav/motion.h"
 #include "../nav/nav_core.h"
+#include "../nav/survival.h"
 #include "../types.h"
 #include "../utils/nav_helpers.h"
 
@@ -173,6 +174,7 @@ void show_status_led(Adafruit_NeoPixel& led, const NavCore& core, const QueueOut
 void nav_task(void* /*param*/) {
   QueueOutput out;
   NavCore core(out);
+  Survival survival(core);
   SensorData sensors = {};
   sensors.obstacle_front_cm = NAN;
   sensors.obstacle_rear_cm = NAN;
@@ -196,6 +198,10 @@ void nav_task(void* /*param*/) {
   for (;;) {
     uint32_t now = millis();
 
+    // Survival overrides first, on the last loop's readings (one loop old).
+    bool ahead_blocked = core.reversing() ? g_obstacle_rear_flag : g_obstacle_front_flag;
+    g_motor_kill_flag = survival.check(sensors.battery_pct, ahead_blocked, now);
+
     // Every reading, in order, so no tag arrival is skipped. tag_seq still
     // shows an arrival whose reading was dropped from a full queue.
     SensorData d;
@@ -218,7 +224,6 @@ void nav_task(void* /*param*/) {
     while (xQueueReceive(g_command_queue, &cmd, 0) == pdTRUE) core.on_command(cmd, now);
 
     core.tick(now);
-    bool ahead_blocked = core.reversing() ? g_obstacle_rear_flag : g_obstacle_front_flag;
     const char* fault = out.motion.check(now, ahead_blocked || g_motor_kill_flag);
     if (fault) core.fault(fault);
 
