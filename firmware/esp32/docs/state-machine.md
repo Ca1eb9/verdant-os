@@ -15,7 +15,6 @@ stateDiagram-v2
     [*] --> initializing : boot
 
     initializing --> idle : first known tag read
-    initializing --> en_route : first known tag read,<br/>task restored from NVS
 
     idle --> en_route : navigate
     en_route --> en_route : tag read - update node and heading
@@ -60,7 +59,7 @@ stateDiagram-v2
     error --> manual : jog or Bluetooth input
     DockTrip --> manual : Bluetooth input
     manual --> manual : jog or input - drive 500 ms
-    manual --> OnTask : resume or timeout - re-localize,<br/>re-plan and continue the task
+    manual --> OnTask : resume or timeout - re-plan from<br/>current_node and continue the task
     manual --> DockTrip : resume or timeout - was on a dock trip
     manual --> stopped : timeout - was stopped
     manual --> idle : no task, or target<br/>unreachable [task_failed]

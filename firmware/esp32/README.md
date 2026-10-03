@@ -24,33 +24,31 @@ Make sure your ESP32 is connected via USB before uploading.
 firmware/
 ├── platformio.ini          # Board config, libraries, build settings
 ├── src/
-│   ├── main.cpp            # setup() and loop() — task creation, queue setup
+│   ├── main.cpp            # setup(): queues + the four tasks; loop() does nothing
+│   ├── config.h            # Every pin, threshold and timing constant
+│   ├── types.h             # Queue structs + shared flags: the task interfaces
+│   ├── globals.cpp         # Queue handles + shared flags, create_queues()
+│   ├── graph.h             # Flash graph types
+│   ├── graph.cpp           # GENERATED from topology.json (tools/gen_graph.mjs)
+│   ├── log.h               # LOG(tag, fmt, ...) serial logger
+│   ├── secrets.example.h   # Copy to secrets.h (gitignored) for WiFi creds
 │   ├── tasks/
-│   │   ├── motor_task.cpp      # Motor control — highest priority
-│   │   ├── motor_task.h
-│   │   ├── sensor_task.cpp     # RFID, battery ADC, obstacle
-│   │   ├── sensor_task.h
-│   │   ├── nav_task.cpp        # State machine, path following
-│   │   ├── nav_task.h
-│   │   ├── comms_task.cpp      # WiFi, MQTT pub/sub
-│   │   └── comms_task.h
-│   ├── utils/
-│   │   ├── nav_helpers.cpp        # On-board pathfinding
-│   │   └── nav_helpers.h
-│   └── config.h                # WiFi creds, MQTT broker IP, pin definitions,
-│                               # battery thresholds, robot ID, dock node ID
-│   └── types.h                 # Shared structs: SensorData, DriveCommand,
-│                               # Command, TelemetryMsg, RobotEvent
-│   ├── graph.cpp               # Farm topology stored in flash
-│   ├── graph.h
-│   ├── globals.cpp             # Queue handles + shared flags, create_queues()
-│   ├── log.h                   # LOG(tag, fmt, ...) serial logger
-│   ├── secrets.example.h       # Copy to secrets.h (gitignored) for WiFi creds
+│   │   ├── motor_task.*        # Motors (highest priority); placeholder for now
+│   │   ├── sensor_task.*       # RFID, battery ADC, obstacle
+│   │   ├── nav_task.*          # Runs the state machine on the queues
+│   │   └── comms_task.*        # WiFi, MQTT pub/sub
+│   ├── nav/
+│   │   ├── nav_core.*          # Robot state machine (pure C++, host-tested)
+│   │   └── task_context.h      # Current/kept task, stop latch, paused status
+│   ├── utils/nav_helpers.*     # Dijkstra, heading, turns (match navigation.ts)
 │   ├── comms/comms_json.*      # JSON <-> struct, matches @farm/shared types
 │   ├── drivers/                # RFID reader, VL53L4CX ToF, battery ADC
-│   └── bench/bench_main.cpp    # `bench` env: test comms + sensor tasks alone
-├── test_host/                  # Laptop tests; checks JSON against types.ts
-├── COMMS-SENSOR.md             # Comms + sensor task design, wiring, testing
+│   ├── bench/bench_main.cpp    # `bench` env: test comms + sensor tasks alone
+│   └── wifitest/               # `wifitest` env: WiFi diagnostics
+├── tools/gen_graph.mjs     # topology.json -> src/graph.cpp
+├── test_host/              # Laptop tests (see below)
+├── docs/state-machine.md   # Robot state machine diagrams
+├── COMMS-SENSOR.md         # Comms + sensor task design, wiring, testing
 └── README.md
 ```
 
@@ -59,7 +57,73 @@ firmware/
 - **`config.h`** — all constants: WiFi SSID/password, broker IP, pin numbers, battery thresholds, timing intervals, robot ID. Nothing should be hardcoded elsewhere.
 - **`types.h`** — the structs that pass through FreeRTOS queues between tasks. Every task includes this file. JSON field names in the comms task must match the TypeScript types in `@farm/shared`.
 - **`tasks/`** — one file per FreeRTOS task. Each task is a standalone function that runs in an infinite loop. Tasks communicate only through queues and shared volatile flags, never by calling each other's functions.
-- **`main.cpp`** — creates queues, creates tasks with `xTaskCreatePinnedToCore()`, and nothing else. `loop()` is empty.
+- **`main.cpp`** — creates queues, creates tasks with `xTaskCreatePinnedToCore()`, and nothing else. `loop()` deletes itself; all logic runs in tasks.
+- **`nav/`, `utils/`, `comms/`** — logic with no Arduino or FreeRTOS calls, so `test_host/` can run it on a laptop.
+
+## Robot state machine
+
+The contract with the orchestrator is [docs/firmware-architecture.md](../../docs/firmware-architecture.md); the diagrams are in [docs/state-machine.md](docs/state-machine.md). `nav/nav_core` implements it. The nav task feeds it tags, battery readings, commands and the time, and it reports through a `NavOutput`: events, and motion hooks the nav task turns into `DriveCommand`s.
+
+Hooks and inputs still owned by later work (placeholders for now):
+
+| Hook / input | Owner |
+|---|---|
+| `follow_edge`, `creep`, `fault()` (missed tag) | RFID navigation |
+| `survival_return()`, battery and obstacle events | Survival overrides |
+| `start_docking`, `on_charge_contact()` | Dock sequence |
+| `motor_task` | Motor control |
+
+Task state is RAM only: the robot never writes to flash. A rebooted robot starts with no task and the orchestrator requeues it.
+
+## Status LED
+
+The onboard NeoPixel (GPIO38) shows the robot's state: colour is the status, the animation is the detail, and short flashes show what just happened. `show_status_led()` in `tasks/nav_task.cpp`; timings and brightness in `config.h`.
+
+| Status | LED |
+|---|---|
+| `initializing` | White, slow breathe |
+| `idle` | Green, dim |
+| `en_route` | Blue |
+| `working` | Cyan (water), magenta (grow), yellow (harvest), green (wait); dim to full over the action |
+| `returning_to_dock` | Amber |
+| `docking` | Amber, fast blink |
+| `charging` | Breathes, red to green with battery % |
+| `stopped` | Red, dim |
+| `error` | Red, fast blink |
+| `manual` | Purple, bright flash on each jog |
+
+| Flash | Meaning |
+|---|---|
+| White blip | Known tag read |
+| Red blip | Tag not in `topology.json` |
+| Two dim white blips | Command ignored (the serial log says why) |
+| Dark gap every 2 s | MQTT offline |
+| Orange blink while moving | Obstacle flag set |
+| Amber blip every 5 s | Battery at or below 20% |
+
+## Flash graph
+
+`src/graph.cpp` is generated from `farm-controller/topology.json`, keeping node and edge order exactly so on-board routes match the orchestrator's, ties included. After changing `topology.json`:
+
+```bash
+cd firmware/esp32 && node tools/gen_graph.mjs
+```
+
+and commit both files. The host tests fail if they're out of sync.
+
+## Host tests (no ESP32)
+
+```bash
+npm install && npm run build:shared        # once, at the repo root
+cd firmware/esp32 && pio run -e bench      # once, downloads ArduinoJson
+cd test_host && ./run.sh
+```
+
+Needs g++ or clang++ (on Windows, MSYS2's `mingw-w64-ucrt-x86_64-gcc`). `run.sh` checks:
+
+- the JSON the firmware sends and parses against `types.ts` (see [COMMS-SENSOR.md](COMMS-SENSOR.md));
+- every route, heading and turn against `navigation.ts`, on the farm and on a fixture full of equal-cost ties (`test_host/fixtures/`);
+- the state machine (`nav_core_test.cpp`): command and sensor sequences, with every event checked to go out before its status change.
 
 ## Libraries
 

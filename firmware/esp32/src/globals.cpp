@@ -15,6 +15,7 @@ QueueHandle_t g_event_queue = nullptr;
 volatile bool g_obstacle_front_flag = false;
 volatile bool g_obstacle_rear_flag = false;
 volatile bool g_motor_kill_flag = false;
+volatile uint32_t g_drive_done_seq = 0;
 volatile bool g_mqtt_connected = false;
 volatile uint32_t g_last_command_ms = 0;
 

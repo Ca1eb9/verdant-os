@@ -60,6 +60,9 @@ constexpr int PIN_TOF_REAR_XSHUT = -1;
 // Battery voltage divider tap
 constexpr int PIN_BATTERY_ADC = 4;
 
+// Onboard NeoPixel (GPIO38 on DevKitC-1 v1.1 boards)
+constexpr int PIN_STATUS_LED = 38;
+
 // ---- RFID (PN532) ---------------------------------------------------------------
 
 constexpr uint16_t RFID_READ_TIMEOUT_MS = 30;   // max time one poll may block
@@ -94,10 +97,56 @@ constexpr uint32_t BATTERY_PERIOD_MS = 500;
 constexpr uint32_t SENSOR_PERIOD_MS = 20;       // sensor loop (50 Hz)
 constexpr uint32_t SENSOR_REPORT_MS = 100;      // push SensorData at least this often
 
+// ---- Navigation task (docs/firmware-architecture.md) -------------------------------
+
+constexpr uint32_t NAV_LOOP_MS = 20;            // nav task tick
+// Also sent right away on a status or node change. Must stay well below the
+// orchestrator's command_ack_timeout_ms (5000).
+constexpr uint32_t TELEMETRY_PERIOD_MS = 1000;
+
+// TBD: tune on the real farm.
+constexpr uint32_t MISSED_TAG_TIMEOUT_MS = 5000;   // no next tag this long while driving: error
+constexpr uint32_t PATH_BLOCKED_TIMEOUT_MS = 10000; // obstacle this long: path_blocked
+
+// Used when a navigate has no duration_ms. With no duration, idle completes
+// right after task_started.
+constexpr uint32_t DEFAULT_WATER_MS = 60000;
+constexpr uint32_t DEFAULT_GROW_MS = 600000;
+constexpr uint32_t DEFAULT_HARVEST_MS = 0;       // TBD: harvest isn't specified yet
+constexpr uint32_t DEFAULT_IDLE_MS = 0;
+
+// ---- Survival overrides -------------------------------------------------------------
+// Each level applies at or below its value. The forced return sits below the
+// orchestrator's battery_low_pct (20), so the orchestrator handles normal
+// charging. A stop beats the forced return; only the motor cutoff applies
+// to a stopped robot.
+
+constexpr float BATTERY_WARN_PCT = 20.0f;       // battery_low
+constexpr float BATTERY_RETURN_PCT = 15.0f;     // battery_critical, go to dock
+constexpr float BATTERY_CUTOFF_PCT = 5.0f;      // kill motors
+constexpr float CHARGE_COMPLETE_PCT = 95.0f;    // matches orchestrator charge_complete_pct
+
+// ---- Manual control -----------------------------------------------------------------
+
+constexpr uint32_t JOG_PULSE_MS = 500;          // each jog drives this long from receipt
+constexpr int16_t JOG_SPEED = 120;              // TBD: tune on the robot (0..255)
+constexpr uint32_t MANUAL_TIMEOUT_MS = 5000;    // leave manual after this long without input
+
+// ---- Status LED (README "Status LED") ----------------------------------------------
+
+constexpr uint8_t STATUS_LED_BRIGHTNESS = 40;   // 0-255 cap, so it isn't blinding on the bench
+constexpr uint32_t LED_BREATHE_MS = 2000;       // one breath (initializing, charging)
+constexpr uint32_t LED_BLINK_MS = 125;          // half a blink: 4 Hz (docking, error, obstacle)
+constexpr uint32_t LED_FLASH_MS = 100;          // one blip (tag read, jog, ignored command)
+constexpr uint32_t LED_OFFLINE_EVERY_MS = 2000; // MQTT down: dark gap this often
+constexpr uint32_t LED_BATTERY_WARN_EVERY_MS = 5000;  // battery low: amber blip this often
+
 // ---- Queue depths ------------------------------------------------------------------
 
 constexpr uint8_t SENSOR_QUEUE_LEN = 8;
-constexpr uint8_t DRIVE_QUEUE_LEN = 4;
+// The motor task only runs the newest command, so the drive queue is a
+// one-slot mailbox (xQueueOverwrite): a halt can never be dropped as full.
+constexpr uint8_t DRIVE_QUEUE_LEN = 1;
 constexpr uint8_t COMMAND_QUEUE_LEN = 4;
 constexpr uint8_t TELEMETRY_QUEUE_LEN = 5;
 constexpr uint8_t EVENT_QUEUE_LEN = 16;         // events wait here while offline
@@ -113,5 +162,7 @@ constexpr uint8_t PRIO_COMMS = 1;
 constexpr int CORE_REALTIME = 1;
 constexpr int CORE_NETWORK = 0;
 
+constexpr uint32_t STACK_MOTOR = 4096;
 constexpr uint32_t STACK_SENSOR = 6144;
+constexpr uint32_t STACK_NAV = 8192;            // TaskContext + path planning scratch
 constexpr uint32_t STACK_COMMS = 8192;

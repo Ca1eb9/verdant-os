@@ -8,10 +8,6 @@
 // Enum values mirror farm-controller/shared/src/types.ts. The comms task
 // converts them to the exact JSON strings the Pi services expect
 // (see comms/comms_json.cpp). If types.ts changes, update both files.
-//
-// STATUS: proposed by Jameson for Sprint 1 so the comms + sensor tasks have
-// something concrete to code against. Caleb owns the final shape: rename or
-// extend freely, but keep comms_json.cpp in sync.
 
 #pragma once
 
@@ -107,15 +103,29 @@ struct SensorData {
 };
 
 // ---- nav task -> motor task (g_drive_queue) ---------------------------------
-// Draft only: the motor task is Sprint 2 and depends on the ME team's motors.
+// The motor task runs the newest command until a new one replaces it. Every
+// cycle it stops on g_motor_kill_flag, and while driving on the obstacle flag
+// for the side it's driving toward: front when left_speed + right_speed > 0,
+// rear when < 0. A pivot moves toward neither side, so no obstacle flag
+// applies.
+//
+// A Drive with duration_ms stops by itself when the time runs out, so a jog
+// pulse ends even if the nav task stalls. When a Turn or a timed Drive
+// finishes, the motor task sets g_drive_done_seq to its seq.
 
-enum class DriveMode : uint8_t { Stop, Drive, Turn };
+enum class DriveMode : uint8_t {
+  Stop,   // motors off
+  Drive,  // left_speed / right_speed
+  Turn,   // pivot in place by `turn`; the motor task owns the calibration
+};
 
 struct DriveCommand {
+  uint32_t seq;          // nav increments it for every command it sends
   DriveMode mode;
-  int16_t left_speed;   // -255..255, used when mode == Drive
-  int16_t right_speed;  // -255..255, used when mode == Drive
-  Turn turn;            // used when mode == Turn
+  int16_t left_speed;    // -255..255, Drive only
+  int16_t right_speed;   // -255..255, Drive only
+  Turn turn;             // Turn only: Right, Left or UTurn
+  uint32_t duration_ms;  // Drive only: stop after this long; 0 = until replaced
 };
 
 // ---- comms task -> nav task (g_command_queue) --------------------------------
@@ -175,7 +185,7 @@ struct RobotEventMsg {
 #include <freertos/queue.h>
 
 extern QueueHandle_t g_sensor_queue;     // SensorData    sensor -> nav
-extern QueueHandle_t g_drive_queue;      // DriveCommand  nav    -> motor
+extern QueueHandle_t g_drive_queue;      // DriveCommand  nav    -> motor (mailbox)
 extern QueueHandle_t g_command_queue;    // Command       comms  -> nav
 // Comms always publishes queued events before queued telemetry, so a status
 // change can never reach the Pi ahead of the event that caused it.
@@ -189,6 +199,8 @@ extern QueueHandle_t g_event_queue;      // RobotEventMsg nav    -> comms
 extern volatile bool g_obstacle_front_flag;  // set/cleared by sensor task
 extern volatile bool g_obstacle_rear_flag;   // set/cleared by sensor task
 extern volatile bool g_motor_kill_flag;  // set by survival overrides (nav)
+// seq of the last Turn or timed Drive the motor task finished.
+extern volatile uint32_t g_drive_done_seq;
 
 // Link state, for diagnostics. There is no Pi heartbeat watchdog: losing the
 // Pi never sends the robot to the dock (docs/firmware-architecture.md).
