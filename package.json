@@ -10,6 +10,8 @@
     "sim:dev": "npm -w @farm/simulator run dev",
     "ingest": "npm -w @farm/ingester run start",
     "ingest:dev": "npm -w @farm/ingester run dev",
+    "alert": "npm -w @farm/alert-engine run start",
+    "alert:dev": "npm -w @farm/alert-engine run dev",
     "orch": "npm -w @farm/orchestrator run start",
     "orch:dev": "npm -w @farm/orchestrator run dev",
     "typecheck": "npm run typecheck --workspaces --if-present"

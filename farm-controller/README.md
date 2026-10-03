@@ -125,7 +125,7 @@ farm-controller/
 ├── simulator/           # Fake ESP32 robot for testing
 ├── ingester/            # Telemetry → SQLite recorder
 ├── orchestrator/        # Robot state, task queue, commands
-├── alert-engine/        # (to be built) Threshold monitoring
+├── alert-engine/        # Telemetry threshold monitoring
 ├── supabase-bridge/     # (to be built) Cloud sync
 ├── dashboard-api/       # (to be built) REST API for dashboard
 ├── topology.json        # Farm layout (nodes + edges)
@@ -177,3 +177,23 @@ mosquitto_pub -t 'farm/robot/robot-1/telemetry' -m '{"robot_id":"robot-1","statu
 4. Connect to MQTT using `createMqttClient()` from the shared package
 5. Add a run script to the root `package.json` if convenient
 6. Rebuild shared if you've added new types: `npm -w @farm/shared run build`
+
+### Alert engine
+
+The alert engine subscribes to robot, shelf, and elevator telemetry, then
+publishes `FarmAlert` messages to `farm/alerts` when a configured numeric
+metric falls outside its accepted range. Repeated alerts for the same device
+and metric are suppressed for the configured cooldown; returning to the valid
+range resets the cooldown state.
+
+Edit `alert-engine/config.json` to set thresholds and `cooldown_ms`, then run:
+
+> The checked-in thresholds are example values only. Confirm the exact safe
+> operating ranges with the team before deploying the alert engine.
+
+```bash
+npm run alert
+```
+
+Use `BROKER_URL` to select another MQTT broker or `CONFIG_PATH` to load a
+different JSON configuration file.
