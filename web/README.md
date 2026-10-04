@@ -39,6 +39,12 @@ npm run build
 npm run start
 ```
 
+## Live Farm Data On FarmNet
+
+Set `NEXT_PUBLIC_MQTT_WS_URL` (for example `ws://192.168.4.1:9001`, Mosquitto's WebSocket listener on the Pi) before `npm run dev` or `npm run build` to show live robots from MQTT and send commands, jog included, straight to the farm (`src/lib/farm/local-source.ts`). It's read at build time. Without it the app uses the default source. For the command history, also set `NEXT_PUBLIC_DASHBOARD_API_URL` to the Pi's Dashboard API (`GET /commands`, see `farm-controller/README.md`); until that exists, leave it unset and the history stays empty. The map uses the layout the orchestrator publishes, so start the orchestrator too.
+
+The header pill shows the farm connection, never the browser's network: "Connected" while the active data source reaches the farm (the MQTT broker here; the Supabase bridge's presence remotely, once the remote source exists), "Connecting" on the first attempt, and "Disconnected" otherwise, with a banner on every page saying why. Data sources report it through `FarmDataSource.subscribeConnection()`.
+
 ## Verification
 
 Run the full handoff check before opening a pull request or handing off the repo:

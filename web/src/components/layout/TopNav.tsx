@@ -2,37 +2,30 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { isActive, NAV_ITEMS } from "@/components/layout/nav-items";
 import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 import { AssetImage } from "@/components/ui/AssetImage";
+import { useFarmConnection } from "@/hooks/useFarmConnection";
 import { FARMS } from "@/lib/mock-data";
 import styles from "@/components/layout/TopNav.module.css";
 
 const LOGO_FALLBACK = "\uD83C\uDF3F";
 
-function useNetworkOnline() {
-  const [online, setOnline] = useState(true);
-
-  useEffect(() => {
-    const sync = () => setOnline(window.navigator.onLine);
-    sync();
-    window.addEventListener("online", sync);
-    window.addEventListener("offline", sync);
-    return () => {
-      window.removeEventListener("online", sync);
-      window.removeEventListener("offline", sync);
-    };
-  }, []);
-
-  return online;
-}
+// The farm connection, not the browser's network: being online is no use
+// if the farm can't be reached.
+const NET_LABEL = { connected: "Connected", connecting: "Connecting", offline: "Disconnected" };
+const NET_CLASS = {
+  connected: styles.netOnline,
+  connecting: styles.netConnecting,
+  offline: styles.netOffline,
+};
 
 export function TopNav() {
   const pathname = usePathname();
   const { activeFarmId, setActiveFarmId } = useSelectedFarm();
-  const online = useNetworkOnline();
+  const connection = useFarmConnection();
+  const state = connection?.state ?? "connecting";
 
   return (
     <header className={styles.wrap}>
@@ -65,9 +58,12 @@ export function TopNav() {
               </option>
             ))}
           </select>
-          <span className={`${styles.netBadge} ${online ? styles.netOnline : styles.netOffline}`}>
+          <span
+            className={`${styles.netBadge} ${NET_CLASS[state]}`}
+            title={`Farm connection: ${connection?.state === "connected" ? "connected" : connection?.reason ?? "connecting…"}`}
+          >
             <span className="statusDot" />
-            {online ? "Online" : "Offline"}
+            {NET_LABEL[state]}
           </span>
           <InstallAppButton className={styles.installButton} />
         </div>
