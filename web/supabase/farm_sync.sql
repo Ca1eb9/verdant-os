@@ -1,8 +1,12 @@
 -- What the Supabase bridge (farm-controller/supabase-bridge) mirrors from
 -- the farm's MQTT bus, for the remote dashboard. It also writes the shelf
--- readings (farm/shelf/+/sensors) into sensor_events. Run after
+-- readings (farm/shelf/+/sensors) into sensor_events. Run after farms.sql,
 -- sensor_events.sql and remote_commands.sql (docs/SUPABASE-SETUP.md). Safe to
 -- run again.
+--
+-- Every row has the farm_id of the bridge that wrote it: one project serves
+-- every farm, and MQTT itself carries no farm id (one Pi, one broker, one
+-- farm). Robot ids are only unique within a farm.
 --
 -- Columns follow farm-controller/shared/src/types.ts. Times in bigint are
 -- Unix ms: `timestamp` is the sender's (a robot's is its uptime, there's no
@@ -19,6 +23,7 @@
 -- (docs/SUPABASE-SETUP.md, "Size"), so this isn't every message.
 create table if not exists public.robot_telemetry (
   id bigint generated always as identity primary key,
+  farm_id text not null references public.farms (id),
   robot_id text not null,
   status text not null,
   current_node text,
@@ -35,22 +40,25 @@ create table if not exists public.robot_telemetry (
   created_at timestamptz not null default now()
 );
 create index if not exists robot_telemetry_robot_idx
-  on public.robot_telemetry (robot_id, created_at desc);
+  on public.robot_telemetry (farm_id, robot_id, created_at desc);
 
 -- RobotStateUpdate from farm/robot/+/state (the orchestrator's view: task,
--- planned path, "lost"). One row per robot, upserted.
+-- planned path, "lost"). One row per robot, upserted on (farm_id, robot_id).
 create table if not exists public.robot_state (
-  robot_id text primary key,
+  farm_id text not null references public.farms (id),
+  robot_id text not null,
   status text not null,
   task jsonb,
   expected_path jsonb not null default '[]'::jsonb,
   "timestamp" bigint not null,
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  primary key (farm_id, robot_id)
 );
 
 -- FarmAlert from farm/alerts.
 create table if not exists public.alerts (
   alert_id text primary key,
+  farm_id text not null references public.farms (id),
   severity text not null,
   source text not null,
   source_type text not null,
@@ -61,11 +69,11 @@ create table if not exists public.alerts (
   "timestamp" bigint not null,
   created_at timestamptz not null default now()
 );
-create index if not exists alerts_created_at_idx on public.alerts (created_at desc);
+create index if not exists alerts_farm_idx on public.alerts (farm_id, created_at desc);
 
--- FarmTopology from farm/system/topology (retained). A single row.
+-- FarmTopology from farm/system/topology (retained). One row per farm.
 create table if not exists public.farm_topology (
-  id smallint primary key default 1 check (id = 1),
+  farm_id text primary key references public.farms (id),
   topology jsonb not null,
   updated_at timestamptz not null default now()
 );
@@ -103,9 +111,10 @@ begin
 end $$;
 
 -- Private channels only (Realtime settings: "Allow public access" off).
--- The dashboard may join "farm-data" (table changes) and "farm-status"
--- (the bridge's presence) and listen. Nothing here lets it send or track:
--- only the bridge's secret key, which bypasses RLS, can mark the farm online.
+-- The dashboard may join "farm-data" (table changes, filtered to its farm with
+-- farm_id=eq.<id>) and "farm-status" (each bridge's presence, keyed by its
+-- farm id) and listen. Nothing here lets it send or track: only a bridge's
+-- secret key, which bypasses RLS, can mark a farm online.
 drop policy if exists "Dashboard listens" on realtime.messages;
 create policy "Dashboard listens" on realtime.messages
   for select to anon, authenticated

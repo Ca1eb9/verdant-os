@@ -7,7 +7,6 @@ import { isActive, NAV_ITEMS } from "@/components/layout/nav-items";
 import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 import { AssetImage } from "@/components/ui/AssetImage";
 import { useFarmConnection } from "@/hooks/useFarmConnection";
-import { FARMS } from "@/lib/mock-data";
 import styles from "@/components/layout/TopNav.module.css";
 
 const LOGO_FALLBACK = "\uD83C\uDF3F";
@@ -23,7 +22,7 @@ const NET_CLASS = {
 
 export function TopNav() {
   const pathname = usePathname();
-  const { activeFarmId, setActiveFarmId } = useSelectedFarm();
+  const { farms, activeFarmId, setActiveFarmId, locked, loading } = useSelectedFarm();
   const connection = useFarmConnection();
   const state = connection?.state ?? "connecting";
 
@@ -45,14 +44,18 @@ export function TopNav() {
         </Link>
 
         <div className={styles.actions}>
+          {/* On FarmNet the dashboard is its Pi's farm; remotely, any farm in Supabase */}
           <select
             id="active-farm"
             className={`controlSelect ${styles.farmSelect}`}
-            value={activeFarmId}
+            value={activeFarmId ?? ""}
             onChange={(event) => setActiveFarmId(event.target.value)}
+            disabled={locked || farms.length === 0}
+            title={locked ? "This dashboard runs on this farm's Pi" : undefined}
             aria-label="Active farm"
           >
-            {FARMS.map((option) => (
+            {farms.length === 0 ? <option value="">{loading ? "Loading farms…" : "No farms"}</option> : null}
+            {farms.map((option) => (
               <option key={option.id} value={option.id}>
                 {option.name}
               </option>

@@ -77,7 +77,7 @@ sudo nano /etc/verdant/dashboard.env
 sudo nano /etc/verdant/shelf-bridge-config.json
 ```
 
-In `dashboard.env`, set `OPERATOR_KEY` (the dashboard asks for it before sending robot commands; `openssl rand -hex 16` makes a good one) and the Supabase values. `NEXT_PUBLIC_MQTT_WS_URL` (the broker's WebSocket listener) gives the dashboard live farm data on FarmNet; the example's `ws://192.168.4.1:9001` is right for the setup in [WIFI-SETUP.md](WIFI-SETUP.md). It's fixed when the dashboard is built, so after changing it run the deploy script, not just a restart.
+In `dashboard.env`, set `OPERATOR_KEY` (the dashboard asks for it before sending robot commands; `openssl rand -hex 16` makes a good one) and the Supabase values. `NEXT_PUBLIC_MQTT_WS_URL` (the broker's WebSocket listener) gives the dashboard live farm data on FarmNet; the example's `ws://192.168.4.1:9001` is right for the setup in [WIFI-SETUP.md](WIFI-SETUP.md). Set `NEXT_PUBLIC_FARM_ID` and `NEXT_PUBLIC_FARM_NAME` to this farm's row in Supabase's `farms` table ([SUPABASE-SETUP.md](SUPABASE-SETUP.md)): the dashboard shows only this farm. These are fixed when the dashboard is built, so after changing them run the deploy script, not just a restart.
 
 In `shelf-bridge-config.json`, set each shelf's `port` to its node's stable path (plug the Uno in, then `ls /dev/serial/by-id/`) and its pH calibration ([shelf-sensors.md](shelf-sensors.md#ph-calibration)). This copy belongs to this Pi; the repo's file is only the template, and a deploy never touches this one. The service can open serial ports through the `dialout` group (set in its unit).
 
@@ -223,5 +223,6 @@ SD cards fail from sudden power loss during a write and from wear. With this set
 | Robot commands fail with "Remote commands are turned off" | `OPERATOR_KEY` is empty in `/etc/verdant/dashboard.env`. Set it, then `sudo systemctl restart farm-dashboard`. |
 | Shelf bridge logs `can't open /dev/...` | The node isn't plugged in, or `port` in `/etc/verdant/shelf-bridge-config.json` is wrong (`ls /dev/serial/by-id/`). It keeps retrying every few seconds. |
 | Shelf readings never appear | The node needs the shelf firmware (`firmware/shelf-sensor`); see "What happens when things fail" in [shelf-sensors.md](shelf-sensors.md). |
+| Dashboard says "No farm to show" on FarmNet | `NEXT_PUBLIC_FARM_ID` is empty or not a valid id (lowercase letters, digits, dashes) in `/etc/verdant/dashboard.env`. Set it and rerun the deploy script. |
 | Dashboard says "Disconnected" on FarmNet | Mosquitto is down or its port 9001 listener is missing ([WIFI-SETUP.md](WIFI-SETUP.md) step 5), or `NEXT_PUBLIC_MQTT_WS_URL` is wrong in `/etc/verdant/dashboard.env`; fix it and rerun the deploy script (it's fixed at build time). |
 | Dashboard map shows "Default farm layout" | The orchestrator isn't running, or Mosquitto lost its retained messages (persistence off): restart the orchestrator. |

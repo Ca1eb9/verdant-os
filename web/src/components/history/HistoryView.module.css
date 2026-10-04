@@ -82,6 +82,14 @@
   line-height: 1.35;
 }
 
+.emptyState {
+  margin-top: 1rem;
+  padding: 1rem 1.05rem;
+  display: grid;
+  gap: 0.45rem;
+  border-radius: var(--radius-md);
+}
+
 .chartGrid {
   display: grid;
   grid-template-columns: 1fr;

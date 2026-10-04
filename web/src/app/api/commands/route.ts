@@ -1,6 +1,7 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { FARM_ID_PATTERN } from "@/lib/farms";
 import { getSupabaseReadConfig } from "@/lib/supabase-config";
 import type { CommandRecord } from "@/lib/farm/data-source";
 import type { ActionAtTarget, CommandType, RemoteCommand, RobotCommand, TaskPriority } from "@/lib/farm/types";
@@ -14,6 +15,8 @@ const PRIORITIES: TaskPriority[] = ["low", "normal", "high", "critical"];
 const ACTIONS: ActionAtTarget[] = ["water", "grow", "harvest", "charge", "idle"];
 const ID_PATTERN = /^[A-Za-z0-9._:-]{1,64}$/;
 const MAX_DURATION_MS = 24 * 60 * 60 * 1000;
+// Postgres foreign_key_violation: farm_id isn't in the farms table
+const UNKNOWN_FARM = "23503";
 
 function client(key: string, url: string) {
   return createClient(url, key, {
@@ -38,11 +41,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** Validate the operator's request and build the RobotCommand the farm will receive */
-function parseCommand(body: unknown): { robotId: string; command: RobotCommand } | string {
-  if (!isRecord(body) || !isRecord(body.command)) return "Request body must include robot_id and command.";
-  const { robot_id: robotId } = body;
+function parseCommand(body: unknown): { farmId: string; robotId: string; command: RobotCommand } | string {
+  if (!isRecord(body) || !isRecord(body.command)) return "Request body must include farm_id, robot_id and command.";
+  const { farm_id: farmId, robot_id: robotId } = body;
   const raw = body.command;
 
+  if (typeof farmId !== "string" || !FARM_ID_PATTERN.test(farmId)) return "farm_id is missing or invalid.";
   if (typeof robotId !== "string" || !ID_PATTERN.test(robotId)) return "robot_id is missing or invalid.";
   // too slow and lossy over Supabase; the local data source sends jogs on the farm network
   if (raw.command === "jog") return "Manual driving is only available on the farm network.";
@@ -80,7 +84,7 @@ function parseCommand(body: unknown): { robotId: string; command: RobotCommand }
     }
   }
 
-  return { robotId, command };
+  return { farmId, robotId, command };
 }
 
 export async function GET(request: Request) {
@@ -89,10 +93,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ commands: [], error: "Supabase is not configured." });
   }
 
-  const robotId = new URL(request.url).searchParams.get("robot_id");
+  const params = new URL(request.url).searchParams;
+  const farmId = params.get("farm_id");
+  if (!farmId || !FARM_ID_PATTERN.test(farmId)) {
+    return NextResponse.json({ commands: [], error: "farm_id is missing or invalid." }, { status: 400 });
+  }
+
+  const robotId = params.get("robot_id");
   let query = client(config.key, config.url)
     .from(TABLE)
     .select(COLUMNS)
+    .eq("farm_id", farmId)
     .order("issued_at", { ascending: false })
     .limit(10);
   if (robotId && ID_PATTERN.test(robotId)) query = query.eq("robot_id", robotId);
@@ -128,10 +139,11 @@ export async function POST(request: Request) {
 
   const { data, error: insertError } = await client(config.key, config.url)
     .from(TABLE)
-    .insert({ ...remote, status: "pending" })
+    .insert({ ...remote, farm_id: parsed.farmId, status: "pending" })
     .select(COLUMNS)
     .single<CommandRecord>();
 
+  if (insertError?.code === UNKNOWN_FARM) return error(`No farm "${parsed.farmId}" in Supabase's farms table.`, 400);
   if (insertError) return error(insertError.message, 502);
   return NextResponse.json({ command: data }, { status: 201 });
 }

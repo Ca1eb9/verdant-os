@@ -9,15 +9,8 @@
 // ============================================================
 
 import Database from "better-sqlite3";
-import {
-  type RobotTelemetry,
-  type ElevatorTelemetry,
-  type ShelfSensorData,
-  type RemoteCommand,
-  TOPICS,
-  extractIdFromTopic,
-  createMqttClient,
-} from "@farm/shared";
+import { TOPICS, extractIdFromTopic, createMqttClient } from "@farm/shared";
+import { isCommand, isElevatorTelemetry, isRobotTelemetry, isShelfSensorData } from "./validate.js";
 
 // --- Config --------------------------------------------------
 
@@ -165,17 +158,6 @@ const insertCommand = db.prepare(`
   VALUES (?, ?, ?, ?, ?, ?, ?)
 `);
 
-function isCommand(v: unknown): v is RemoteCommand {
-  if (typeof v !== "object" || v === null) return false;
-  const c = v as Record<string, unknown>;
-  const command = c.command as Record<string, unknown> | null;
-  return typeof c.id === "string" && c.id.length > 0 &&
-    (c.robot_id === undefined || typeof c.robot_id === "string") &&
-    typeof command === "object" && command !== null && typeof command.command === "string" &&
-    typeof c.issued_by === "string" && typeof c.issued_at === "number" &&
-    Number.isFinite(c.issued_at);
-}
-
 // --- Counters for logging ------------------------------------
 
 let counts = { robot: 0, shelf: 0, elevator: 0, command: 0 };
@@ -193,7 +175,11 @@ async function main() {
   console.log(`   Database: ${DB_PATH}\n`);
 
   // --- Robot telemetry ---
-  mqtt.subscribe<RobotTelemetry>(TOPICS.robot.telemetryAll, (msg, topic) => {
+  mqtt.subscribe<unknown>(TOPICS.robot.telemetryAll, (msg, topic) => {
+    if (!isRobotTelemetry(msg)) {
+      console.warn(`Ignoring malformed robot telemetry on ${topic}`);
+      return;
+    }
     // Topic id, same as the orchestrator uses
     const id = extractIdFromTopic(topic) ?? msg.robot_id;
     insertRobot.run(
@@ -220,7 +206,11 @@ async function main() {
   });
 
   // --- Shelf sensors ---
-  mqtt.subscribe<ShelfSensorData>(TOPICS.shelf.sensorsAll, (msg, topic) => {
+  mqtt.subscribe<unknown>(TOPICS.shelf.sensorsAll, (msg, topic) => {
+    if (!isShelfSensorData(msg)) {
+      console.warn(`Ignoring malformed shelf reading on ${topic}`);
+      return;
+    }
     const id = extractIdFromTopic(topic) ?? msg.shelf_id;
     // SQLite has no boolean type
     const levelOk = msg.water_level_ok == null ? null : msg.water_level_ok ? 1 : 0;
@@ -245,7 +235,11 @@ async function main() {
   });
 
   // --- Elevator telemetry ---
-  mqtt.subscribe<ElevatorTelemetry>(TOPICS.elevator.telemetryAll, (msg, topic) => {
+  mqtt.subscribe<unknown>(TOPICS.elevator.telemetryAll, (msg, topic) => {
+    if (!isElevatorTelemetry(msg)) {
+      console.warn(`Ignoring malformed elevator telemetry on ${topic}`);
+      return;
+    }
     const id = extractIdFromTopic(topic) ?? msg.elevator_id;
     insertElevator.run(
       msg.elevator_id,

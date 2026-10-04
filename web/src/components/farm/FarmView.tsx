@@ -3,6 +3,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { ControlPanel } from "@/components/farm/ControlPanel";
 import { FarmMap } from "@/components/farm/FarmMap";
+import { useSelectedFarm } from "@/components/farms/FarmContext";
+import { NoFarmNotice } from "@/components/farms/NoFarmNotice";
 import { useFarmLive } from "@/hooks/useFarmLive";
 import { useRobotRoutes } from "@/hooks/useRobotRoutes";
 import type { RouteDraw } from "@/lib/farm/map/renderer";
@@ -10,6 +12,7 @@ import { dijkstra, resolveNode } from "@/lib/farm/navigation";
 import styles from "@/components/farm/FarmView.module.css";
 
 export function FarmView() {
+  const { farm } = useSelectedFarm();
   const { source, topology, usingDefaultTopology, graph, scene, robots, now } = useFarmLive();
   const routes = useRobotRoutes(graph, robots);
 
@@ -51,6 +54,8 @@ export function FarmView() {
     : usingDefaultTopology
       ? "Waiting for robot telemetry · showing the default farm layout"
       : "Waiting for robot telemetry";
+
+  if (!farm) return <NoFarmNotice title="Farm" />;
 
   return (
     <section className="pageSection">

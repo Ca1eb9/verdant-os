@@ -1,5 +1,5 @@
 export type ConnectionState = "online" | "offline";
-export type LiveStatus = "live" | "stale";
+export type LiveStatus = "live" | "stale" | "waiting";
 export type HistoryRange = "24h" | "72h" | "7d";
 export type FloatSensorState = 0 | 1;
 export type AlertSeverity = "warning" | "critical";
@@ -12,14 +12,26 @@ export type AlertMetric =
   | "water.level"
   | "light.ppfd";
 
+/** A row of Supabase's farms table (or the Pi's own farm on FarmNet) */
 export interface FarmIdentity {
   id: string;
   name: string;
-  zone: string;
-  deviceLabel: string;
-  deviceCount: number;
-  cultivarFocus: string;
-  connectionState: ConnectionState;
+}
+
+/** A farm's latest environment reading. Null where the farm has no such sensor or it didn't read. */
+export interface SensorReading {
+  timestamp: string;
+  device: string | null;
+  airTemperature: number | null;
+  humidity: number | null;
+  pressure: number | null;
+  waterTemperature: number | null;
+  ph: number | null;
+  ec: number | null;
+  /** False when the reservoir is below the float sensor */
+  waterLevelOk: boolean | null;
+  waterLevelText: string | null;
+  ppfd: number | null;
 }
 
 export interface TelemetrySnapshot {

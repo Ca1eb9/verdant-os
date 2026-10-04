@@ -106,10 +106,8 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       return url;
     }
   })();
-  const CONNECTING: FarmConnection = {
-    state: "connecting",
-    reason: `Connecting to the farm's MQTT broker at ${host}…`,
-  };
+  // Reasons are for the operator; the broker's address goes to the console
+  const CONNECTING: FarmConnection = { state: "connecting", reason: "Connecting to the farm…" };
   let connection: FarmConnection = CONNECTING;
   const setConnection = (next: FarmConnection) => {
     connection = next;
@@ -117,8 +115,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
   };
   const OFFLINE: FarmConnection = {
     state: "offline",
-    reason: `Can't reach the farm's MQTT broker at ${host}. Check that this device is on FarmNet ` +
-      "and the Pi is running.",
+    reason: "Make sure this device is on the farm's Wi-Fi.",
   };
   let topology: FarmTopology | null = null;
   const warned = new Set<string>();
@@ -176,7 +173,10 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       client.on("message", onMessage);
       client.on("connect", () => setConnection({ state: "connected" }));
       // Each failed reconnect closes again: stays offline, no flicker to "connecting"
-      client.on("close", () => setConnection(OFFLINE));
+      client.on("close", () => {
+        if (connection.state !== "offline") console.warn(`[local-source] lost the MQTT broker at ${host}`);
+        setConnection(OFFLINE);
+      });
       client.on("error", (err) => console.warn(`[local-source] ${err.message}`));
       client.subscribe([TOPICS.robot.telemetryAll, TOPICS.robot.stateAll, TOPICS.system.topology]);
     } else if (!needed && client) {

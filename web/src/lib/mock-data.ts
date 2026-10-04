@@ -14,34 +14,15 @@ export const HISTORY_RANGE_HOURS: Record<HistoryRange, number> = {
   "7d": 168,
 };
 
+// Generated readings and history for building the dashboard without a farm.
+// Off: the dashboard shows only real data (farms from Supabase or the Pi's
+// own, readings from sensor_events). Turn on to see the UI filled in.
+export const MOCK_DATA_ENABLED = false;
+
 export const FARMS: FarmIdentity[] = [
-  {
-    id: "atlas-north",
-    name: "Arduino Uno R3 Farm",
-    zone: "USB Serial Bench",
-    deviceLabel: "Arduino Uno R3",
-    deviceCount: 1,
-    cultivarFocus: "Live sensor monitoring",
-    connectionState: "online",
-  },
-  {
-    id: "delta-east",
-    name: "Delta Array East",
-    zone: "Queens Corridor B",
-    deviceLabel: "Serial Sensor B4",
-    deviceCount: 9,
-    cultivarFocus: "Basil + Mint",
-    connectionState: "online",
-  },
-  {
-    id: "nova-west",
-    name: "Nova Grow West",
-    zone: "Jersey Module C",
-    deviceLabel: "Serial Sensor C2",
-    deviceCount: 11,
-    cultivarFocus: "Romaine + Arugula",
-    connectionState: "online",
-  },
+  { id: "atlas-north", name: "Arduino Uno R3 Farm" },
+  { id: "delta-east", name: "Delta Array East" },
+  { id: "nova-west", name: "Nova Grow West" },
 ];
 
 function round(value: number, precision = 1) {
@@ -223,6 +204,3 @@ export function buildLiveSensorEvents(farmId: string, frames = 30, now = Date.no
   });
 }
 
-export function getFarmById(farmId: string) {
-  return FARMS.find((farm) => farm.id === farmId) ?? FARMS[0];
-}
