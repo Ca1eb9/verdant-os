@@ -13,6 +13,7 @@ Every service is a **systemd** unit. systemd is built into the OS, so there's no
 | Mosquitto | `mosquitto` | MQTT broker, ports 1883 and 9001 (WebSockets) | — |
 | Orchestrator | `farm-orchestrator` | Robot state, task queue, commands | `/var/lib/verdant/orchestrator-state.json` |
 | Ingester | `farm-ingester` | Records telemetry and operator commands to SQLite | `/var/lib/verdant/farm_telemetry.db` |
+| Shelf bridge | `farm-shelf-bridge` | Reads the shelf sensor node over USB serial and publishes its readings ([shelf-sensors.md](shelf-sensors.md)) | — |
 | Dashboard | `farm-dashboard` | Web app on `http://farmnet.local:3000` | — |
 
 Networks (set up in [WIFI-SETUP.md](WIFI-SETUP.md)):
@@ -40,7 +41,7 @@ sudo apt update && sudo apt full-upgrade -y
 sudo apt install -y git build-essential python3 ufw
 ```
 
-`build-essential` and `python3` are for `better-sqlite3` (the ingester), in case npm has to compile it.
+`build-essential` and `python3` are for `better-sqlite3` (the ingester) and `serialport` (the shelf bridge), in case npm has to compile them.
 
 ### 2. Node.js 22
 
@@ -68,13 +69,19 @@ The services run as `farm`, which can't log in and can only write to its own fol
 
 ```bash
 sudo install -d -m 750 -o root -g farm /etc/verdant
-for f in orchestrator ingester dashboard; do
+for f in orchestrator ingester shelf-bridge dashboard; do
   sudo install -m 640 -o root -g farm /opt/verdant-os/deploy/env/$f.env.example /etc/verdant/$f.env
 done
+sudo install -m 640 -o root -g farm /opt/verdant-os/farm-controller/shelf-bridge-config.json /etc/verdant/shelf-bridge-config.json
 sudo nano /etc/verdant/dashboard.env
+sudo nano /etc/verdant/shelf-bridge-config.json
 ```
 
-In `dashboard.env`, set `OPERATOR_KEY` (the dashboard asks for it before sending robot commands; `openssl rand -hex 16` makes a good one) and the Supabase values. `NEXT_PUBLIC_MQTT_WS_URL` (the broker's WebSocket listener) gives the dashboard live farm data on FarmNet; the example's `ws://192.168.4.1:9001` is right for the setup in [WIFI-SETUP.md](WIFI-SETUP.md). It's fixed when the dashboard is built, so after changing it run the deploy script, not just a restart. The orchestrator and ingester files work as they are.
+In `dashboard.env`, set `OPERATOR_KEY` (the dashboard asks for it before sending robot commands; `openssl rand -hex 16` makes a good one) and the Supabase values. `NEXT_PUBLIC_MQTT_WS_URL` (the broker's WebSocket listener) gives the dashboard live farm data on FarmNet; the example's `ws://192.168.4.1:9001` is right for the setup in [WIFI-SETUP.md](WIFI-SETUP.md). It's fixed when the dashboard is built, so after changing it run the deploy script, not just a restart.
+
+In `shelf-bridge-config.json`, set each shelf's `port` to its node's stable path (plug the Uno in, then `ls /dev/serial/by-id/`) and its pH calibration ([shelf-sensors.md](shelf-sensors.md#ph-calibration)). This copy belongs to this Pi; the repo's file is only the template, and a deploy never touches this one. The service can open serial ports through the `dialout` group (set in its unit).
+
+The orchestrator, ingester and shelf bridge `.env` files work as they are.
 
 These files are readable by root and the `farm` user only. Never copy them into the repo; it's public.
 
@@ -97,7 +104,7 @@ sudo systemctl restart systemd-journald
 sudo bash /opt/verdant-os/scripts/pi-deploy.sh
 ```
 
-The first run takes several minutes, mostly the dashboard build. It installs the unit files, enables them at boot and starts them. It ends by printing each service's status; all three should be `active (running)`.
+The first run takes several minutes, mostly the dashboard build. It installs the unit files, enables them at boot and starts them. It ends by printing each service's status; all four should be `active (running)`.
 
 ### 7. Firewall
 
@@ -139,7 +146,7 @@ sudo reboot
 
 After it's back:
 
-1. `systemctl status mosquitto farm-orchestrator farm-ingester farm-dashboard`: all `active (running)`
+1. `systemctl status mosquitto farm-orchestrator farm-ingester farm-shelf-bridge farm-dashboard`: all `active (running)`
 2. `journalctl -u farm-orchestrator -n 20`: connected to the broker
 3. `curl -sI http://localhost:3000 | head -1`: `HTTP/1.1 200 OK`
 4. `systemctl show -p RuntimeWatchdogUSec`: `14s`
@@ -214,5 +221,7 @@ SD cards fail from sudden power loss during a write and from wear. With this set
 | FarmNet missing after a reboot, or the uplink on the wrong radio | `wlan0` and `wlan1` swapped names. See step 4 of the USB adapter section in [WIFI-SETUP.md](WIFI-SETUP.md#no-ethernet-use-a-usb-wifi-adapter). |
 | Can't SSH over the uplink | The uplink's address changes with DHCP; use `farmnet.local`, or SSH over FarmNet at `192.168.4.1`. |
 | Robot commands fail with "Remote commands are turned off" | `OPERATOR_KEY` is empty in `/etc/verdant/dashboard.env`. Set it, then `sudo systemctl restart farm-dashboard`. |
+| Shelf bridge logs `can't open /dev/...` | The node isn't plugged in, or `port` in `/etc/verdant/shelf-bridge-config.json` is wrong (`ls /dev/serial/by-id/`). It keeps retrying every few seconds. |
+| Shelf readings never appear | The node needs the shelf firmware (`firmware/shelf-sensor`); see "What happens when things fail" in [shelf-sensors.md](shelf-sensors.md). |
 | Dashboard says "Disconnected" on FarmNet | Mosquitto is down or its port 9001 listener is missing ([WIFI-SETUP.md](WIFI-SETUP.md) step 5), or `NEXT_PUBLIC_MQTT_WS_URL` is wrong in `/etc/verdant/dashboard.env`; fix it and rerun the deploy script (it's fixed at build time). |
 | Dashboard map shows "Default farm layout" | The orchestrator isn't running, or Mosquitto lost its retained messages (persistence off): restart the orchestrator. |

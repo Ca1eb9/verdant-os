@@ -1,0 +1,31 @@
+# Shelf bridge: the shelf sensor node (USB serial) to MQTT. See docs/PI-SERVICES.md
+# and docs/shelf-sensors.md.
+[Unit]
+Description=VerdantOS shelf bridge
+# Wants, not Requires: see farm-orchestrator.service
+After=mosquitto.service
+Wants=mosquitto.service
+StartLimitIntervalSec=0
+
+[Service]
+User=farm
+Group=farm
+# Serial ports belong to the dialout group
+SupplementaryGroups=dialout
+WorkingDirectory=/opt/verdant-os/farm-controller/shelf-bridge
+EnvironmentFile=/etc/verdant/shelf-bridge.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /opt/verdant-os/node_modules/tsx/dist/cli.mjs src/index.ts
+Restart=always
+RestartSec=5
+# The service closes its serial ports and the broker connection on SIGINT.
+KillSignal=SIGINT
+TimeoutStopSec=10
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
