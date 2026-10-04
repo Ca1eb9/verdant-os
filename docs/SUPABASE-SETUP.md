@@ -1,6 +1,6 @@
 # Supabase setup
 
-Supabase is the farm's cloud side: the dashboard on Vercel reads farm data from it and sends commands through it, and the Supabase bridge on the Pi keeps it in sync with the farm's MQTT bus. This doc sets up the one team project. About an hour and a quarter, most of it pasting SQL.
+Supabase is the farm's cloud side: the dashboard on Vercel reads farm data from it and sends commands through it, and the Supabase bridge on the Pi keeps it in sync with the farm's MQTT bus. This doc sets up the one team project, which serves every farm: each farm has its own Pi and bridge, and every row carries its `farm_id`. About an hour and a quarter, most of it pasting SQL.
 
 | Who | What |
 |---|---|
@@ -25,11 +25,20 @@ In **SQL Editor**, run these files from the repo, in this order (paste each, **R
 
 | File | Creates |
 |---|---|
+| [`web/supabase/farms.sql`](../web/supabase/farms.sql) | `farms`: one row per farm, the list the dashboard's farm picker shows. Every other table's `farm_id` must name one |
 | [`web/supabase/sensor_events.sql`](../web/supabase/sensor_events.sql) | `sensor_events`: shelf sensor readings, the dashboard's environment feed. The Supabase bridge mirrors them from `farm/shelf/+/sensors` ([shelf-sensors.md](shelf-sensors.md)) |
 | [`web/supabase/remote_commands.sql`](../web/supabase/remote_commands.sql) | `remote_commands`: commands the dashboard sends from anywhere; the bridge relays them to the farm |
 | [`web/supabase/farm_sync.sql`](../web/supabase/farm_sync.sql) | `robot_telemetry`, `robot_state`, `alerts`, `farm_topology` (what the bridge mirrors), Realtime for them, the presence rule and daily cleanup |
 
-Then **Table Editor** should list all six tables, each with RLS enabled.
+Then **Table Editor** should list all seven tables, each with RLS enabled.
+
+**Add each farm** in the SQL editor, one row per farm (one Pi each):
+
+```sql
+insert into public.farms (id, name) values ('atlas', 'Atlas Farm');
+```
+
+The id is lowercase letters, digits and dashes, and never changes: it's what that farm's Pi is configured with (step 5). A Pi whose id has no row here can't write anything, so a typo fails loudly instead of creating a second farm. Add a farm the same way later; the dashboard lists it within seconds.
 
 These files are the contract between the bridge and the dashboard. Change the schema by editing them in a PR, never only in the Supabase UI.
 
@@ -47,6 +56,8 @@ These files are the contract between the bridge and the dashboard. Change the sc
 | Publishable (anon) key | `SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `SUPABASE_ANON_KEY` | — |
 | Secret (service_role) key | `SUPABASE_SERVICE_ROLE_KEY` | — | `SUPABASE_SERVICE_ROLE_KEY` |
 
+Each Pi also names its farm (not a secret): `FARM_ID` in `supabase-bridge.env`, and `NEXT_PUBLIC_FARM_ID` / `NEXT_PUBLIC_FARM_NAME` in `dashboard.env`, all matching its row in `farms`. Vercel needs none: it lists every farm.
+
 Also on Vercel: `OPERATOR_KEY`, the passphrase the dashboard asks for before sending commands (`openssl rand -hex 16`). Without it and the secret key, remote commands are turned off.
 
 - Never put the secret key in a `NEXT_PUBLIC_*` variable: those are built into the page.
@@ -56,18 +67,19 @@ Also on Vercel: `OPERATOR_KEY`, the passphrase the dashboard asks for before sen
 
 ## 6. Check it
 
-1. **Table Editor**: six tables; `remote_commands`, `robot_telemetry` and the rest show "RLS enabled".
+1. **Table Editor**: seven tables; `farms`, `remote_commands`, `robot_telemetry` and the rest show "RLS enabled", and `farms` has a row for each farm.
 2. **Database → Publications → supabase_realtime**: `robot_telemetry`, `robot_state`, `alerts`, `farm_topology` and `remote_commands` are on.
 3. **Integrations → Cron** (or `select jobname, schedule from cron.job;`): four `trim-*` jobs.
 4. The anon key can't write. With `URL` and `ANON` set to the project URL and the publishable key, `curl -X POST "$URL/rest/v1/farm_topology" -H "apikey: $ANON" -H "Authorization: Bearer $ANON" -H "Content-Type: application/json" -d '{"topology":{}}'` returns a row-level security error (the row is otherwise valid, so nothing else can be the reason).
-5. Once Vercel has the keys: sending a command from the dashboard adds a `pending` row to `remote_commands`.
+5. Once Vercel has the keys: the header's farm picker lists your farms, and sending a command adds a `pending` row to `remote_commands` with the selected farm's `farm_id`.
 6. Once the bridge runs: the row turns `sent`, `robot_telemetry`, `robot_state` and `sensor_events` fill, the dashboard's environment feed loads, and the remote dashboard's pill shows **Connected**. A client with only the anon key trying to track presence on `farm-status` is refused.
 
 ## Things to know
 
 - **Free projects pause after about a week without activity.** The bridge keeps the project active once it runs; until then, un-pause it from the dashboard (one click, data kept).
 - **Size.** The free tier has 500 MB. Robots publish telemetry every second, so the bridge sends at most one row per robot every few seconds (configurable), and the cleanup jobs delete telemetry after 14 days, sensor events and commands after 30, alerts after 90. The Pi's SQLite database keeps the full history.
-- **Only the Pi writes farm data to Supabase** (the dashboard's command route only adds `remote_commands` rows). The old laptop serial bridge is retired: the shelf sensors go through the Pi's shelf bridge and MQTT like everything else.
+- **Multiple farms.** One project, one `farms` row and one Pi per farm. MQTT carries no farm id; each farm's bridge stamps its `FARM_ID` on what it writes and relays only its own farm's commands. Remotely the dashboard can switch between farms; on FarmNet it shows only its Pi's farm. Robot ids only need to be unique within a farm.
+- **Only the farms' Pis write farm data to Supabase** (the dashboard's command route only adds `remote_commands` rows). The old laptop serial bridge is retired: the shelf sensors go through the Pi's shelf bridge and MQTT like everything else.
 - **Anyone with the dashboard's URL can read farm data.** The publishable key is in the page and RLS allows reads (there's no login). Commands still need `OPERATOR_KEY`, and nothing but the secret key can write.
 - **Backups.** The free tier has no downloadable backups. The schema is in git (step 3) and the Pi keeps the history, so a lost project means recreating it from this doc, not lost data.
 - **Clocks.** `created_at` and `updated_at` are Supabase's clock. Compare ages in SQL with `now()`, never against a robot's or the Pi's clock (e.g. the bridge's stale-command check).

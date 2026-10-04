@@ -4,10 +4,13 @@
 -- marks it 'sent' (or 'failed' with an error) so it is not processed twice.
 --
 -- Rows match RemoteCommand in farm-controller/shared/src/types.ts,
--- plus robot_id so the bridge knows which farm/robot/{id}/command to use.
+-- plus robot_id so the bridge knows which farm/robot/{id}/command to use,
+-- and farm_id: each farm's bridge relays only its own farm's rows. Run after
+-- farms.sql.
 
 create table if not exists public.remote_commands (
   id uuid primary key,
+  farm_id text not null references public.farms (id),
   robot_id text not null,
   command jsonb not null,          -- RobotCommand (includes "immediate")
   issued_by text not null,
@@ -20,10 +23,10 @@ create table if not exists public.remote_commands (
 );
 
 create index if not exists remote_commands_status_idx
-  on public.remote_commands (status, issued_at);
+  on public.remote_commands (farm_id, status, issued_at);
 
 create index if not exists remote_commands_robot_idx
-  on public.remote_commands (robot_id, issued_at desc);
+  on public.remote_commands (farm_id, robot_id, issued_at desc);
 
 alter table public.remote_commands enable row level security;
 

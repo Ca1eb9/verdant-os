@@ -66,8 +66,17 @@ When sources disagree, this order wins: **code contract > design docs > timeline
 - **Elevator nodes are never navigate targets.** Robots only pass through.
 - Dashboard commands on FarmNet are **never queued for a reconnect**: with the
   broker unreachable they fail, so a stop or jog can't arrive late.
+- **One Pi is one farm.** MQTT topics and the firmware carry no farm id; every
+  Supabase row has a `farm_id`, stamped by that farm's Supabase bridge. Remotely
+  the dashboard switches between the farms in Supabase's `farms` table; on
+  FarmNet it shows only its Pi's farm (`NEXT_PUBLIC_FARM_ID`).
+- **Mock data is off** (`MOCK_DATA_ENABLED` in `web/src/lib/mock-data.ts`). The
+  dashboard shows only real data and says when there's none; don't add fallbacks
+  that make up values.
 - The dashboard's connection pill shows the **farm connection** (the MQTT broker on
   FarmNet, the Supabase bridge's presence remotely), never the browser's network.
+  Its reasons are **plain and short** ("Make sure this device is on the farm's
+  Wi-Fi."): no service names, addresses or env vars. Log those to the console.
 
 If one of these blocks your task, raise it; don't work around it.
 
