@@ -198,3 +198,35 @@ From `farm/commands/local` (dashboard on the farm network) and
 | `jog` | Only from `farm/commands/local` and for a known robot; sent straight to it, never queued |
 
 `immediate` is read from the message or from inside `command`.
+
+## 6. Plant scheduler
+
+`src/scheduler.ts`. Each robot carries one plant, listed in `robot_plants`
+(`robot_id`, `plant_type`, `water_node`, `grow_node`), with the care times
+from `plant_schedules`. Every `scheduler_interval_ms` (60 s) it queues at most
+one task per plant, pinned to its robot, with source `scheduler`:
+
+| Order | Rule |
+|---|---|
+| 1 | A scheduler task for this robot is already queued or assigned: nothing |
+| 2 | Its latest scheduler task failed less than `task_retry_delay_ms` ago (from when it failed): nothing |
+| 3 | No `water` care within `water_interval_ms`: `water` at `water_node` for `water_duration_ms`, priority `normal` |
+| 4 | `grow` care over the last `light_interval_ms` adds up to less than `light_duration_ms`: `grow` at `grow_node`, priority `low`, for the light still owed but never past the next watering |
+
+**Care** is a task that completed on this robot (from any source, an
+operator's included), or one of the scheduler's that an operator cancelled: a
+cancel skips that care for one interval (a cancelled `grow` counts as its
+duration of light). Light is credited when the task finishes.
+
+It keeps no state of its own: rules 2 to 4 read the finished tasks and their
+`completed_at` (when they completed, failed or were cancelled), which are
+persisted, so a restart doesn't water twice. Finished tasks stamped after now
+are ignored: the Pi has no clock battery and can start behind after a power
+cut, and at worst that waters once extra. Charging still comes first: the
+queue only assigns care to a charged robot.
+
+At startup each `robot_plants` entry is checked (known plant type with a
+schedule, `water_node` a water node, `grow_node` not an elevator or the dock,
+both reachable from the dock); a bad entry is logged and skipped. If
+`scheduler_interval_ms` or `task_retry_delay_ms` isn't a positive number, the
+scheduler doesn't run at all (logged as an error).

@@ -107,6 +107,9 @@ npm run orch
 - Settings load from `orchestrator-config.json` at startup.
 - It publishes `topology.json` (retained) to `farm/system/topology` at startup,
   for the dashboard's map.
+- The plant scheduler queues water and grow tasks for each robot in
+  `robot_plants` (`orchestrator/docs/state-machine.md`, section 6). Tests:
+  `npm -w @farm/orchestrator test`.
 - Queued, assigned and finished tasks are saved to
   `farm-controller/orchestrator-state.json` (gitignored) and restored on restart.
 - Environment overrides: `BROKER_URL`, `CONFIG_PATH`, `TOPOLOGY_PATH`, `STATE_PATH`.

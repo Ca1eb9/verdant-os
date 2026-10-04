@@ -13,6 +13,8 @@ const DEFAULTS: OrchestratorConfig = {
   max_task_retries: 2,
   task_retry_delay_ms: 60000,
   plant_schedules: [],
+  scheduler_interval_ms: 60000,
+  robot_plants: [],
 };
 
 export function loadConfig(path?: string): OrchestratorConfig {

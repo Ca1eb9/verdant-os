@@ -228,6 +228,7 @@ export interface FarmTask {
   pinned_robot?: string;
   assigned_robot?: string;
   assigned_at?: number;
+  /** When it finished: completed, failed or cancelled */
   completed_at?: number;
   error?: string;
   include_path?: boolean;
@@ -316,6 +317,16 @@ export interface PlantSchedule {
   harvest_after_days?: number;
 }
 
+/** The plant a robot carries (one per robot) and where it's cared for */
+export interface RobotPlant {
+  robot_id: string;
+  plant_type: PlantType;
+  /** A water node */
+  water_node: string;
+  /** Where it sits under the grow light: not an elevator or the dock */
+  grow_node: string;
+}
+
 export interface OrchestratorConfig {
   watchdog_interval_ms: number;
   heartbeat_timeout_ms: number;
@@ -331,4 +342,7 @@ export interface OrchestratorConfig {
   max_task_retries: number;
   task_retry_delay_ms: number;
   plant_schedules: PlantSchedule[];
+  /** How often the plant scheduler checks each plant */
+  scheduler_interval_ms: number;
+  robot_plants: RobotPlant[];
 }
