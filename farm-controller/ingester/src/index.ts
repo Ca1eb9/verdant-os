@@ -1,8 +1,9 @@
 // ============================================================
 // Telemetry ingester
 //
-// Subscribes to all robot, elevator, and shelf sensor telemetry.
-// Logs to console and writes to SQLite for persistence.
+// Subscribes to all robot, elevator, and shelf sensor telemetry, and
+// to operator commands. Logs to console and writes to SQLite for
+// persistence.
 //
 // Run:  npx tsx src/index.ts
 // ============================================================
@@ -12,6 +13,7 @@ import {
   type RobotTelemetry,
   type ElevatorTelemetry,
   type ShelfSensorData,
+  type RemoteCommand,
   TOPICS,
   extractIdFromTopic,
   createMqttClient,
@@ -84,6 +86,20 @@ db.exec(`
     received_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000)
   );
 
+  -- Operator commands from farm/commands/local and /remote. command is the
+  -- RobotCommand as JSON. Jogs aren't kept: one every 500 ms while driving.
+  CREATE TABLE IF NOT EXISTS commands (
+    id TEXT PRIMARY KEY,
+    robot_id TEXT,
+    command TEXT NOT NULL,
+    issued_by TEXT NOT NULL,
+    issued_at INTEGER NOT NULL,
+    channel TEXT NOT NULL,
+    received_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000)
+  );
+
+  -- Sort by received_at: issued_at is the sender's clock (no clock sync)
+  CREATE INDEX IF NOT EXISTS idx_commands_robot ON commands(robot_id, received_at);
   CREATE INDEX IF NOT EXISTS idx_robot_ts ON robot_telemetry(timestamp);
   CREATE INDEX IF NOT EXISTS idx_shelf_ts ON shelf_sensors(timestamp);
   CREATE INDEX IF NOT EXISTS idx_robot_id ON robot_telemetry(robot_id, timestamp);
@@ -120,9 +136,27 @@ const insertElevator = db.prepare(`
   VALUES (?, ?, ?, ?, ?, ?)
 `);
 
+// A redelivered command (same id) is stored once. received_at in ms, not the
+// column default's whole seconds, so commands sort in the order they came.
+const insertCommand = db.prepare(`
+  INSERT OR IGNORE INTO commands (id, robot_id, command, issued_by, issued_at, channel, received_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+`);
+
+function isCommand(v: unknown): v is RemoteCommand {
+  if (typeof v !== "object" || v === null) return false;
+  const c = v as Record<string, unknown>;
+  const command = c.command as Record<string, unknown> | null;
+  return typeof c.id === "string" && c.id.length > 0 &&
+    (c.robot_id === undefined || typeof c.robot_id === "string") &&
+    typeof command === "object" && command !== null && typeof command.command === "string" &&
+    typeof c.issued_by === "string" && typeof c.issued_at === "number" &&
+    Number.isFinite(c.issued_at);
+}
+
 // --- Counters for logging ------------------------------------
 
-let counts = { robot: 0, shelf: 0, elevator: 0 };
+let counts = { robot: 0, shelf: 0, elevator: 0, command: 0 };
 
 // --- Main ----------------------------------------------------
 
@@ -201,13 +235,29 @@ async function main() {
     );
   });
 
+  // --- Operator commands ---
+  mqtt.subscribe<unknown>(TOPICS.commands.all, (msg, topic) => {
+    if (!isCommand(msg)) {
+      console.warn(`Ignoring malformed command on ${topic}`);
+      return;
+    }
+    if (msg.command.command === "jog") return;
+    const channel = topic === TOPICS.commands.local ? "local" : "remote";
+    const { changes } = insertCommand.run(msg.id, msg.robot_id ?? null, JSON.stringify(msg.command),
+      msg.issued_by, msg.issued_at, channel, Date.now());
+    if (!changes) return; // already stored
+    counts.command++;
+    console.log(`Command: ${msg.robot_id ?? "any"} | ${msg.command.command} (${channel})`);
+  });
+
   // --- Stats logging ---
   setInterval(() => {
-    const total = counts.robot + counts.shelf + counts.elevator;
+    const total = counts.robot + counts.shelf + counts.elevator + counts.command;
     if (total > 0) {
       console.log(
         `\nMessages ingested: ${total} total ` +
-        `(robot: ${counts.robot}, shelf: ${counts.shelf}, elevator: ${counts.elevator})\n`
+        `(robot: ${counts.robot}, shelf: ${counts.shelf}, elevator: ${counts.elevator}, ` +
+        `command: ${counts.command})\n`
       );
     }
   }, 1_000);
@@ -215,7 +265,7 @@ async function main() {
   // --- Graceful shutdown ---
   process.on("SIGINT", async () => {
     console.log("\nIngester shutting down");
-    const total = counts.robot + counts.shelf + counts.elevator;
+    const total = counts.robot + counts.shelf + counts.elevator + counts.command;
     console.log(`   Total messages stored: ${total}`);
     db.close();
     await mqtt.disconnect();
