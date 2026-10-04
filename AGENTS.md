@@ -28,8 +28,12 @@ When sources disagree, this order wins: **code contract > design docs > timeline
   `firmware/esp32/docs/state-machine.md`: orchestrator and robot state machines.
 - `web/src/lib/farm/data-source.ts`: `FarmDataSource`, the only way the
   dashboard's UI gets farm data, sends commands and learns the farm connection.
-- `docs/dev-team-timeline.html`: who owns what and when. Plans only; it may be
-  older than the docs above.
+- `web/supabase/*.sql`: the Supabase schema, the contract between the Supabase
+  bridge and the dashboard. Setup in `docs/SUPABASE-SETUP.md`.
+- `docs/dev-team-timeline.html`: who owns what and when, and what each task
+  must do. **Before starting a task, pull `main` and read its current entry
+  there**: tasks are updated as work lands, so an old copy (or memory of one)
+  may be wrong. Where it disagrees with the code or the docs above, they win.
 
 ## Contract rules
 

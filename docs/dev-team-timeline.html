@@ -360,12 +360,21 @@ gantt
   <details>
     <summary>Requirements</summary>
     <ul>
-      <li>New service in <code>farm-controller/supabase-bridge</code>. Tunable values in a config file; the Supabase URL and service role key in env vars or a gitignored file, with a checked-in example (the repo is public)</li>
+      <li>New service in <code>farm-controller/supabase-bridge</code>, run on the Pi like the others (<code>docs/PI-SERVICES.md</code>, "Adding a service"). Tunable values in a config file.</li>
+      <li><strong>Supabase project:</strong> use the team project Caleb owns (<code>docs/SUPABASE-SETUP.md</code>); ask him for an invite. Its tables are already defined in <code>web/supabase/*.sql</code> — write to those, and change the schema only by editing those files in a PR. Take the project URL and the <strong>secret (service_role)</strong> key from the project's settings into <code>SUPABASE_URL</code> / <code>SUPABASE_SERVICE_ROLE_KEY</code> in <code>/etc/verdant/supabase-bridge.env</code>, with a checked-in <code>deploy/env/supabase-bridge.env.example</code>. Never commit or share the key (the repo is public). The project only allows private Realtime channels, so create every channel with <code>{ config: { private: true } }</code>; the secret key may use any channel name.</li>
       <li><strong>Inbound (commands):</strong> the dashboard on Vercel already inserts operator commands into the <code>remote_commands</code> table (<code>web/src/app/api/commands/route.ts</code>: <code>id</code>, <code>robot_id</code>, <code>command</code> as a <code>RobotCommand</code>, <code>issued_by</code>, <code>issued_at</code>, <code>status</code> <code>pending</code> / <code>sent</code> / <code>failed</code>, <code>error</code>). Subscribe to new rows with Supabase Realtime, and also fetch <code>pending</code> rows on every (re)connect, since Realtime misses rows inserted while the bridge was offline.</li>
-      <li>For each pending row: publish <code>{ id, robot_id, command, issued_by, issued_at }</code> (a <code>RemoteCommand</code>) to <code>TOPICS.commands.remote</code>, then set <code>status</code> to <code>sent</code>, or <code>failed</code> with an <code>error</code>. Update only while it's still <code>pending</code>, so a restart or a second bridge never sends it twice. Validate each row before publishing. The orchestrator already handles this topic; jog is local only and the route refuses it.</li>
+      <li>For each pending row: publish <code>{ id, robot_id, command, issued_by, issued_at }</code> (a <code>RemoteCommand</code>) to <code>TOPICS.commands.remote</code>, then set <code>status</code> to <code>sent</code>, or <code>failed</code> with an <code>error</code>, and <code>processed_at</code> to <code>now()</code>. Update only while it's still <code>pending</code>, so a restart or a second bridge never sends it twice. Validate each row before publishing. The orchestrator already handles this topic; jog is local only and the route refuses it.</li>
       <li>Prevent replaying stale commands: mark a row older than a configured limit <code>failed</code> ("stale") instead of sending it. Measure its age with Supabase's clock (<code>now()</code> in SQL), not the Pi's: there's no clock sync.</li>
-      <li><strong>Outbound (telemetry):</strong> Subscribe to robot telemetry on local MQTT. Rather than writing each message to Supabase individually, accumulate them in a buffer and flush at a regular interval to stay within Supabase's rate limits.</li>
-      <li><strong>Farm online (presence):</strong> while connected to the local MQTT broker, track presence on the Supabase Realtime channel <code>farm-status</code> with <code>{ service: "supabase-bridge", online_at }</code>; untrack when the MQTT connection drops. Supabase removes it on its own when the bridge loses its internet connection. Use a private channel (Realtime Authorization) so only the bridge can track; the dashboard only reads it. The remote dashboard's connection pill follows this presence.</li>
+      <li><strong>Outbound:</strong> mirror the farm into the tables from <code>web/supabase/farm_sync.sql</code>:
+        <ul>
+          <li><code>farm/robot/+/telemetry</code> → insert into <code>robot_telemetry</code>, with the Pi's receive time as <code>received_at</code>. Downsample: at most one row per robot every few seconds (configurable), plus one right away when its status or node changes, so the free tier's 500 MB lasts (old rows are trimmed daily).</li>
+          <li><code>farm/robot/+/state</code> (retained) → upsert <code>robot_state</code> by <code>robot_id</code></li>
+          <li><code>farm/alerts</code> → insert into <code>alerts</code> (ignore a duplicate <code>alert_id</code>)</li>
+          <li><code>farm/system/topology</code> (retained) → upsert the single <code>farm_topology</code> row</li>
+          <li><code>farm/shelf/+/sensors</code> (from the Pi's shelf bridge, <code>docs/shelf-sensors.md</code>) → insert into <code>sensor_events</code>, the dashboard's environment feed, downsampled the same way: <code>device</code> = <code>shelf_id</code>, <code>source</code> = <code>"supabase-bridge"</code>, <code>ts</code> = the reading's <code>timestamp</code>, <code>air_temp_c</code> = <code>temperature_c</code>, <code>humidity_pct</code>, <code>water_temp_c</code>, <code>water_level_ok</code>, <code>ph</code> and <code>light_lux</code> by name (each may be null), and <code>water_level_text</code> = <code>"OK"</code> / <code>"LOW"</code> from <code>water_level_ok</code> (the dashboard shows it). Leave <code>light_ppfd</code>, <code>air_temp_f</code>, <code>water_temp_f</code>, <code>ph_voltage</code> and <code>raw_text</code> null: the dashboard derives PPFD from lux and °F from °C. This is the only writer of <code>sensor_events</code>; the old laptop serial bridge is retired.</li>
+        </ul>
+        Accumulate writes in a buffer and flush at a regular interval to stay within Supabase's rate limits.</li>
+      <li><strong>Farm online (presence):</strong> while connected to the local MQTT broker, track presence on the Supabase Realtime channel <code>farm-status</code> (private: <code>{ config: { private: true } }</code>) with <code>{ service: "supabase-bridge", online_at }</code>; untrack when the MQTT connection drops. Supabase removes it on its own when the bridge loses its internet connection. The project only allows private channels, and only the secret key can track, so the dashboard can listen but never mark the farm online. The remote dashboard's connection pill follows this presence.</li>
       <li>Handle internet outages without crashing — buffer outbound data (bounded) and flush when the connection resumes</li>
     </ul>
   </details>
@@ -373,11 +382,11 @@ gantt
     <summary>Approach</summary>
     <ul>
       <li>Start with just the inbound command path: subscribe to Supabase Realtime, log each row, publish to MQTT. Verify with Mosquitto CLI tools.</li>
-      <li>Add presence next, then the outbound telemetry batching</li>
+      <li>Add presence next, then the outbound mirroring</li>
       <li>Review the Supabase Realtime documentation (Postgres changes, Presence, Authorization) and the <code>@supabase/supabase-js</code> library</li>
     </ul>
   </details>
-  <p class="deps">Depends on: Supabase tables set up (remote_commands, telemetry), shared package, Mosquitto broker</p>
+  <p class="deps">Depends on: the Supabase project set up per <code>docs/SUPABASE-SETUP.md</code> (Caleb), shared package, Mosquitto broker</p>
 </div>
 
 <div class="task">
@@ -388,14 +397,16 @@ gantt
     <ul>
       <li><strong>Remote source:</strong> a new <code>web/src/lib/farm/remote-source.ts</code> implementing <code>FarmDataSource</code> with <code>mode: "remote"</code>. Use <code>local-source.ts</code> as the model:
         <ul>
-          <li><code>subscribeRobots</code>: live robot updates through Supabase Realtime on the tables the bridge writes, mapped to <code>RobotView</code> the same way <code>local-source.ts</code> does</li>
-          <li><code>getTopology</code>: the layout if Supabase has it, otherwise <code>null</code> (the default layout)</li>
+          <li><code>subscribeRobots</code>: load each robot's latest <code>robot_telemetry</code> row and its <code>robot_state</code>, then follow their changes through Supabase Realtime on the private channel <code>farm-data</code>; map them to <code>RobotView</code> the same way <code>local-source.ts</code> does (<code>lastSeen</code> from the row's <code>created_at</code>, Supabase's clock)</li>
+          <li><code>getTopology</code>: the <code>farm_topology</code> row, otherwise <code>null</code> (the default layout)</li>
           <li><code>sendCommand</code> / <code>listRecentCommands</code>: the existing <code>/api/commands</code> route (operator key required), as <code>dashboardApiSource</code> does today</li>
           <li><code>subscribeConnection</code>: connected while the bridge is present on the <code>farm-status</code> presence channel; otherwise offline, with a reason the operator understands (e.g. "No heartbeat from the farm: the Pi, its internet connection or the Supabase bridge is down", or Supabase itself unreachable). The header pill and the offline banner already follow this, so no UI work is needed.</li>
         </ul>
       </li>
       <li><strong>Detection:</strong> replace the temporary <code>NEXT_PUBLIC_MQTT_WS_URL</code> switch at the bottom of <code>data-source.ts</code>. On the farm network the page is served from the Pi, so its origin hostname is the Pi and the broker's WebSocket listener (port 9001) is right there; on Vercel it isn't. Pick the source at runtime and register it with <code>setFarmDataSource()</code>. Components must not change.</li>
-      <li><strong>Historical data:</strong> sensor history and alerts. Local mode queries the Pi's Dashboard API; remote mode queries Supabase tables.</li>
+      <li><strong>Environment feed (shelf sensors):</strong> today the dashboard reads the latest <code>sensor_events</code> row through <code>/api/sensor-events/latest</code> (<code>useFarmTelemetry</code>) in both modes, so on FarmNet it depends on the internet. Move it behind the data source: local mode from <code>farm/shelf/+/sensors</code> over MQTT (add it to <code>local-source.ts</code> and the dashboard's <code>topics.ts</code> copy), remote mode from <code>sensor_events</code>.</li>
+      <li><strong>Historical data:</strong> sensor history and alerts. Local mode queries the Pi's Dashboard API; remote mode queries <code>sensor_events</code>, <code>robot_telemetry</code> and <code>alerts</code>.</li>
+      <li><strong>Supabase:</strong> the team project (<code>docs/SUPABASE-SETUP.md</code>). The browser uses only the publishable key (<code>NEXT_PUBLIC_SUPABASE_URL</code>, <code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code>, set on Vercel); every Realtime channel must be private (<code>{ config: { private: true } }</code>), and only <code>farm-data</code> and <code>farm-status</code> are allowed.</li>
     </ul>
   </details>
   <details>
@@ -406,7 +417,7 @@ gantt
       <li>Research Supabase Realtime's Postgres changes and Presence in the browser</li>
     </ul>
   </details>
-  <p class="deps">Depends on: Supabase bridge (populates Supabase and the presence channel for remote mode), Jameson's Dashboard API (history in local mode), Mosquitto's WebSocket listener (already in <code>docs/WIFI-SETUP.md</code>)</p>
+  <p class="deps">Depends on: Supabase bridge (populates Supabase and the presence channel for remote mode), the Supabase project and Vercel env vars (<code>docs/SUPABASE-SETUP.md</code>), Jameson's Dashboard API (history in local mode), Mosquitto's WebSocket listener (already in <code>docs/WIFI-SETUP.md</code>)</p>
 </div>
 
 
