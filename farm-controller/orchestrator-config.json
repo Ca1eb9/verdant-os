@@ -17,5 +17,9 @@
       "water_duration_ms": 900000,
       "water_interval_ms": 14400000
     }
+  ],
+  "scheduler_interval_ms": 60000,
+  "robot_plants": [
+    { "robot_id": "robot-1", "plant_type": "basil", "water_node": "water-01", "grow_node": "cp-02" }
   ]
 }

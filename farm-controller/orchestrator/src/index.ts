@@ -46,6 +46,7 @@ import {
 } from "./state-machine.js";
 import { isRobotTelemetry, isRobotEvent, isRemoteCommand } from "./validate.js";
 import { loadTasks, saveTasks } from "./persistence.js";
+import { validatePlants, nextTask } from "./scheduler.js";
 
 // --- Config & topology ---------------------------------------
 
@@ -211,6 +212,7 @@ function executeEffects(robotId: string, effects: SideEffect[]) {
         const state = robots.get(robotId);
         if (state?.assigned_task) {
           state.assigned_task.status = TaskStatus.FAILED;
+          state.assigned_task.completed_at = Date.now();
           state.assigned_task.error = effect.error;
           recordFinished(state.assigned_task);
           console.log(`[TASK] ${state.assigned_task.task_id} failed: ${effect.error}`);
@@ -315,6 +317,7 @@ function dispatchTask(state: RobotState, task: FarmTask) {
     if (!found || found.length < 1) {
       // Topology is static, so retrying won't help
       task.status = TaskStatus.FAILED;
+      task.completed_at = Date.now();
       task.error = `No path from ${state.current_node} to ${task.target_node}`;
       recordFinished(task);
       executeEffects(robotId, [{
@@ -621,6 +624,25 @@ function onRemoteCommand(raw: unknown, topic: string) {
   console.log(`[REMOTE] Unhandled command: ${msg.command.command}`);
 }
 
+// --- Plant scheduler -----------------------------------------
+
+// Empty when the scheduler settings are bad: then it never runs.
+const plants = validatePlants(config, graph);
+
+function runScheduler() {
+  const now = Date.now();
+  const assigned = [...robots.values()].flatMap((s) => (s.assigned_task ? [s.assigned_task] : []));
+  for (const plan of plants) {
+    const task = nextTask(plan, [...queue.all(), ...assigned], completedTasks, now,
+      config.task_retry_delay_ms);
+    if (!task) continue;
+    queue.push(task);
+    console.log(`[SCHED] +${task.task_id} (${task.type} → ${task.target_node}, ` +
+      `${Math.round(task.duration_ms! / 60000)} min) for ${plan.robot_id}`);
+    tryAssignTask(plan.robot_id);
+  }
+}
+
 // --- Watchdog ------------------------------------------------
 
 function runWatchdog() {
@@ -673,16 +695,10 @@ async function main() {
   // Start watchdog timer
   setInterval(persisting(runWatchdog), config.watchdog_interval_ms);
 
-  // --- Scheduler hook ----------------------------------------
-  // When you add the plant scheduler module, import it here:
-  //
-  //   import { startScheduler } from "./scheduler.js";
-  //   startScheduler(queue, robots, config);
-  //
-  // The scheduler pushes FarmTasks into the queue on plant-care
-  // intervals. The orchestrator assigns them normally. Call
-  // persist() after pushing so new tasks survive a restart.
-  // -------------------------------------------------------------
+  // Plant care: water and light tasks into the queue
+  const planted = plants.map((p) => `${p.robot_id}=${p.plant_type}`).join(", ");
+  console.log(`[ORCH]   scheduler: ${planted || "no plants"}`);
+  if (plants.length) setInterval(persisting(runScheduler), config.scheduler_interval_ms);
 
   // Status logging
   setInterval(() => {
