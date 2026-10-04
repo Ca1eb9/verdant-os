@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { FarmStatusBanner } from "@/components/layout/FarmStatusBanner";
 import { SideNav } from "@/components/layout/SideNav";
 import { TopNav } from "@/components/layout/TopNav";
 import styles from "@/components/layout/AppShell.module.css";
@@ -9,6 +10,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <SideNav />
       <div className={styles.column}>
         <TopNav />
+        <FarmStatusBanner />
         <main className={styles.main}>{children}</main>
       </div>
     </div>

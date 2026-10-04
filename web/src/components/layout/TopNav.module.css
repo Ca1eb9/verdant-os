@@ -79,6 +79,10 @@
   color: var(--teal);
 }
 
+.netConnecting {
+  color: var(--amber);
+}
+
 .netOffline {
   color: var(--danger);
 }

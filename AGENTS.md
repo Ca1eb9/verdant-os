@@ -26,6 +26,8 @@ When sources disagree, this order wins: **code contract > design docs > timeline
 - `docs/firmware-architecture.md`: the robot–orchestrator contract.
 - `farm-controller/orchestrator/docs/state-machine.md` and
   `firmware/esp32/docs/state-machine.md`: orchestrator and robot state machines.
+- `web/src/lib/farm/data-source.ts`: `FarmDataSource`, the only way the
+  dashboard's UI gets farm data, sends commands and learns the farm connection.
 - `docs/dev-team-timeline.html`: who owns what and when. Plans only; it may be
   older than the docs above.
 
@@ -39,6 +41,7 @@ When sources disagree, this order wins: **code contract > design docs > timeline
 - **Shared types have copies.** Changing `types.ts` means updating every copy
   in the same PR: `web/src/lib/farm/types.ts`, the orchestrator's validators,
   the simulator, and the firmware's JSON code. Search the repo for the field name.
+  The dashboard also copies the topics it uses (`web/src/lib/farm/topics.ts`).
 - **Validate everything that arrives over MQTT or HTTP.** Never trust a payload's shape.
 - **Contract changes are a team decision.** If your task needs one, say so in
   the PR rather than quietly redesigning it.
@@ -53,6 +56,14 @@ When sources disagree, this order wins: **code contract > design docs > timeline
 - A **stop beats a low-battery return**, the firmware's survival override
   included. Only the motor cutoff still applies to a stopped robot.
 - **Manual driving (`jog`) is local-network only.**
+- The robot **never turns**: one drive motor, no encoder. It always faces
+  `ROBOT_HEADING` (away from the dock, so it backs onto the charger) and drives
+  backward to go the other way. An edge to the side faults.
+- **Elevator nodes are never navigate targets.** Robots only pass through.
+- Dashboard commands on FarmNet are **never queued for a reconnect**: with the
+  broker unreachable they fail, so a stop or jog can't arrive late.
+- The dashboard's connection pill shows the **farm connection** (the MQTT broker on
+  FarmNet, the Supabase bridge's presence remotely), never the browser's network.
 
 If one of these blocks your task, raise it; don't work around it.
 
