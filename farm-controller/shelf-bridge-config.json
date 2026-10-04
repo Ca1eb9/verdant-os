@@ -1,0 +1,16 @@
+{
+  "baud": 115200,
+  "reopen_interval_ms": 3000,
+  "silence_timeout_ms": 20000,
+  "watchdog_interval_ms": 5000,
+  "max_line_length": 512,
+  "shelves": [
+    {
+      "shelf_id": "shelf-1",
+      "level": 0,
+      "port": "/dev/ttyACM0",
+      "ph_neutral_mv": 2500,
+      "ph_mv_per_unit": -175
+    }
+  ]
+}

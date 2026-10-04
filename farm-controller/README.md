@@ -115,6 +115,25 @@ npm run orch
 - State machine diagrams: `orchestrator/docs/state-machine.md`. The robot-side
   contract is in `docs/firmware-architecture.md`.
 
+### Shelf bridge
+
+Reads the shelf sensor node (Arduino Uno, `firmware/shelf-sensor/`) over USB
+serial and publishes its readings to `farm/shelf/{id}/sensors`.
+
+```bash
+npm run shelf
+```
+
+- Settings load from `shelf-bridge-config.json`: one entry per node with its
+  serial port, shelf id, level and pH calibration. On the Pi, prefer the
+  `/dev/serial/by-id/...` path over `/dev/ttyACM0`.
+- An unplugged node is reopened automatically; a shelf with no readings for
+  `silence_timeout_ms` raises one alert on `farm/alerts`.
+- Environment overrides: `BROKER_URL`, `CONFIG_PATH`. On the Pi it runs as
+  the `farm-shelf-bridge` service with its config in `/etc/verdant/`
+  ([docs/PI-SERVICES.md](../docs/PI-SERVICES.md)); by hand, your user needs to
+  be in the `dialout` group.
+
 ### Other services
 
 As new services are added, they'll follow the same pattern:
@@ -135,11 +154,13 @@ farm-controller/
 ├── simulator/           # Fake ESP32 robot for testing
 ├── ingester/            # Telemetry → SQLite recorder
 ├── orchestrator/        # Robot state, task queue, commands
+├── shelf-bridge/        # Shelf sensor node (USB serial) → MQTT
 ├── alert-engine/        # (to be built) Threshold monitoring
 ├── supabase-bridge/     # (to be built) Cloud sync
 ├── dashboard-api/       # (to be built) REST API for dashboard
 ├── topology.json        # Farm layout (nodes + edges)
 ├── orchestrator-config.json  # Tunable orchestrator settings
+├── shelf-bridge-config.json  # Shelf serial ports and pH calibration
 └── package.json         # Workspace root
 ```
 
