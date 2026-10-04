@@ -66,7 +66,7 @@ That runs lint, TypeScript, and production build validation.
 
 ## Shelf Sensors
 
-The shelf sensor node (Arduino Uno R3) now publishes over MQTT on the Pi through the `shelf-bridge` service; see [`docs/shelf-sensors.md`](../docs/shelf-sensors.md). The old laptop serial bridge is retired, so `sensor_events` no longer has a writer; moving the dashboard onto shelf data is part of the dashboard data-flow work.
+The shelf sensor node (Arduino Uno R3) publishes over MQTT on the Pi through the `shelf-bridge` service; see [`docs/shelf-sensors.md`](../docs/shelf-sensors.md). The old laptop serial bridge is retired. Supabase's `sensor_events` is filled by the Pi's Supabase bridge from those readings, and on FarmNet the dashboard will read them over MQTT; both are part of the Supabase bridge and dashboard data-flow work.
 
 ## Deploy To Vercel
 

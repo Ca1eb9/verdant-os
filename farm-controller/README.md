@@ -129,8 +129,10 @@ npm run shelf
   `/dev/serial/by-id/...` path over `/dev/ttyACM0`.
 - An unplugged node is reopened automatically; a shelf with no readings for
   `silence_timeout_ms` raises one alert on `farm/alerts`.
-- Environment overrides: `BROKER_URL`, `CONFIG_PATH`. Run it under systemd like
-  the orchestrator; the user needs to be in the `dialout` group.
+- Environment overrides: `BROKER_URL`, `CONFIG_PATH`. On the Pi it runs as
+  the `farm-shelf-bridge` service with its config in `/etc/verdant/`
+  ([docs/PI-SERVICES.md](../docs/PI-SERVICES.md)); by hand, your user needs to
+  be in the `dialout` group.
 
 ### Other services
 

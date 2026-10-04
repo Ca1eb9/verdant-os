@@ -12,6 +12,7 @@ flowchart LR
     Bridge -- "farm/shelf/{id}/sensors<br/>ShelfSensorData" --> Broker[(Mosquitto)]
     Bridge -- "farm/alerts<br/>shelf silent" --> Broker
     Broker --> Ingester["ingester → shelf_sensors"]
+    Broker --> SupaBridge["supabase-bridge →<br/>Supabase sensor_events"]
 ```
 
 ## Hardware
@@ -43,38 +44,19 @@ previous team's DS1307 RTC isn't used: the Pi timestamps readings on receipt
 ## Running it on the Pi
 
 1. Flash the Uno once: `cd firmware/shelf-sensor && pio run -t upload`.
-2. Plug it into the Pi and find its stable path:
-   `ls /dev/serial/by-id/`. Put that path in `port` in
-   `farm-controller/shelf-bridge-config.json` (`/dev/ttyACM0` works too, but
-   can change if other USB serial devices are added).
-3. Let the service user open serial ports: `sudo usermod -aG dialout $USER`,
-   then log out and back in.
-4. Start it: `npm run shelf`, and watch the output with
-   `mosquitto_sub -t 'farm/shelf/#' -v`.
+2. Plug it into the Pi and find its stable path: `ls /dev/serial/by-id/`
+   (`/dev/ttyACM0` works too, but can change if other USB serial devices are
+   added).
+3. On the Pi it runs as the `farm-shelf-bridge` service
+   ([PI-SERVICES.md](PI-SERVICES.md)). Its config is
+   `/etc/verdant/shelf-bridge-config.json`, copied from
+   `farm-controller/shelf-bridge-config.json` and kept outside the repo,
+   because the port and pH calibration belong to that Pi. Put the
+   `/dev/serial/by-id/...` path in `port` there.
+4. Watch the readings with `mosquitto_sub -t 'farm/shelf/#' -v`.
 
-To run it at boot, run it under systemd (the farm-controller README recommends
-the same for the orchestrator):
-
-```ini
-# /etc/systemd/system/shelf-bridge.service
-[Unit]
-Description=VerdantOS shelf bridge
-Wants=mosquitto.service
-After=mosquitto.service
-
-[Service]
-User=<pi user>
-WorkingDirectory=/home/<pi user>/verdant-os
-# Use the path from `which npm` (it differs under nvm)
-ExecStart=/usr/bin/npm run shelf
-Restart=on-failure
-# The bridge exits if the broker isn't up yet; without a delay, systemd's
-# start limit (5 restarts in 10 s) would give up on it for good
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
+On a laptop, `npm run shelf` runs it against the repo's config (your user
+needs to be in the `dialout` group to open serial ports).
 
 ### Config (`shelf-bridge-config.json`)
 
@@ -108,7 +90,7 @@ program can hold the port) and read `ph_mv` with `pio device monitor`.
 3. Set `ph_neutral_mv` = *mv7* and `ph_mv_per_unit` = (*mv7* − *mv4*) / 3.
    It comes out negative on this board.
 
-Restart the bridge after editing the config.
+Restart the bridge after editing the config: `sudo systemctl restart farm-shelf-bridge`.
 
 ## What happens when things fail
 
@@ -126,6 +108,9 @@ Restart the bridge after editing the config.
 | Garbage, partial or library error lines | — | Never published; non-JSON lines are logged as node output, repeats once |
 | Broker down | — | The shared MQTT client reconnects and sends readings queued while it was offline |
 
-The dashboard doesn't show shelf data yet: it still reads the old Supabase
-`sensor_events` table, which nothing writes to since the laptop serial bridge
-was retired. Moving it onto shelf data belongs to the dashboard data-flow work.
+The readings reach the dashboard two ways: on FarmNet straight from
+`farm/shelf/+/sensors` over MQTT, and remotely through the Supabase bridge,
+which mirrors them into Supabase's `sensor_events` table
+([SUPABASE-SETUP.md](SUPABASE-SETUP.md)). Both belong to the Supabase bridge
+and dashboard data-flow tasks; until then the dashboard's environment feed has
+no live source.
