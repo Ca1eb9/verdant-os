@@ -12,7 +12,7 @@ Every service is a **systemd** unit. systemd is built into the OS, so there's no
 |---|---|---|---|
 | Mosquitto | `mosquitto` | MQTT broker, ports 1883 and 9001 (WebSockets) | — |
 | Orchestrator | `farm-orchestrator` | Robot state, task queue, commands | `/var/lib/verdant/orchestrator-state.json` |
-| Ingester | `farm-ingester` | Records telemetry to SQLite | `/var/lib/verdant/farm_telemetry.db` |
+| Ingester | `farm-ingester` | Records telemetry and operator commands to SQLite | `/var/lib/verdant/farm_telemetry.db` |
 | Dashboard | `farm-dashboard` | Web app on `http://farmnet.local:3000` | — |
 
 Networks (set up in [WIFI-SETUP.md](WIFI-SETUP.md)):
@@ -74,7 +74,7 @@ done
 sudo nano /etc/verdant/dashboard.env
 ```
 
-In `dashboard.env`, set `OPERATOR_KEY` (the dashboard asks for it before sending robot commands; `openssl rand -hex 16` makes a good one) and the Supabase values. The orchestrator and ingester files work as they are.
+In `dashboard.env`, set `OPERATOR_KEY` (the dashboard asks for it before sending robot commands; `openssl rand -hex 16` makes a good one) and the Supabase values. `NEXT_PUBLIC_MQTT_WS_URL` (the broker's WebSocket listener) gives the dashboard live farm data on FarmNet; the example's `ws://192.168.4.1:9001` is right for the setup in [WIFI-SETUP.md](WIFI-SETUP.md). It's fixed when the dashboard is built, so after changing it run the deploy script, not just a restart. The orchestrator and ingester files work as they are.
 
 These files are readable by root and the `farm` user only. Never copy them into the repo; it's public.
 
@@ -197,7 +197,8 @@ SD cards fail from sudden power loss during a write and from wear. With this set
 - **No real-time clock.** The Pi sets its clock over the uplink at boot. Without the uplink it restores the time it last saved, which can be behind. The orchestrator doesn't care (it uses receive times), but timestamps in the ingester's database can be off after a long time without the uplink.
 - **A WiFi uplink drops more often than Ethernet.** Nothing on the farm depends on it; only `apt`, the clock and the Supabase bridge do, and the bridge has to reconnect on its own when it comes back.
 - **Power.** Use the official 5 V / 5 A (Pi 5) or 5 V / 3 A (Pi 4) supply. Under-voltage causes random crashes; `vcgencmd get_throttled` shows it.
-- **Mosquitto** isn't a farm unit: it's the OS package's own `mosquitto.service`, configured in [WIFI-SETUP.md](WIFI-SETUP.md). The farm services wait for it and restart if it does.
+- **Mosquitto** isn't a farm unit: it's the OS package's own `mosquitto.service`, configured in [WIFI-SETUP.md](WIFI-SETUP.md). The farm services start after it; while it's down they keep retrying every 5 seconds, and they reconnect on their own when it restarts.
+- **Retained messages.** The orchestrator publishes the farm layout and each robot's state as retained messages, which the dashboard reads when it connects. Mosquitto keeps them across its own restarts only with persistence on: check `grep persistence /etc/mosquitto/mosquitto.conf` shows `persistence true` (the default).
 
 ## Troubleshooting
 
@@ -213,3 +214,5 @@ SD cards fail from sudden power loss during a write and from wear. With this set
 | FarmNet missing after a reboot, or the uplink on the wrong radio | `wlan0` and `wlan1` swapped names. See step 4 of the USB adapter section in [WIFI-SETUP.md](WIFI-SETUP.md#no-ethernet-use-a-usb-wifi-adapter). |
 | Can't SSH over the uplink | The uplink's address changes with DHCP; use `farmnet.local`, or SSH over FarmNet at `192.168.4.1`. |
 | Robot commands fail with "Remote commands are turned off" | `OPERATOR_KEY` is empty in `/etc/verdant/dashboard.env`. Set it, then `sudo systemctl restart farm-dashboard`. |
+| Dashboard says "Disconnected" on FarmNet | Mosquitto is down or its port 9001 listener is missing ([WIFI-SETUP.md](WIFI-SETUP.md) step 5), or `NEXT_PUBLIC_MQTT_WS_URL` is wrong in `/etc/verdant/dashboard.env`; fix it and rerun the deploy script (it's fixed at build time). |
+| Dashboard map shows "Default farm layout" | The orchestrator isn't running, or Mosquitto lost its retained messages (persistence off): restart the orchestrator. |

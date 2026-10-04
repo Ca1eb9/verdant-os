@@ -1,9 +1,11 @@
 # Orchestrator: robot state, task queue, commands. See docs/PI-SERVICES.md.
 [Unit]
 Description=VerdantOS orchestrator
-# It exits at startup if the broker isn't reachable; start after it.
+# It exits at startup if the broker isn't reachable; start after it. Wants,
+# not Requires: with Mosquitto down it keeps retrying (Restart=always) instead
+# of not starting at all, and it reconnects on its own when Mosquitto restarts.
 After=mosquitto.service
-Requires=mosquitto.service
+Wants=mosquitto.service
 # Keep retrying forever instead of giving up after a few fast failures.
 StartLimitIntervalSec=0
 

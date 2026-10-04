@@ -1,8 +1,9 @@
 # Ingester: records telemetry to SQLite. See docs/PI-SERVICES.md.
 [Unit]
 Description=VerdantOS telemetry ingester
+# Wants, not Requires: see farm-orchestrator.service
 After=mosquitto.service
-Requires=mosquitto.service
+Wants=mosquitto.service
 StartLimitIntervalSec=0
 
 [Service]
