@@ -34,12 +34,12 @@ flowchart LR
         subgraph ClientState[Client State + Browser Storage]
             FarmContext["FarmContext"]
             TelemetryHook["useFarmTelemetry"]
-            LocalStorage["localStorage\nlast snapshot + alert history"]
+            LocalStorage["localStorage\nlast reading per farm + alert history"]
             ServiceWorker["service-worker.js\noffline shell cache"]
         end
 
         subgraph DomainLib[Shared Domain Libraries]
-            MockData["mock-data.ts\nfarms + fallback telemetry"]
+            MockData["mock-data.ts\nmock farms + telemetry (off)"]
             AlertsLib["alerts.ts\nthreshold evaluation + persistence"]
             LightCal["light-calibration.ts"]
             FormatLib["format.ts"]
@@ -49,11 +49,12 @@ flowchart LR
 
         subgraph ApiRoutes[Server API Routes]
             LatestRoute["/api/sensor-events/latest"]
+            FarmsRoute["/api/farms"]
             StatusRoute["/api/config/status"]
         end
     end
 
-    DB[(Supabase\nsensor_events)]
+    DB[(Supabase\nfarms + sensor_events)]
 
     User --> DashboardPage
     User --> HistoryPage
@@ -74,20 +75,25 @@ flowchart LR
     DashboardView --> TelemetryHook
     DashboardView --> FormatLib
     HistoryView --> FarmContext
-    HistoryView --> MockData
+    HistoryView -. mock on .-> MockData
     AlertsView --> FarmContext
+    AlertsView --> TelemetryHook
+    FarmContext --> FarmsRoute
+    FarmContext -. mock on .-> MockData
     AlertsView --> AlertsLib
     ConfigView --> StatusRoute
 
     TelemetryHook --> LatestRoute
     TelemetryHook --> AlertsLib
-    TelemetryHook --> MockData
+    TelemetryHook -. mock on .-> MockData
     TelemetryHook --> LightCal
     TelemetryHook --> LocalStorage
 
     AlertsLib --> LocalStorage
 
     LatestRoute --> SupabaseConfig
+    FarmsRoute --> SupabaseConfig
+    FarmsRoute --> DB
     StatusRoute --> SupabaseConfig
     LatestRoute --> DB
     StatusRoute --> DB
@@ -100,6 +106,7 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     autonumber
+    participant F as FarmContext
     participant D as Supabase sensor_events
     participant R as /api/sensor-events/latest
     participant H as useFarmTelemetry
@@ -108,21 +115,22 @@ sequenceDiagram
     participant U as User
 
     U->>V: Open dashboard
-    V->>H: Initialize telemetry hook
-    H->>L: Read last snapshot
-    L-->>H: Stored snapshot or null
-    H-->>V: Render fallback/live snapshot
+    V->>F: Selected farm (the Pi's own on FarmNet, else from /api/farms)
+    V->>H: Initialize telemetry hook for that farm
+    H->>L: Read the farm's last reading
+    L-->>H: Stored reading or null
+    H-->>V: Render it, or "Waiting for data"
 
     loop Every 2 seconds while browser online
-        H->>R: GET /api/sensor-events/latest
-        R->>D: Query newest sensor_events row
+        H->>R: GET /api/sensor-events/latest?farm_id=
+        R->>D: Query the farm's newest sensor_events row
         D-->>R: Latest record
         R-->>H: JSON event payload
-        H->>H: Map DB row to TelemetrySnapshot
+        H->>H: Map DB row to SensorReading
         H->>H: Evaluate alert thresholds
-        H->>L: Store latest snapshot
+        H->>L: Store latest reading
         H->>L: Store alert history
-        H-->>V: Updated snapshot, status, alerts
+        H-->>V: Updated reading, status, alerts
         V-->>U: Refresh dashboard cards and badges
     end
 

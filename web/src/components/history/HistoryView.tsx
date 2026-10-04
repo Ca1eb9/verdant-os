@@ -2,10 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
+import { NoFarmNotice } from "@/components/farms/NoFarmNotice";
 import { MetricChartPanel } from "@/components/history/MetricChartPanel";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import {
   HISTORY_RANGE_HOURS,
+  MOCK_DATA_ENABLED,
   buildHistoricalSeries,
 } from "@/lib/mock-data";
 import {
@@ -35,7 +37,9 @@ export function HistoryView() {
   const DEGREE = fmt.tempUnit;
 
   // temperatures are stored in °C; convert once for display
+  // No history source yet: it comes with the dashboard data-flow work (Dashboard API / Supabase)
   const data = useMemo(() => {
+    if (!MOCK_DATA_ENABLED || !activeFarmId) return [];
     const series = buildHistoricalSeries(activeFarmId, HISTORY_RANGE_HOURS[range]);
     if (prefs.temperatureUnit === "C") return series;
     return series.map((point) => ({
@@ -46,6 +50,7 @@ export function HistoryView() {
   }, [activeFarmId, fmt, prefs.temperatureUnit, range]);
 
   const summary = useMemo(() => {
+    if (!data.length) return [];
     const airTemp = data.map((point) => point.air.temperature);
     const humidity = data.map((point) => point.air.humidity);
     const pressure = data.map((point) => point.air.pressure);
@@ -175,6 +180,8 @@ export function HistoryView() {
     },
   ];
 
+  if (!farm) return <NoFarmNotice title="Historical analytics" />;
+
   return (
     <section className="pageSection">
       <header className={styles.hero}>
@@ -215,8 +222,15 @@ export function HistoryView() {
         </div>
       </header>
 
+      {data.length === 0 ? (
+        <div className={`glassPanel ${styles.emptyState}`} role="status">
+          <strong>No sensor history yet.</strong>
+          <span>The dashboard doesn&apos;t read stored history for {farm.name} yet; it will once the history feed is built.</span>
+        </div>
+      ) : null}
+
       <div className={styles.chartGrid}>
-        {charts.map((chart) => (
+        {data.length > 0 && charts.map((chart) => (
           <MetricChartPanel
             key={chart.title}
             title={chart.title}

@@ -1,13 +1,14 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { evaluateTelemetryAlerts, recordTelemetryAlerts } from "@/lib/alerts";
-import { getFarmById } from "@/lib/mock-data";
 import { getCalibratedLightPpfd } from "@/lib/light-calibration";
-import { buildLiveTelemetry } from "@/lib/mock-data";
+import { MOCK_DATA_ENABLED, buildLiveTelemetry } from "@/lib/mock-data";
 import type {
   LiveStatus,
   SensorEventRecord,
+  SensorReading,
   TelemetryAlert,
   TelemetrySnapshot,
 } from "@/lib/types";
@@ -16,157 +17,74 @@ const STALE_AFTER_MS = 10_000;
 const POLL_INTERVAL_MS = 2_000;
 
 function storageKey(farmId: string) {
-  return `verdantos:v3:last-snapshot:${farmId}`;
+  return `verdantos:v4:last-reading:${farmId}`;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+function eventToReading(event: SensorEventRecord): SensorReading {
+  return {
+    timestamp: event.created_at ?? event.ts ?? new Date().toISOString(),
+    device: event.device,
+    airTemperature: event.air_temp_c,
+    humidity: event.humidity_pct,
+    // the shelf node has no pressure or EC sensor
+    pressure: null,
+    waterTemperature: event.water_temp_c,
+    ph: event.ph,
+    ec: null,
+    waterLevelOk: event.water_level_ok,
+    waterLevelText: event.water_level_text,
+    ppfd: getCalibratedLightPpfd(event.light_lux, event.light_ppfd),
+  };
 }
 
-function toNumber(value: unknown, fallback: number) {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+function snapshotToReading(snapshot: TelemetrySnapshot): SensorReading {
+  return {
+    timestamp: snapshot.timestamp,
+    device: snapshot.deviceId,
+    airTemperature: snapshot.air.temperature,
+    humidity: snapshot.air.humidity,
+    pressure: snapshot.air.pressure,
+    waterTemperature: snapshot.water.temperature,
+    ph: snapshot.water.ph,
+    ec: snapshot.water.ec,
+    waterLevelOk: snapshot.water.levelFloat === 1,
+    waterLevelText: snapshot.water.levelText ?? null,
+    ppfd: snapshot.light.ppfd,
+  };
 }
 
-function toStringValue(value: unknown, fallback: string) {
-  return typeof value === "string" && value.length > 0 ? value : fallback;
+const NUMBER_FIELDS = ["airTemperature", "humidity", "pressure", "waterTemperature", "ph", "ec", "ppfd"] as const;
+
+function isReading(value: unknown): value is SensorReading {
+  if (typeof value !== "object" || value === null) return false;
+  const r = value as Record<string, unknown>;
+  return (
+    typeof r.timestamp === "string" &&
+    !Number.isNaN(new Date(r.timestamp).getTime()) &&
+    (r.device === null || typeof r.device === "string") &&
+    NUMBER_FIELDS.every((key) => r[key] === null || (typeof r[key] === "number" && Number.isFinite(r[key]))) &&
+    (r.waterLevelOk === null || typeof r.waterLevelOk === "boolean") &&
+    (r.waterLevelText === null || typeof r.waterLevelText === "string")
+  );
 }
 
-function normalizeSnapshot(
-  farmId: string,
-  storedValue: unknown,
-  fallback: TelemetrySnapshot,
-): TelemetrySnapshot {
-  if (!isRecord(storedValue)) {
-    return fallback;
+// The last reading per farm, so a reload while the feed is down still shows it (as stale)
+function readStoredReading(farmId: string): SensorReading | null {
+  try {
+    const value = window.localStorage.getItem(storageKey(farmId));
+    const parsed: unknown = value ? JSON.parse(value) : null;
+    return isReading(parsed) ? parsed : null;
+  } catch {
+    return null;
   }
-
-  const air = isRecord(storedValue.air) ? storedValue.air : {};
-  const water = isRecord(storedValue.water) ? storedValue.water : {};
-  const light = isRecord(storedValue.light) ? storedValue.light : {};
-  const rawEvent = isRecord(storedValue.rawEvent) ? storedValue.rawEvent : {};
-  const rawAir = isRecord(rawEvent.air) ? rawEvent.air : {};
-  const rawWater = isRecord(rawEvent.water) ? rawEvent.water : {};
-  const rawLight = isRecord(rawEvent.light) ? rawEvent.light : {};
-  const rawLevel = isRecord(rawEvent.level) ? rawEvent.level : {};
-  const timestamp = toStringValue(storedValue.timestamp, fallback.timestamp);
-  const deviceId = toStringValue(storedValue.deviceId, fallback.deviceId);
-  const sequence = toNumber(storedValue.sequence, fallback.sequence);
-  const levelFloat =
-    water.levelFloat === 0 || water.levelFloat === 1 ? water.levelFloat : fallback.water.levelFloat;
-
-  return {
-    farmId,
-    deviceId,
-    sequence,
-    timestamp,
-    connectionState: storedValue.connectionState === "offline" ? "offline" : "online",
-    rawEvent: {
-      type: "sensor",
-      ts: toStringValue(rawEvent.ts, timestamp),
-      device: toStringValue(rawEvent.device, deviceId),
-      seq: toNumber(rawEvent.seq, sequence),
-      air: {
-        t_c: toNumber(rawAir.t_c, toNumber(air.temperature, fallback.air.temperature)),
-        rh_pct: toNumber(rawAir.rh_pct, toNumber(air.humidity, fallback.air.humidity)),
-        p_hpa: toNumber(rawAir.p_hpa, toNumber(air.pressure, fallback.air.pressure)),
-      },
-      water: {
-        t_c: toNumber(rawWater.t_c, toNumber(water.temperature, fallback.water.temperature)),
-        ph: toNumber(rawWater.ph, toNumber(water.ph, fallback.water.ph)),
-        ec_ms_cm: toNumber(rawWater.ec_ms_cm, toNumber(water.ec, fallback.water.ec)),
-      },
-      light: {
-        lux: toNumber(rawLight.lux, toNumber(light.lux, fallback.light.lux)),
-        ppfd: toNumber(rawLight.ppfd, toNumber(light.ppfd, fallback.light.ppfd)),
-      },
-      level: {
-        float: rawLevel.float === 0 || rawLevel.float === 1 ? rawLevel.float : levelFloat,
-      },
-    },
-    air: {
-      temperature: toNumber(air.temperature, fallback.air.temperature),
-      humidity: toNumber(air.humidity, fallback.air.humidity),
-      pressure: toNumber(air.pressure, fallback.air.pressure),
-    },
-    water: {
-      temperature: toNumber(water.temperature, fallback.water.temperature),
-      ph: toNumber(water.ph, fallback.water.ph),
-      ec: toNumber(water.ec, fallback.water.ec),
-      level: toNumber(water.level, fallback.water.level),
-      levelFloat,
-      levelText: toStringValue(water.levelText, fallback.water.levelText ?? ""),
-    },
-    light: {
-      lux: toNumber(light.lux, fallback.light.lux),
-      ppfd: toNumber(light.ppfd, fallback.light.ppfd),
-    },
-  };
 }
 
-function valueOrFallback(value: number | null, fallback: number) {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function mapSensorEventToSnapshot(
-  farmId: string,
-  event: SensorEventRecord,
-  fallback: TelemetrySnapshot,
-): TelemetrySnapshot {
-  const timestamp = event.ts ?? event.created_at ?? new Date().toISOString();
-  const waterLevelFloat =
-    event.water_level_ok === null ? fallback.water.levelFloat : event.water_level_ok ? 1 : 0;
-  const waterLevel =
-    event.water_level_ok === null ? fallback.water.level : event.water_level_ok ? 72 : 18;
-  const lightLux = valueOrFallback(event.light_lux, fallback.light.lux);
-  const lightPpfd = getCalibratedLightPpfd(lightLux, event.light_ppfd) ?? fallback.light.ppfd;
-
-  return {
-    farmId,
-    deviceId: event.device ?? fallback.deviceId,
-    sequence: fallback.sequence + 1,
-    timestamp,
-    connectionState: "online",
-    rawEvent: {
-      type: "sensor",
-      ts: timestamp,
-      device: event.device ?? fallback.deviceId,
-      seq: fallback.sequence + 1,
-      air: {
-        t_c: valueOrFallback(event.air_temp_c, fallback.air.temperature),
-        rh_pct: valueOrFallback(event.humidity_pct, fallback.air.humidity),
-        p_hpa: fallback.air.pressure,
-      },
-      water: {
-        t_c: valueOrFallback(event.water_temp_c, fallback.water.temperature),
-        ph: valueOrFallback(event.ph, fallback.water.ph),
-        ec_ms_cm: fallback.water.ec,
-      },
-      light: {
-        lux: lightLux,
-        ppfd: lightPpfd,
-      },
-      level: {
-        float: waterLevelFloat,
-      },
-    },
-    air: {
-      temperature: valueOrFallback(event.air_temp_c, fallback.air.temperature),
-      humidity: valueOrFallback(event.humidity_pct, fallback.air.humidity),
-      pressure: fallback.air.pressure,
-    },
-    water: {
-      temperature: valueOrFallback(event.water_temp_c, fallback.water.temperature),
-      ph: valueOrFallback(event.ph, fallback.water.ph),
-      ec: fallback.water.ec,
-      level: waterLevel,
-      levelFloat: waterLevelFloat,
-      levelText: event.water_level_text ?? fallback.water.levelText,
-    },
-    light: {
-      lux: lightLux,
-      ppfd: lightPpfd,
-    },
-  };
+function storeReading(farmId: string, reading: SensorReading) {
+  try {
+    window.localStorage.setItem(storageKey(farmId), JSON.stringify(reading));
+  } catch {
+    // the reading just isn't cached
+  }
 }
 
 interface LatestSensorResponse {
@@ -174,59 +92,41 @@ interface LatestSensorResponse {
   error?: string;
 }
 
-function readStoredSnapshot(farmId: string, fallback: TelemetrySnapshot): TelemetrySnapshot | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const value = window.localStorage.getItem(storageKey(farmId));
-    return value ? normalizeSnapshot(farmId, JSON.parse(value), fallback) : null;
-  } catch {
-    return null;
-  }
+// Keyed by farm, so a switch never shows (or alerts on) the last farm's reading.
+// `polled`: the feed has answered since the switch; until then the reading may
+// be a cached one, too old to judge.
+interface FeedState {
+  farmId: string | null;
+  reading: SensorReading | null;
+  polled: boolean;
 }
 
-function storeSnapshot(farmId: string, snapshot: TelemetrySnapshot) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(storageKey(farmId), JSON.stringify(snapshot));
-}
-
-export function useFarmTelemetry(farmId: string) {
-  const farm = useMemo(() => getFarmById(farmId), [farmId]);
-  const sequence = useMemo(() => buildLiveTelemetry(farmId), [farmId]);
-  const latest = sequence[sequence.length - 1];
-  const [snapshot, setSnapshot] = useState<TelemetrySnapshot>(latest);
-  const [lastUpdate, setLastUpdate] = useState<Date>(new Date(latest.timestamp));
+/**
+ * The selected farm's latest environment reading, polled from its newest
+ * sensor_events row. Null until the farm has reported one.
+ */
+export function useFarmTelemetry(farmId: string | null) {
+  const { farm } = useSelectedFarm();
+  const [feed, setFeed] = useState<FeedState>({ farmId: null, reading: null, polled: false });
   const [isOnline, setIsOnline] = useState(true);
-  const [latestEvent, setLatestEvent] = useState<SensorEventRecord | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    const stored = readStoredSnapshot(farmId, latest);
-    const nextSnapshot = stored ?? latest;
-
-    setSnapshot(nextSnapshot);
-    setLastUpdate(new Date(nextSnapshot.timestamp));
-  }, [farmId, latest]);
+    if (!farmId) {
+      setFeed({ farmId, reading: null, polled: false });
+    } else if (MOCK_DATA_ENABLED) {
+      const frames = buildLiveTelemetry(farmId);
+      setFeed({ farmId, reading: snapshotToReading(frames[frames.length - 1]), polled: true });
+    } else {
+      setFeed({ farmId, reading: readStoredReading(farmId), polled: false });
+    }
+  }, [farmId]);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return undefined;
-    }
-
-    const syncNetworkState = () => {
-      setIsOnline(window.navigator.onLine);
-    };
-
+    const syncNetworkState = () => setIsOnline(window.navigator.onLine);
     syncNetworkState();
-
     window.addEventListener("online", syncNetworkState);
     window.addEventListener("offline", syncNetworkState);
-
     return () => {
       window.removeEventListener("online", syncNetworkState);
       window.removeEventListener("offline", syncNetworkState);
@@ -234,47 +134,33 @@ export function useFarmTelemetry(farmId: string) {
   }, []);
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setNow(Date.now());
-    }, 1000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
+    const intervalId = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !isOnline) {
-      return undefined;
-    }
+    if (MOCK_DATA_ENABLED || !farmId || !isOnline) return undefined;
 
     let isCancelled = false;
 
     const fetchLatest = async () => {
       try {
-        const response = await fetch("/api/sensor-events/latest", {
+        const response = await fetch(`/api/sensor-events/latest?farm_id=${encodeURIComponent(farmId)}`, {
           cache: "no-store",
         });
         const payload = (await response.json()) as LatestSensorResponse;
-
-        if (isCancelled || !payload.event) {
+        if (isCancelled) return;
+        if (!payload.event) {
+          setFeed((current) => (current.farmId === farmId ? { ...current, polled: true } : current));
           return;
         }
 
-        setLatestEvent(payload.event);
-
-        const nextSnapshot = mapSensorEventToSnapshot(farmId, payload.event, latest);
-        const heartbeatTime = payload.event.created_at ?? payload.event.ts ?? nextSnapshot.timestamp;
-        const updateTime = new Date(heartbeatTime);
-
-        startTransition(() => {
-          setSnapshot(nextSnapshot);
-        });
-
-        setLastUpdate(Number.isNaN(updateTime.getTime()) ? new Date() : updateTime);
-        storeSnapshot(farmId, nextSnapshot);
+        const next = eventToReading(payload.event);
+        setFeed({ farmId, reading: next, polled: true });
+        storeReading(farmId, next);
       } catch {
-        return;
+        // keep the last reading; it turns stale
+        if (!isCancelled) setFeed((current) => (current.farmId === farmId ? { ...current, polled: true } : current));
       }
     };
 
@@ -285,26 +171,31 @@ export function useFarmTelemetry(farmId: string) {
       isCancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [farmId, isOnline, latest]);
+  }, [farmId, isOnline]);
 
-  const isStale = now - lastUpdate.getTime() > STALE_AFTER_MS;
-  const liveStatus: LiveStatus = !isStale ? "live" : "stale";
+  const current = feed.farmId === farmId ? feed : null;
+  const reading = current?.reading ?? null;
+  const polled = current?.polled ?? false;
+  const lastUpdate = useMemo(() => (reading ? new Date(reading.timestamp) : null), [reading]);
+  // Mock readings are generated, never stale
+  const isStale = !MOCK_DATA_ENABLED && lastUpdate !== null && now - lastUpdate.getTime() > STALE_AFTER_MS;
+  const liveStatus: LiveStatus = !reading ? "waiting" : isStale ? "stale" : "live";
   const alerts = useMemo<TelemetryAlert[]>(
-    () => evaluateTelemetryAlerts(farm, snapshot, lastUpdate, now),
-    [farm, lastUpdate, now, snapshot],
+    () =>
+      farm?.id === farmId && polled && reading && lastUpdate
+        ? evaluateTelemetryAlerts(farm, reading, lastUpdate, MOCK_DATA_ENABLED ? lastUpdate.getTime() : now)
+        : [],
+    [farm, farmId, lastUpdate, now, polled, reading],
   );
 
   useEffect(() => {
-    recordTelemetryAlerts(farmId, alerts);
+    if (farmId) recordTelemetryAlerts(farmId, alerts);
   }, [alerts, farmId]);
 
   return {
-    snapshot,
+    reading,
     lastUpdate,
-    isOnline,
     liveStatus,
-    latestEvent,
-    isStale,
     alerts,
   };
 }

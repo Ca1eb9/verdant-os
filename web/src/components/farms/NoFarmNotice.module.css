@@ -1,0 +1,6 @@
+.notice {
+  padding: 1.25rem 1.3rem;
+  display: grid;
+  gap: 0.5rem;
+  border-radius: var(--radius-md);
+}

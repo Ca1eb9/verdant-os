@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
-import { evaluateTelemetryAlerts, readTelemetryAlerts } from "@/lib/alerts";
+import { NoFarmNotice } from "@/components/farms/NoFarmNotice";
+import { readTelemetryAlerts } from "@/lib/alerts";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { useFarmTelemetry } from "@/hooks/useFarmTelemetry";
 import type { TelemetryAlert } from "@/lib/types";
@@ -16,18 +17,13 @@ export function AlertsView() {
   const { activeFarmId, farm } = useSelectedFarm();
   const { fmt } = usePreferences();
   const [limit, setLimit] = useState<10 | 20>(20);
-  const { snapshot, lastUpdate } = useFarmTelemetry(activeFarmId);
+  const { alerts: currentAlerts, lastUpdate } = useFarmTelemetry(activeFarmId);
   // stored alerts live in the browser, so build the list after mount to match the server render
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const currentAlerts = useMemo(
-    () => evaluateTelemetryAlerts(farm, snapshot, lastUpdate, Date.now()),
-    [farm, lastUpdate, snapshot],
-  );
-
   const alerts = useMemo(() => {
-    if (!mounted) return [];
+    if (!mounted || !activeFarmId) return [];
     const combined = [...currentAlerts, ...readTelemetryAlerts(activeFarmId)];
     const seen = new Set<string>();
     const deduped: TelemetryAlert[] = [];
@@ -56,6 +52,8 @@ export function AlertsView() {
     }),
     [alerts],
   );
+
+  if (!farm) return <NoFarmNotice title="System alerts" />;
 
   return (
     <section className="pageSection">
@@ -106,7 +104,7 @@ export function AlertsView() {
         <article className={`glassPanel ${styles.summaryCard}`}>
           <span className={styles.summaryLabel}>Heartbeat</span>
           <strong className={styles.summaryValue} suppressHydrationWarning>
-            {fmt.time(lastUpdate)}
+            {lastUpdate ? fmt.time(lastUpdate) : "Never"}
           </strong>
           <span className={styles.summaryDetail}>Last sensor heartbeat seen</span>
         </article>

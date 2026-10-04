@@ -20,6 +20,9 @@ export function useFarmLive() {
   useEffect(() => onFarmDataSourceChange(() => setSource(getFarmDataSource())), []);
 
   useEffect(() => {
+    // a new source is another farm (or none): drop the last one's layout and robots
+    setTopology(DEFAULT_TOPOLOGY);
+    setRobots([]);
     let cancelled = false;
     source
       .getTopology()

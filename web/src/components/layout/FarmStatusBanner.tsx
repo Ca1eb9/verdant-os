@@ -13,8 +13,7 @@ export function FarmStatusBanner() {
     <div className={styles.banner} role="status" aria-live="polite">
       <span className="statusDot" />
       <p>
-        <strong>Disconnected from the farm.</strong> {connection.reason} Robot positions and
-        commands are unavailable until it reconnects.
+        <strong>Disconnected from the farm.</strong> {connection.reason}
       </p>
     </div>
   );

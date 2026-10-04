@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { RobotsCard } from "@/components/dashboard/RobotsCard";
 import { SensorCard } from "@/components/dashboard/SensorCard";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
+import { NoFarmNotice } from "@/components/farms/NoFarmNotice";
 import { useFarmTelemetry } from "@/hooks/useFarmTelemetry";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { formatMetric } from "@/lib/format";
@@ -14,31 +15,36 @@ const AIR_FALLBACK = "\uD83C\uDF2C\uFE0F";
 const WATER_FALLBACK = "\uD83D\uDCA7";
 const LIGHT_FALLBACK = "\uD83D\uDCA1";
 
+// The reservoir has a float switch, not a gauge: the tank drawing shows above or below it
+const RESERVOIR_FILL_OK = 72;
+const RESERVOIR_FILL_LOW = 18;
+
 function formatOptionalMetric(value: number | null, unit: string, precision = 1) {
   return value === null ? "No reading" : formatMetric(value, unit, precision);
 }
 
+const STATUS_LABEL = { live: "Live feed", stale: "Stale snapshot", waiting: "Waiting for data" };
+
 export function DashboardView() {
-  const { activeFarmId, farm } = useSelectedFarm();
+  const { farm } = useSelectedFarm();
   const { fmt } = usePreferences();
-  // readings are generated in the browser; the prerendered page shows placeholders instead
+  // readings load in the browser; the prerendered page shows placeholders instead
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const { snapshot, lastUpdate, liveStatus, latestEvent } = useFarmTelemetry(
-    activeFarmId,
-  );
+  const { reading, lastUpdate, liveStatus } = useFarmTelemetry(farm?.id ?? null);
 
-  const airTemperature = latestEvent ? latestEvent.air_temp_c : snapshot.air.temperature;
-  const humidity = latestEvent ? latestEvent.humidity_pct : snapshot.air.humidity;
-  const waterTemperature = latestEvent ? latestEvent.water_temp_c : snapshot.water.temperature;
-  const waterPh = latestEvent ? latestEvent.ph : snapshot.water.ph;
-  const lightPpfd = latestEvent ? latestEvent.light_ppfd : snapshot.light.ppfd;
-  const reservoirLevel = Math.min(92, Math.max(12, snapshot.water.level));
-  const reservoirHealthy = snapshot.water.level >= 50;
+  const airTemperature = reading?.airTemperature ?? null;
+  const humidity = reading?.humidity ?? null;
+  const pressure = reading?.pressure ?? null;
+  const waterTemperature = reading?.waterTemperature ?? null;
+  const waterPh = reading?.ph ?? null;
+  const waterEc = reading?.ec ?? null;
+  const lightPpfd = reading?.ppfd ?? null;
+  const waterLevelOk = reading?.waterLevelOk ?? null;
+  const reservoirLevel = waterLevelOk === null ? 0 : waterLevelOk ? RESERVOIR_FILL_OK : RESERVOIR_FILL_LOW;
   const waterLevelText =
-    latestEvent?.water_level_text ??
-    snapshot.water.levelText ??
-    (snapshot.water.levelFloat === 1 ? "Liquid detected" : "No liquid detected");
+    reading?.waterLevelText ??
+    (waterLevelOk === null ? "No reading" : waterLevelOk ? "Liquid detected" : "No liquid detected");
 
   const sensorCards = useMemo(
     () => [
@@ -57,7 +63,7 @@ export function DashboardView() {
           },
           {
             label: "Pressure",
-            value: formatMetric(snapshot.air.pressure, "hPa", 1),
+            value: formatOptionalMetric(pressure, "hPa", 1),
             tone: "focus" as const,
           },
         ],
@@ -79,11 +85,11 @@ export function DashboardView() {
               <span>Reservoir volume</span>
               <div
                 className={`${styles.reservoirStatus} ${
-                  reservoirHealthy ? styles.reserveGood : styles.reserveLow
+                  waterLevelOk === null ? "" : waterLevelOk ? styles.reserveGood : styles.reserveLow
                 }`}
               >
                 <span className="statusDot" />
-                <strong>{reservoirHealthy ? "Enough water" : "Refill soon"}</strong>
+                <strong>{waterLevelOk === null ? "No reading" : waterLevelOk ? "Enough water" : "Refill soon"}</strong>
               </div>
             </div>
             <div className={styles.waterSystemGrid}>
@@ -93,7 +99,7 @@ export function DashboardView() {
                   <div className={styles.reservoirColumn}>
                     <div className={styles.reservoirThreshold}>
                       <span className={styles.reservoirThresholdLine} />
-                      <span className={styles.reservoirThresholdLabel}>50% minimum</span>
+                      <span className={styles.reservoirThresholdLabel}>Level sensor</span>
                     </div>
                     <div className={styles.reservoirFill}>
                       <span className={styles.chamberWave} />
@@ -109,7 +115,6 @@ export function DashboardView() {
               </div>
             </div>
             <div className={styles.chamberStats}>
-              <span suppressHydrationWarning>{formatMetric(snapshot.water.level, "%", 0)} volume</span>
               <span>{waterLevelText}</span>
             </div>
           </div>
@@ -122,12 +127,12 @@ export function DashboardView() {
           },
           {
             label: "EC",
-            value: formatMetric(snapshot.water.ec, "mS/cm", 2),
+            value: formatOptionalMetric(waterEc, "mS/cm", 2),
             tone: "focus" as const,
           },
           {
             label: "Water Level",
-            value: formatMetric(snapshot.water.level, "%", 0),
+            value: waterLevelOk === null ? "No reading" : waterLevelOk ? "OK" : "LOW",
             tone: "watch" as const,
           },
         ],
@@ -147,14 +152,17 @@ export function DashboardView() {
       fmt,
       humidity,
       lightPpfd,
-      reservoirHealthy,
+      pressure,
       reservoirLevel,
-      snapshot,
+      waterEc,
+      waterLevelOk,
       waterLevelText,
       waterPh,
       waterTemperature,
     ],
   );
+
+  if (!farm) return <NoFarmNotice title="Farm" />;
 
   return (
     <section className="pageSection">
@@ -166,15 +174,15 @@ export function DashboardView() {
 
         <div className={styles.chips}>
           <span
-            className={`${styles.chip} ${mounted ? styles[liveStatus] : ""}`}
-            title={latestEvent ? `Reading the latest sensor event for ${farm.name}` : "Waiting for the first sensor event"}
+            className={`${styles.chip} ${mounted ? styles[liveStatus] ?? "" : ""}`}
+            title={reading ? `Reading the latest sensor event for ${farm.name}` : `No sensor readings from ${farm.name} yet`}
           >
             <span className="statusDot" />
-            {!mounted ? "Connecting" : liveStatus === "live" ? "Live feed" : "Stale snapshot"}
+            {!mounted ? "Connecting" : STATUS_LABEL[liveStatus]}
           </span>
           <span className={styles.chip}>
             <span className={styles.chipLabel}>Updated</span>
-            <time suppressHydrationWarning>{fmt.time(lastUpdate)}</time>
+            <time suppressHydrationWarning>{lastUpdate ? fmt.time(lastUpdate) : "Never"}</time>
           </span>
         </div>
       </header>

@@ -1,4 +1,4 @@
-import type { FarmIdentity, TelemetryAlert, TelemetrySnapshot } from "@/lib/types";
+import type { FarmIdentity, SensorReading, TelemetryAlert } from "@/lib/types";
 
 const ALERT_STORAGE_PREFIX = "verdantos:alerts:v1:";
 const LAST_AGE_WARNING_MS = 10_000;
@@ -40,11 +40,6 @@ const THRESHOLDS = {
     criticalMin: 150,
     criticalMax: 650,
     unit: "PPFD",
-  },
-  waterLevel: {
-    warningMin: 50,
-    criticalMin: 25,
-    unit: "%",
   },
 } as const;
 
@@ -201,7 +196,7 @@ function outOfRangeAlert(
 
 export function evaluateTelemetryAlerts(
   farm: FarmIdentity,
-  snapshot: TelemetrySnapshot,
+  reading: SensorReading,
   lastUpdate: Date,
   now: number,
 ) {
@@ -234,100 +229,44 @@ export function evaluateTelemetryAlerts(
     );
   }
 
-  const airTemperatureAlert = outOfRangeAlert(
-    farm,
-    "air.temperature",
-    "Air temperature",
-    snapshot.air.temperature,
-    THRESHOLDS.airTemperature.warningMin,
-    THRESHOLDS.airTemperature.warningMax,
-    THRESHOLDS.airTemperature.criticalMin,
-    THRESHOLDS.airTemperature.criticalMax,
-    THRESHOLDS.airTemperature.unit,
-  );
+  // A sensor that didn't read raises nothing here; the shelf bridge alerts on silence
+  const ranges = [
+    ["air.temperature", "Air temperature", reading.airTemperature, THRESHOLDS.airTemperature],
+    ["air.humidity", "Humidity", reading.humidity, THRESHOLDS.humidity],
+    ["water.temperature", "Water temperature", reading.waterTemperature, THRESHOLDS.waterTemperature],
+    ["water.ph", "pH", reading.ph, THRESHOLDS.ph],
+    ["light.ppfd", "PPFD", reading.ppfd, THRESHOLDS.ppfd],
+  ] as const;
 
-  const humidityAlert = outOfRangeAlert(
-    farm,
-    "air.humidity",
-    "Humidity",
-    snapshot.air.humidity,
-    THRESHOLDS.humidity.warningMin,
-    THRESHOLDS.humidity.warningMax,
-    THRESHOLDS.humidity.criticalMin,
-    THRESHOLDS.humidity.criticalMax,
-    THRESHOLDS.humidity.unit,
-  );
+  for (const [metric, label, value, band] of ranges) {
+    if (value === null) continue;
+    const alert = outOfRangeAlert(
+      farm,
+      metric,
+      label,
+      value,
+      band.warningMin,
+      band.warningMax,
+      band.criticalMin,
+      band.criticalMax,
+      band.unit,
+    );
+    if (alert) alerts.push(alert);
+  }
 
-  const waterTempAlert = outOfRangeAlert(
-    farm,
-    "water.temperature",
-    "Water temperature",
-    snapshot.water.temperature,
-    THRESHOLDS.waterTemperature.warningMin,
-    THRESHOLDS.waterTemperature.warningMax,
-    THRESHOLDS.waterTemperature.criticalMin,
-    THRESHOLDS.waterTemperature.criticalMax,
-    THRESHOLDS.waterTemperature.unit,
-  );
-
-  const phAlert = outOfRangeAlert(
-    farm,
-    "water.ph",
-    "pH",
-    snapshot.water.ph,
-    THRESHOLDS.ph.warningMin,
-    THRESHOLDS.ph.warningMax,
-    THRESHOLDS.ph.criticalMin,
-    THRESHOLDS.ph.criticalMax,
-    THRESHOLDS.ph.unit,
-  );
-
-  const ppfdAlert = outOfRangeAlert(
-    farm,
-    "light.ppfd",
-    "PPFD",
-    snapshot.light.ppfd,
-    THRESHOLDS.ppfd.warningMin,
-    THRESHOLDS.ppfd.warningMax,
-    THRESHOLDS.ppfd.criticalMin,
-    THRESHOLDS.ppfd.criticalMax,
-    THRESHOLDS.ppfd.unit,
-  );
-
-  const waterLevelAlert =
-    snapshot.water.level < THRESHOLDS.waterLevel.criticalMin
-      ? makeAlert(
-          farm,
-          "water.level",
-          "critical",
-          "Reservoir low",
-          `Reservoir level is ${toFixed(snapshot.water.level, 0)}%, below the critical floor.`,
-          `${toFixed(snapshot.water.level, 0)}%`,
-          `>= ${THRESHOLDS.waterLevel.warningMin}%`,
-        )
-      : snapshot.water.level < THRESHOLDS.waterLevel.warningMin
-        ? makeAlert(
-            farm,
-            "water.level",
-            "warning",
-            "Reservoir level falling",
-            `Reservoir level is ${toFixed(snapshot.water.level, 0)}%, below target band.`,
-            `${toFixed(snapshot.water.level, 0)}%`,
-            `>= ${THRESHOLDS.waterLevel.warningMin}%`,
-          )
-        : null;
-
-  for (const alert of [
-    airTemperatureAlert,
-    humidityAlert,
-    waterTempAlert,
-    phAlert,
-    ppfdAlert,
-    waterLevelAlert,
-  ]) {
-    if (alert) {
-      alerts.push(alert);
-    }
+  // The reservoir has a float switch, not a level gauge: below it is already critical
+  if (reading.waterLevelOk === false) {
+    alerts.push(
+      makeAlert(
+        farm,
+        "water.level",
+        "critical",
+        "Reservoir low",
+        "The reservoir is below the level sensor. Refill it.",
+        "LOW",
+        "OK",
+      ),
+    );
   }
 
   return alerts;

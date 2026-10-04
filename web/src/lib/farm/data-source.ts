@@ -4,6 +4,9 @@
 // the farm network, Supabase when on Vercel) implements FarmDataSource and is
 // registered with setFarmDataSource(). The map and control panel only ever
 // talk to this interface, so they work unchanged in both modes.
+//
+// A source serves one farm. On FarmNet that's the Pi's own farm; remotely,
+// selectFarm() swaps in a source for the farm picked in the header.
 
 import { createLocalSource } from "@/lib/farm/local-source";
 import type { RobotView } from "@/lib/farm/robots";
@@ -29,7 +32,8 @@ export interface CommandRequest {
 
 /**
  * Whether this source can reach the farm right now. `reason` says why not,
- * in words for the operator.
+ * in plain words for the operator: no service names, addresses or settings
+ * (log those to the console instead).
  */
 export type FarmConnection =
   | { state: "connected" }
@@ -69,55 +73,88 @@ async function readJson<T>(response: Response): Promise<T> {
 }
 
 /** Recent commands, newest first, from a GET endpoint returning { commands } */
-export async function listCommandsFrom(endpoint: string, robotId?: string) {
-  const query = robotId ? `?robot_id=${encodeURIComponent(robotId)}` : "";
-  const response = await fetch(`${endpoint}${query}`, { cache: "no-store" });
+export async function listCommandsFrom(endpoint: string, robotId?: string, farmId?: string) {
+  const params = new URLSearchParams();
+  if (farmId) params.set("farm_id", farmId);
+  if (robotId) params.set("robot_id", robotId);
+  const query = params.toString();
+  const response = await fetch(query ? `${endpoint}?${query}` : endpoint, { cache: "no-store" });
   const payload = await readJson<{ commands: CommandRecord[] }>(response);
   return payload.commands;
 }
 
 /**
- * Default source until the data service lands: default topology, no robot
- * stream, and commands through this app's /api/commands route (Supabase).
+ * Remote source for one farm until the data service lands: default topology,
+ * no robot stream, and that farm's commands through this app's /api/commands
+ * route (Supabase).
  */
-export const dashboardApiSource: FarmDataSource = {
-  mode: "remote",
-  async getTopology() {
-    return null;
-  },
-  subscribeRobots(onRobots) {
-    onRobots([]);
-    return () => undefined;
-  },
-  async sendCommand(request, operatorKey) {
-    const response = await fetch("/api/commands", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-operator-key": operatorKey },
-      body: JSON.stringify(request),
-    });
-    const payload = await readJson<{ command: CommandRecord }>(response);
-    return payload.command;
-  },
-  listRecentCommands(robotId) {
-    return listCommandsFrom("/api/commands", robotId);
-  },
-  subscribeConnection(onChange) {
-    onChange({
-      state: "offline",
-      reason: "Remote access to the farm isn't set up yet: the Supabase bridge will report the farm's status.",
-    });
-    return () => undefined;
-  },
-};
+export function createDashboardApiSource(farmId: string): FarmDataSource {
+  return {
+    mode: "remote",
+    async getTopology() {
+      return null;
+    },
+    subscribeRobots(onRobots) {
+      onRobots([]);
+      return () => undefined;
+    },
+    async sendCommand(request, operatorKey) {
+      const response = await fetch("/api/commands", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-operator-key": operatorKey },
+        body: JSON.stringify({ ...request, farm_id: farmId }),
+      });
+      const payload = await readJson<{ command: CommandRecord }>(response);
+      return payload.command;
+    },
+    listRecentCommands(robotId) {
+      return listCommandsFrom("/api/commands", robotId, farmId);
+    },
+    subscribeConnection(onChange) {
+      onChange({
+        state: "offline",
+        reason: "Remote access isn't available yet.",
+      });
+      return () => undefined;
+    },
+  };
+}
+
+/** Remote, with no farm picked (the farm list is loading, empty or failed) */
+function noFarmSource(connection: FarmConnection): FarmDataSource {
+  return {
+    mode: "remote",
+    async getTopology() {
+      return null;
+    },
+    subscribeRobots(onRobots) {
+      onRobots([]);
+      return () => undefined;
+    },
+    async sendCommand() {
+      throw new CommandError("No farm selected.", 400);
+    },
+    async listRecentCommands() {
+      return [];
+    },
+    subscribeConnection(onChange) {
+      onChange(connection);
+      return () => undefined;
+    },
+  };
+}
 
 // Until the data service detects local vs remote on its own: set
 // NEXT_PUBLIC_MQTT_WS_URL (e.g. ws://192.168.4.1:9001) for the live local source,
 // and NEXT_PUBLIC_DASHBOARD_API_URL for its command history.
 const LOCAL_MQTT_URL = process.env.NEXT_PUBLIC_MQTT_WS_URL;
 
+/** True when this dashboard runs on a farm's Pi: one farm, no farm picker */
+export const ON_FARMNET = Boolean(LOCAL_MQTT_URL);
+
 let activeSource: FarmDataSource = LOCAL_MQTT_URL
   ? createLocalSource(LOCAL_MQTT_URL, process.env.NEXT_PUBLIC_DASHBOARD_API_URL)
-  : dashboardApiSource;
+  : noFarmSource({ state: "connecting", reason: "Loading farms…" });
 const listeners = new Set<() => void>();
 
 export function getFarmDataSource() {
@@ -128,6 +165,15 @@ export function getFarmDataSource() {
 export function setFarmDataSource(source: FarmDataSource) {
   activeSource = source;
   listeners.forEach((listener) => listener());
+}
+
+/**
+ * Point the remote dashboard at a farm, or at none (`reason` says why, for the
+ * banner). On FarmNet the source is fixed to the Pi's farm.
+ */
+export function selectFarm(farmId: string | null, reason = "No farm selected.") {
+  if (ON_FARMNET) return;
+  setFarmDataSource(farmId ? createDashboardApiSource(farmId) : noFarmSource({ state: "offline", reason }));
 }
 
 export function onFarmDataSourceChange(listener: () => void) {
