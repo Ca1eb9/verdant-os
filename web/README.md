@@ -72,7 +72,7 @@ For the Arduino Uno R3 USB serial to Supabase live ingestion flow, see [`docs/li
 
 - Import the repository into Vercel as a Next.js project.
 - Use Node.js 20 or newer.
-- Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` in the project environment.
+- Set the Supabase keys, `OPERATOR_KEY` and the `NEXT_PUBLIC_SUPABASE_*` values in the project environment: [docs/SUPABASE-SETUP.md](../docs/SUPABASE-SETUP.md) step 5 lists each one. The tables are in [`supabase/`](./supabase).
 - The included [`vercel.json`](./vercel.json) sets cache behavior for the service worker, manifest, and `/images` assets so the PWA works cleanly in deployment.
 - No custom server is required. Vercel can build and deploy the app directly with the default `next build` flow.
 
