@@ -1,0 +1,30 @@
+# Ingester: records telemetry to SQLite. See docs/PI-SERVICES.md.
+[Unit]
+Description=VerdantOS telemetry ingester
+# Wants, not Requires: see farm-orchestrator.service
+After=mosquitto.service
+Wants=mosquitto.service
+StartLimitIntervalSec=0
+
+[Service]
+User=farm
+Group=farm
+WorkingDirectory=/opt/verdant-os/farm-controller/ingester
+EnvironmentFile=/etc/verdant/ingester.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /opt/verdant-os/node_modules/tsx/dist/cli.mjs src/index.ts
+Restart=always
+RestartSec=5
+# The service closes the database cleanly on SIGINT.
+KillSignal=SIGINT
+TimeoutStopSec=10
+
+# farm_telemetry.db lives here (DB_PATH)
+StateDirectory=verdant
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

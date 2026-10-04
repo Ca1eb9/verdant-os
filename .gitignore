@@ -22,6 +22,8 @@ __pycache__/
 .venv/
 venv/
 env/
+# ...but not the Pi services' env examples (docs/PI-SERVICES.md)
+!deploy/env/
 *.egg-info/
 dist/
 .Python

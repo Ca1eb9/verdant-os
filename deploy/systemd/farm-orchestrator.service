@@ -1,0 +1,33 @@
+# Orchestrator: robot state, task queue, commands. See docs/PI-SERVICES.md.
+[Unit]
+Description=VerdantOS orchestrator
+# It exits at startup if the broker isn't reachable; start after it. Wants,
+# not Requires: with Mosquitto down it keeps retrying (Restart=always) instead
+# of not starting at all, and it reconnects on its own when Mosquitto restarts.
+After=mosquitto.service
+Wants=mosquitto.service
+# Keep retrying forever instead of giving up after a few fast failures.
+StartLimitIntervalSec=0
+
+[Service]
+User=farm
+Group=farm
+WorkingDirectory=/opt/verdant-os/farm-controller/orchestrator
+EnvironmentFile=/etc/verdant/orchestrator.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /opt/verdant-os/node_modules/tsx/dist/cli.mjs src/index.ts
+Restart=always
+RestartSec=5
+# The service saves its tasks on SIGINT.
+KillSignal=SIGINT
+TimeoutStopSec=10
+
+# orchestrator-state.json lives here (STATE_PATH)
+StateDirectory=verdant
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
