@@ -636,6 +636,8 @@ async function main() {
   console.log(`[ORCH] Orchestrator running`);
   console.log(`[ORCH]   broker:    ${BROKER_URL}`);
   console.log(`[ORCH]   topology:  ${topology.nodes.length} nodes, ${topology.edges.length} edges`);
+  // Retained, so the dashboard's map always matches the layout the robots use
+  mqtt.publish(TOPICS.system.topology, topology, true);
   console.log(`[ORCH]   battery:   low=${config.battery_low_pct}% critical=${config.battery_critical_pct}%`);
   console.log(`[ORCH]   watchdog:  ${config.heartbeat_timeout_ms / 1000}s timeout`);
   // Restore tasks from the last run. Assigned tasks go back on their robot

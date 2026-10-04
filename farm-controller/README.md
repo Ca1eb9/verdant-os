@@ -105,6 +105,8 @@ npm run orch
 ```
 
 - Settings load from `orchestrator-config.json` at startup.
+- It publishes `topology.json` (retained) to `farm/system/topology` at startup,
+  for the dashboard's map.
 - Queued, assigned and finished tasks are saved to
   `farm-controller/orchestrator-state.json` (gitignored) and restored on restart.
 - Environment overrides: `BROKER_URL`, `CONFIG_PATH`, `TOPOLOGY_PATH`, `STATE_PATH`.
