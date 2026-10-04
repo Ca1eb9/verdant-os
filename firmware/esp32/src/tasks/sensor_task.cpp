@@ -58,13 +58,19 @@ void update_rfid(uint32_t now) {
 }
 
 // ---- Obstacle state ----------------------------------------------------------
-// One per sensor. Sets that side's flag on the FIRST close reading. Clears it
-// only after OBSTACLE_CLEAR_COUNT readings beyond OBSTACLE_CLEAR_CM, so the
-// robot doesn't stutter at the threshold.
+// One per sensor. Sets that side's flag on the FIRST reading under its stop
+// distance (OBSTACLE_STOP_CM, or lower while nav approaches the elevator or
+// dock). Clears it only after OBSTACLE_CLEAR_COUNT readings beyond the clear
+// distance, so the robot doesn't stutter at the threshold. When nav changes
+// the stop distance, the next reading is judged against it straight away:
+// otherwise a robot stopped a few cm from the elevator wall would hold its
+// flag and never creep the rest of the way in.
 
 struct ObstacleState {
   TofSensor* tof;
   volatile bool* flag;
+  volatile float* stop_cm;
+  float judged_stop_cm = OBSTACLE_STOP_CM;  // the stop distance last applied
   float cm = NAN;
   uint8_t clear_count = 0;
   uint32_t last_data_ms = 0;
@@ -73,10 +79,11 @@ struct ObstacleState {
 
   // Needed because the toolchain builds as C++11, where default member
   // initializers stop this struct being brace-initializable as an aggregate.
-  ObstacleState(TofSensor* t, volatile bool* f) : tof(t), flag(f) {}
+  ObstacleState(TofSensor* t, volatile bool* f, volatile float* s)
+      : tof(t), flag(f), stop_cm(s) {}
 };
-ObstacleState s_front{&s_tof_front, &g_obstacle_front_flag};
-ObstacleState s_rear{&s_tof_rear, &g_obstacle_rear_flag};
+ObstacleState s_front{&s_tof_front, &g_obstacle_front_flag, &g_obstacle_front_stop_cm};
+ObstacleState s_rear{&s_tof_rear, &g_obstacle_rear_flag, &g_obstacle_rear_stop_cm};
 
 void set_obstacle_flag(ObstacleState& obs, bool on, const char* why) {
   if (*obs.flag == on) return;
@@ -92,19 +99,27 @@ void update_obstacle(ObstacleState& obs, uint32_t now) {
     case TofReading::Pending:
       break;
     case TofReading::Target:
-    case TofReading::Clear:
+    case TofReading::Clear: {
       obs.last_data_ms = now;
       obs.fault_logged = false;
       obs.cm = (r == TofReading::Target) ? cm : NAN;
-      if (r == TofReading::Target && cm < OBSTACLE_STOP_CM) {
+      float stop_cm = *obs.stop_cm;
+      bool rejudge = stop_cm != obs.judged_stop_cm;
+      obs.judged_stop_cm = stop_cm;
+      if (r == TofReading::Target && cm < stop_cm) {
         obs.clear_count = 0;
         set_obstacle_flag(obs, true, "target in range");
-      } else if (r == TofReading::Clear || cm > OBSTACLE_CLEAR_CM) {
+      } else if (rejudge) {
+        obs.clear_count = OBSTACLE_CLEAR_COUNT;
+        set_obstacle_flag(obs, false, "stop distance changed");
+      } else if (r == TofReading::Clear ||
+                 cm > stop_cm + (OBSTACLE_CLEAR_CM - OBSTACLE_STOP_CM)) {
         if (obs.clear_count < OBSTACLE_CLEAR_COUNT) obs.clear_count++;
         if (obs.clear_count >= OBSTACLE_CLEAR_COUNT) set_obstacle_flag(obs, false, "path clear");
       }
-      // Between STOP and CLEAR: hold the current flag state.
+      // Between stop and clear: hold the current flag state.
       break;
+    }
     case TofReading::Error:
       break;
   }

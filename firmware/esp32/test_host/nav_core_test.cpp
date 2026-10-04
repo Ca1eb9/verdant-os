@@ -73,6 +73,7 @@ class Rig : public NavOutput {
   uint32_t now = 1000;
   std::vector<Event> events;
   std::vector<std::string> motion;  // "halt", "edge a>b", "creep", "jog f", "dock"
+  EdgeDrive edge_drive = EdgeDrive::Forward;  // of the last edge
 
   Rig() { core.on_battery(80.0f); }
 
@@ -94,8 +95,9 @@ class Rig : public NavOutput {
     events.push_back({type, task_id, node == NO_NODE ? "" : GRAPH_NODES[node].id, core.status()});
   }
   void halt() override { motion.push_back("halt"); }
-  void follow_edge(NodeIndex from, NodeIndex to, bool, Heading) override {
+  void follow_edge(NodeIndex from, NodeIndex to, EdgeDrive d) override {
     motion.push_back(std::string("edge ") + GRAPH_NODES[from].id + ">" + GRAPH_NODES[to].id);
+    edge_drive = d;
   }
   void creep() override { motion.push_back("creep"); }
   void jog(JogDirection d) override { motion.push_back(d == JogDirection::Backward ? "jog b" : "jog f"); }
@@ -208,7 +210,8 @@ static void test_boot() {
   CHECK(r.last_motion() == "halt");
   TelemetryMsg t = {};
   r.core.snapshot(t);
-  CHECK(!t.heading_known);  // no move yet
+  // It never turns, and is set down facing away from the dock.
+  CHECK(t.heading_known && t.heading == Heading::East);
 }
 
 static void test_task_cycle() {
@@ -330,7 +333,7 @@ static void test_path_following() {
   SCENARIO("path following");
   Rig r;
   r.boot_at("dock-1");
-  r.command(navigate("t1", "elev-1-L0", TargetAction::Water, 10));
+  r.command(navigate("t1", "cp-11", TargetAction::Water, 10));
   // A missed tag: the next one along the path still counts.
   r.tag("water-01");
   CHECK(r.status() == RobotStatus::EnRoute && r.last_motion() == "edge water-01>cp-02");
@@ -341,13 +344,89 @@ static void test_path_following() {
   r.tag("cp-01");
   CHECK(r.last_motion() == "edge cp-01>water-01");
   // Elevator move: the heading stays.
-  r.drive({"water-01", "cp-02", "elev-1-L0"});
+  r.drive({"water-01", "cp-02", "elev-1-L0", "elev-1-L1", "cp-11"});
   CHECK(r.status() == RobotStatus::Working);
-  r.advance(10);
-  r.command(navigate("t2", "elev-1-L1", TargetAction::Water, 10));
   TelemetryMsg t = {};
   r.core.snapshot(t);
   CHECK(t.heading_known && t.heading == Heading::East);
+
+  // An elevator is never a target: the robot only passes through.
+  r.advance(10);
+  r.clear();
+  r.command(navigate("t2", "elev-1-L1", TargetAction::Water, 10));
+  CHECK(r.emitted({RobotEventType::TaskFailed}) && r.last_event().task_id == "t2");
+  CHECK(r.status() == RobotStatus::Idle && r.task().empty());
+}
+
+static void test_drive_direction() {
+  SCENARIO("forward, backward, elevator");
+  Rig r;
+  r.boot_at("water-01");
+  // Toward the dock: backward, heading kept, rear sensor.
+  r.command(navigate("t1", "dock-1", TargetAction::Water, 10));
+  CHECK(r.last_motion() == "edge water-01>cp-01" && r.edge_drive == EdgeDrive::Backward);
+  CHECK(r.core.reversing());
+  r.tag("cp-01");
+  CHECK(r.last_motion() == "edge cp-01>dock-1" && r.edge_drive == EdgeDrive::Backward);
+  TelemetryMsg t = {};
+  r.core.snapshot(t);
+  CHECK(t.heading == Heading::East);
+  r.tag("dock-1");
+
+  // Away from it: forward, onto the elevator; off it the other way.
+  r.command(navigate("t2", "cp-11", TargetAction::Water, 10));
+  CHECK(r.edge_drive == EdgeDrive::Forward && !r.core.reversing());
+  r.drive({"cp-01", "water-01", "cp-02"});
+  CHECK(r.last_motion() == "edge cp-02>elev-1-L0" && r.edge_drive == EdgeDrive::Forward);
+  r.tag("elev-1-L0");
+  CHECK(r.last_motion() == "edge elev-1-L0>elev-1-L1");
+  CHECK(r.edge_drive == EdgeDrive::ElevatorBackward && r.core.reversing());
+  // Its tag read again during the ride: still drives off the same way.
+  r.tag("elev-1-L0");
+  CHECK(r.last_motion() == "edge elev-1-L0>elev-1-L1");
+  CHECK(r.edge_drive == EdgeDrive::ElevatorBackward);
+  // Stopped during the ride and resumed: the same.
+  r.command(make(CommandType::Stop));
+  r.command(make(CommandType::Resume));
+  CHECK(r.last_motion() == "edge elev-1-L0>elev-1-L1");
+  CHECK(r.edge_drive == EdgeDrive::ElevatorBackward);
+  r.tag("elev-1-L1");
+  CHECK(r.last_motion() == "edge elev-1-L1>cp-11" && r.edge_drive == EdgeDrive::Backward);
+  r.tag("cp-11");
+  CHECK(r.status() == RobotStatus::Working);
+  r.core.snapshot(t);
+  CHECK(t.heading == Heading::East);
+
+  // Up two levels: one ride, off only at the top.
+  Rig two;
+  two.boot_at("cp-02");
+  two.command(navigate("t5", "cp-21", TargetAction::Water, 10));
+  two.tag("elev-1-L0");
+  CHECK(two.last_motion() == "edge elev-1-L0>elev-1-L2");
+  CHECK(two.edge_drive == EdgeDrive::ElevatorBackward);
+  two.tag("elev-1-L2");
+  CHECK(two.last_motion() == "edge elev-1-L2>cp-21" && two.edge_drive == EdgeDrive::Backward);
+  // And back down from a level-2 checkpoint: forward onto it, off at the bottom.
+  two.tag("cp-21");
+  two.command(navigate("t6", "cp-02", TargetAction::Water, 10));
+  CHECK(two.last_motion() == "edge cp-21>elev-1-L2" && two.edge_drive == EdgeDrive::Forward);
+  two.tag("elev-1-L2");
+  CHECK(two.last_motion() == "edge elev-1-L2>elev-1-L0");
+  CHECK(two.edge_drive == EdgeDrive::ElevatorBackward);
+
+  // Crept forward onto the elevator after boot: drives off backward.
+  Rig e;
+  e.boot_at("elev-1-L0");
+  e.command(navigate("t3", "cp-11", TargetAction::Water, 10));
+  CHECK(e.edge_drive == EdgeDrive::ElevatorBackward);
+  // Backed onto it (a backward jog over its tag): drives off forward.
+  Rig j;
+  j.boot_at("cp-02");
+  j.command(jog(JogDirection::Backward));
+  j.tag("elev-1-L0");
+  j.command(make(CommandType::Resume));
+  j.command(navigate("t4", "cp-11", TargetAction::Water, 10));
+  CHECK(j.edge_drive == EdgeDrive::ElevatorForward && !j.core.reversing());
 }
 
 static void test_stop_resume() {
@@ -692,6 +771,7 @@ int main() {
   test_navigate_edge_cases();
   test_command_path();
   test_path_following();
+  test_drive_direction();
   test_stop_resume();
   test_dock_trip_keeps_task();
   test_dock_task();
@@ -733,7 +813,7 @@ static void test_unreachable() {
   // The same during a dock trip with a kept task: both fail.
   Rig r3;
   r3.boot_at("b1");
-  r3.command(navigate("t3", "c2", TargetAction::Water, 1000));
+  r3.command(navigate("t3", "c3", TargetAction::Water, 1000));
   r3.tag("c1");
   r3.command(make(CommandType::ReturnToDock));
   r3.clear();

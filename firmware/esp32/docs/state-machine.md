@@ -17,7 +17,7 @@ stateDiagram-v2
     initializing --> idle : first known tag read
 
     idle --> en_route : navigate
-    en_route --> en_route : tag read - update node and heading
+    en_route --> en_route : tag read - update node
     en_route --> working : target reached<br/>[arrived, task_started]
     working --> idle : duration_ms elapsed [task_complete]<br/>clear task_id, set last_completed_task_id
     en_route --> idle : target unreachable [task_failed]
@@ -100,9 +100,12 @@ stateDiagram-v2
   forced return.
   - warn at 20% [`battery_low`];
   - forced return at 15% [`battery_critical`], keeping the task;
-  - motor cutoff at about 5%.
+  - motor cutoff at about 5%, until back above 15%. Driving itself with the
+    motors cut off is a fault [`error`].
 - **Obstacle:** motors hard-stop while the flag on the side they're driving
-  toward is set (front or rear sensor). The status doesn't change. `[obstacle_detected]` is sent once, then `[path_blocked]` if still
+  toward is set (front or rear sensor). The status doesn't change. After the
+  elevator or dock tag, the robot creeps in closer than that instead (ToF
+  approach). `[obstacle_detected]` is sent once, then `[path_blocked]` if still
   blocked after a timeout.
 - **Telemetry** is sent every 1 s and on every status or node change, and always
   reports the current `task_id` and `last_completed_task_id`. The robot never

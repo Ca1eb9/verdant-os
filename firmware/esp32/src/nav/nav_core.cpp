@@ -20,6 +20,12 @@ bool is_dock_trip(RobotStatus s) {
 
 bool is_on_task(RobotStatus s) { return s == RobotStatus::EnRoute || s == RobotStatus::Working; }
 
+// An elevator move: no x/y change.
+bool is_elevator_edge(NodeIndex from, NodeIndex to) {
+  Heading h;
+  return !compute_heading(from, to, h);
+}
+
 uint32_t default_duration_ms(TargetAction a) {
   switch (a) {
     case TargetAction::Water: return DEFAULT_WATER_MS;
@@ -37,6 +43,11 @@ void copy_id(char (&dst)[N], const char* src) {
 
 }  // namespace
 
+NavCore::NavCore(NavOutput& out) : out_(out) {
+  ctx_.current.target = NO_NODE;
+  ctx_.kept.target = NO_NODE;
+}
+
 // ---- State ----------------------------------------------------------------------
 
 const char* NavCore::reported_task_id() const {
@@ -50,8 +61,8 @@ void NavCore::snapshot(TelemetryMsg& t) const {
   copy_id(t.current_node, node_ == NO_NODE ? "" : GRAPH_NODES[node_].id);
   copy_id(t.task_id, reported_task_id());
   copy_id(t.last_completed_task_id, ctx_.last_completed_task_id);
-  t.heading_known = heading_known_;
-  t.heading = heading_;
+  t.heading_known = true;
+  t.heading = ROBOT_HEADING;
 }
 
 // ---- Inputs ----------------------------------------------------------------------
@@ -85,14 +96,12 @@ void NavCore::on_tag(NodeIndex node, uint32_t now) {
     out_.note("ignored: tag isn't in the graph");
     return;
   }
-  NodeIndex prev = node_;
-  node_ = node;
-  // Reversing doesn't turn the robot, so the heading stays.
-  Heading h;
-  if (prev != NO_NODE && !reversing_ && compute_heading(prev, node, h)) {
-    heading_ = h;
-    heading_known_ = true;
+  // Not on a re-read of the same tag (e.g. during the ride): by then
+  // reversing_ is already the way off.
+  if (node != node_ && GRAPH_NODES[node].type == NodeType::Elevator) {
+    elevator_exit_backward_ = !reversing_;
   }
+  node_ = node;
 
   switch (status_) {
     case RobotStatus::Initializing:
@@ -160,6 +169,7 @@ void NavCore::on_charge_contact() {
     out_.note("ignored: charge contact while not docking");
     return;
   }
+  out_.halt();
   emit(RobotEventType::DockConnected);
   // A dock task is done once connected; a kept task waits for the charge.
   if (ctx_.dock_task) {
@@ -215,6 +225,13 @@ void NavCore::navigate(const Command& cmd, uint32_t now) {
   char details[EVENT_DETAILS_LEN];
   if (goal == NO_NODE) {
     snprintf(details, sizeof(details), "unknown target %s", cmd.target_node);
+    emit_for(RobotEventType::TaskFailed, id, details);
+    return;
+  }
+  // The robot only passes through an elevator: stopping on its tag leaves it
+  // off the platform, with nothing to drive it back on.
+  if (GRAPH_NODES[goal].type == NodeType::Elevator) {
+    snprintf(details, sizeof(details), "%s is an elevator, not a target", cmd.target_node);
     emit_for(RobotEventType::TaskFailed, id, details);
     return;
   }
@@ -418,15 +435,29 @@ void NavCore::follow_path(uint32_t now) {
     return;
   }
   NodeIndex from = ctx_.path[ctx_.path_index];
-  NodeIndex to = ctx_.path[ctx_.path_index + 1];
-  out_.follow_edge(from, to, heading_known_, heading_);
-  // It now faces `to` (an elevator move keeps the heading).
-  reversing_ = false;
-  Heading h;
-  if (compute_heading(from, to, h)) {
-    heading_ = h;
-    heading_known_ = true;
+  uint8_t last = ctx_.path_index + 1;
+  // One ride over several levels: it drives off only at the last one.
+  if (is_elevator_edge(from, ctx_.path[last])) {
+    while (last + 1 < ctx_.path_len && is_elevator_edge(ctx_.path[last], ctx_.path[last + 1])) {
+      last++;
+    }
   }
+  NodeIndex to = ctx_.path[last];
+  EdgeDrive drive = edge_drive(from, to);
+  if (drive != EdgeDrive::Turn) {
+    reversing_ = drive == EdgeDrive::Backward || drive == EdgeDrive::ElevatorBackward;
+  }
+  out_.follow_edge(from, to, drive);
+}
+
+EdgeDrive NavCore::edge_drive(NodeIndex from, NodeIndex to) const {
+  Heading travel;
+  if (!compute_heading(from, to, travel)) {
+    return elevator_exit_backward_ ? EdgeDrive::ElevatorBackward : EdgeDrive::ElevatorForward;
+  }
+  if (travel == ROBOT_HEADING) return EdgeDrive::Forward;
+  return compute_turn(ROBOT_HEADING, travel) == Turn::UTurn ? EdgeDrive::Backward
+                                                             : EdgeDrive::Turn;
 }
 
 void NavCore::arrive(uint32_t now) {

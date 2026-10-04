@@ -199,6 +199,11 @@ extern QueueHandle_t g_event_queue;      // RobotEventMsg nav    -> comms
 extern volatile bool g_obstacle_front_flag;  // set/cleared by sensor task
 extern volatile bool g_obstacle_rear_flag;   // set/cleared by sensor task
 extern volatile bool g_motor_kill_flag;  // set by survival overrides (nav)
+// Distance under which the sensor task sets that side's flag: OBSTACLE_STOP_CM,
+// lowered by nav while it creeps into the elevator or dock. Aligned 32-bit
+// writes are atomic on the ESP32 too.
+extern volatile float g_obstacle_front_stop_cm;
+extern volatile float g_obstacle_rear_stop_cm;
 // seq of the last Turn or timed Drive the motor task finished.
 extern volatile uint32_t g_drive_done_seq;
 

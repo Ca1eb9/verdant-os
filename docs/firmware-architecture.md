@@ -112,7 +112,7 @@ pushed first, then the status changes.
 |---|---|---|---|
 | `initializing` | First known tag read | — | `idle` |
 | `idle` | `navigate` accepted | — | `en_route` |
-| `en_route` | Tag read (not the target) | — | `en_route` (update `current_node`, heading) |
+| `en_route` | Tag read (not the target) | — | `en_route` (update `current_node`) |
 | `en_route` | Target reached (including already there) | `arrived`, `task_started` | `working` |
 | `working` | `duration_ms` elapsed | `task_complete` | `idle` (clear `task_id`, set `last_completed_task_id`; a task without a `task_id` leaves it unchanged) |
 | any moving state | Target unreachable / path can't be followed | `task_failed` | `idle` (clear `task_id`) |
@@ -158,9 +158,8 @@ Telemetry:
 }
 ```
 
-`heading` is 0 N, 1 E, 2 S, 3 W, or `null` until known: the way the robot
-faces. It changes when the robot starts driving an edge (an elevator move keeps
-it), not when it reaches the next tag. `battery_pct` is 0–100.
+`heading` is 0 N, 1 E, 2 S, 3 W, or `null` if unknown: the way the robot
+faces. It never changes (see "Driving" below). `battery_pct` is 0–100.
 
 Event:
 
@@ -184,10 +183,12 @@ the node with `type: "dock"`.
 ### Boot and localization
 
 After boot the robot reports `initializing` until it knows its node. It must
-find a tag on its own (e.g. creep forward slowly until one is read, or be
-placed on a tag). The orchestrator never assigns work to a robot without a
-node, and the robot can't plan a path to the dock without one, so a robot that
-reported `idle` with a `null` node would never move again.
+find a tag on its own: it creeps forward slowly until one is read, or it can
+be placed on a tag. If no tag turns up within a timeout, it stops, publishes
+`error` and stays `initializing` until a tag is read. The orchestrator never
+assigns work to a robot without a node, and the robot can't plan a path to the
+dock without one, so a robot that reported `idle` with a `null` node would
+never move again.
 
 ### Telemetry `task_id`
 
@@ -228,7 +229,7 @@ The robot never queues commands: each one acts on the current state right away.
 
 | Command | Behaviour |
 |---|---|
-| `navigate` | Replaces the current task (and clears the stop latch, paused status and kept task). If `path` is included, follow it from the robot's current node; if it doesn't lead from there to `target_node` along graph edges, or there is no `path`, compute the shortest path on board. Target already reached: `arrived` straight away. Unknown or unreachable target: publish `task_failed` with the command's `task_id` and stay as you were. **Ignore** a `navigate` whose `task_id` equals the current `task_id` or `last_completed_task_id` (a redelivered duplicate). |
+| `navigate` | Replaces the current task (and clears the stop latch, paused status and kept task). If `path` is included, follow it from the robot's current node; if it doesn't lead from there to `target_node` along graph edges, or there is no `path`, compute the shortest path on board. Target already reached: `arrived` straight away. Unknown or unreachable target, or an elevator node (the robot only passes through elevators): publish `task_failed` with the command's `task_id` and stay as you were. **Ignore** a `navigate` whose `task_id` equals the current `task_id` or `last_completed_task_id` (a redelivered duplicate). |
 | `stop` | Pause in place: halt motors, hold the action timer, report `stopped`, keep `task_id`, set the stop latch. Ignored if already stopped. |
 | `resume` | In `manual`: leave manual control (see [Manual control](#manual-control)) and clear the stop latch. Otherwise only acts if the stop latch is set: clear it and restore the paused status (the action timer continues with the remaining time). If it was on a task, re-plan from the current node first, since manual control may have moved it while stopped; a robot still at its target keeps working. If the robot is stopped at the dock with a kept task, re-plan and continue it. |
 | `return_to_dock` | Ignored if already returning, docking or charging. Otherwise head to the dock. A task in progress or paused is kept and resumed after charging. With no task and a `task_id` on the command, adopt it as a dock task and publish `task_complete` for it once connected to the charger. If already at the dock but not charging, run the dock sequence again (straight to `docking`, no `arrived`). No path to the dock: publish `task_failed` for a dock task's `task_id`, else ignore it. A latched stop stays latched. |
@@ -275,6 +276,50 @@ Heading and turns follow `computeHeading()` / `computeTurn()` in the same file:
 +y is north, +x is east, and a move with no x/y change (elevator) keeps the
 current heading.
 
+### Driving
+
+The robot has a single drive motor, so it never turns. It is set down facing
+away from the dock (`ROBOT_HEADING` in `config.h`, east on our farm), so it can
+back onto the charger, and `heading` stays that way. To go the other way it drives
+backward (`computeTurn()` gives a U-turn). An edge to the side (a left or
+right turn) can't be driven yet: see Faults.
+
+An elevator ride (edges with no x/y change): the robot stays put while the
+elevator moves, for `ELEVATOR_WAIT_MS` (in `config.h`) per level, then drives
+off the opposite way to how it drove onto the elevator, until it reads the
+elevator's tag on the new level. Before the wait it creeps onto the platform
+to its end wall (see "ToF approach"). A path through several levels (e.g.
+`elev-1-L0` to `elev-1-L2`) is one ride: it only drives off at the last level.
+"How it drove on" is the drive direction when the robot read the elevator tag
+it's leaving from.
+
+### ToF approach
+
+The robot slows to `APPROACH_SPEED` once the obstacle sensor on the side it's
+driving toward reads inside `SLOW_ZONE_CM`, and stays slow until the next edge.
+That's for anything ahead, so it also stops more accurately at
+`OBSTACLE_STOP_CM` for a real obstruction.
+
+The elevator and the dock need it much closer: about 1–3 cm from the end wall.
+Only **after reading their tag**, the nav task lowers the stop distance for
+that side (`ELEVATOR_STOP_CM`, `DOCK_STOP_CM`) and creeps in at
+`APPROACH_SPEED` until the sensor reads it. Before the tag, anything inside
+`OBSTACLE_STOP_CM` is a real obstruction, so a person standing at the elevator
+isn't driven up to. That means each elevator and dock tag must be read while
+the end wall is still more than `OBSTACLE_STOP_CM` away; otherwise the robot
+stops short of the tag.
+
+- **Elevator:** it creeps onto the platform the way it drove on, then rides.
+- **Dock:** it backs on (it faces away from the dock) until `DOCK_STOP_CM`,
+  then waits for the charger contact, which stops the motors.
+- If the end wall isn't reached within `APPROACH_TIMEOUT_MS` of driving, the
+  robot faults (see Faults).
+
+The sensor task owns the obstacle flags; the nav task only sets each side's
+stop distance (`g_obstacle_front_stop_cm`, `g_obstacle_rear_stop_cm`). When it
+changes, the sensor task judges the next reading against it straight away, so
+a robot stopped a few cm from the wall can creep the rest of the way in.
+
 ## Survival overrides
 
 Checked at the top of every navigation loop, before any other logic. They
@@ -285,10 +330,12 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
   **below** the orchestrator's `battery_low_pct` (20%) so the orchestrator
   handles normal charging (in `stopped` and `manual`, only the motor cutoff
   applies):
-  - warn at 20%: publish `battery_low`;
+  - warn at 20%: publish `battery_low`, once until the next charge complete
+    (not while docking or charging);
   - force return to dock at 15%: publish `battery_critical` and go to the dock,
     keeping the task;
-  - kill motors at about 5%.
+  - kill motors at about 5%, in every status. They stay off until the battery
+    is back above 15%, so noise near the cutoff can't toggle them.
 - **Obstacle:** two VL53L4CX sensors, front and rear, each on its own I2C bus
   (they share one fixed address). The sensor task sets a front and a rear
   obstacle flag, and the motor task hard-stops only on the flag for the side
@@ -307,6 +354,13 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
   `error` and report `error`, keeping `task_id` and the last known node. When a
   known tag is read again, publish `recovery`, re-plan from that node and
   continue.
+- **Approach not finished:** the elevator or dock end wall isn't reached
+  within a timeout. The robot faults the same way.
+- **Turn needed:** turns are a placeholder: an edge whose next node is to
+  the side (neither ahead nor behind) faults the same way.
+- **Motor cutoff:** whenever the robot is driving itself with the motors cut
+  off (battery at or below about 5%), it faults the same way, rather than
+  waiting forever. Not while charging.
 
 ### No Pi heartbeat watchdog
 
@@ -369,10 +423,10 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
 ## TBD
 
 - Missed-tag and path-blocked timeout values
-- Dock alignment sequence and charge-contact detection
+- Charge-contact detection
+- ToF approach distances and speeds, and where the elevator and dock tags go
 - Battery ADC calibration curve
-- Turn calibration constants
-- Elevator moves (how the robot rides between levels and confirms arrival)
+- Turns (single drive motor: an edge to the side faults for now)
 - `harvest` action
 - Bluetooth controller pairing and input mapping
 - Graph updates from the orchestrator (the only case where the robot would

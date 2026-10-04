@@ -56,13 +56,19 @@ const topology: FarmTopology = JSON.parse(
 );
 const graph = buildGraph(topology);
 const DOCK_NODE = topology.nodes.find((n) => n.type === "dock")!.id;
+/**
+ * The robot has a single drive motor, so it never turns: it faces away from
+ * the dock (so it backs onto the charger) and drives backward to go the
+ * other way. Matches ROBOT_HEADING in the firmware's config.h.
+ */
+const ROBOT_HEADING = Heading.EAST;
 
 // --- Robot state ---------------------------------------------
 
 const robot = {
   status: RobotStatus.IDLE,
   currentNodeId: "dock-1",
-  heading: Heading.EAST,
+  heading: ROBOT_HEADING,
   battery: 100,
   path: [] as string[],
   pathIndex: 0,
@@ -223,12 +229,6 @@ function followablePath(path: string[], targetNode: string): string[] | null {
   return route.every((id, i) => i === 0 || hasEdge(route[i - 1], id)) ? route : null;
 }
 
-/** Face the next node, as the robot does when it starts an edge (elevator: heading kept) */
-function faceNextNode() {
-  const next = robot.path[robot.pathIndex + 1];
-  if (next) robot.heading = computeHeading(currentNode(), graph.nodes.get(next)!) ?? robot.heading;
-}
-
 function startNavigation(targetNode: string, path?: string[]): boolean {
   const route = (path && followablePath(path, targetNode)) ??
     dijkstra(graph, robot.currentNodeId, targetNode);
@@ -237,7 +237,6 @@ function startNavigation(targetNode: string, path?: string[]): boolean {
   robot.pathIndex = 0;
   robot.targetNode = targetNode;
   robot.status = RobotStatus.EN_ROUTE;
-  faceNextNode();
   return true;
 }
 
@@ -285,7 +284,6 @@ function startReturnToDock(dockTaskId?: string) {
   robot.status = robot.currentNodeId === DOCK_NODE
     ? RobotStatus.DOCKING
     : RobotStatus.RETURNING_TO_DOCK;
-  faceNextNode();
 }
 
 /**
@@ -325,6 +323,12 @@ async function main() {
         // Path is node ids; plan our own when it isn't included
         if (duplicate) {
           console.log(`[CMD] duplicate navigate ${cmd.task_id}, ignored`);
+        } else if (graph.nodes.get(cmd.target_node)?.type === "elevator") {
+          publishEvent(
+            RobotEventType.TASK_FAILED,
+            `${cmd.target_node} is an elevator, not a target`,
+            cmd.task_id ?? null,
+          );
         } else if (startNavigation(cmd.target_node, cmd.path)) {
           robot.taskId = cmd.task_id ?? null;
           robot.currentAction = cmd.action_at_target ?? "idle";
@@ -524,7 +528,6 @@ function handleMoving() {
   robot.currentNodeId = robot.path[robot.pathIndex];
 
   const currNode = currentNode();
-  faceNextNode();
   robot.battery = Math.max(0, robot.battery - BATTERY_DRAIN_PER_MOVE);
 
   // Check battery thresholds after drain

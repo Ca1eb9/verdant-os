@@ -14,9 +14,11 @@
 //
 // Priority PRIO_NAV on core 1. Runs every NAV_LOOP_MS.
 //
-// Driving between tags, creeping to the first tag and docking are
-// placeholders (logged, motors stopped) until the RFID navigation and dock
-// sequence cards fill them in.
+// nav/survival runs first in every loop: battery thresholds, obstacle events,
+// and g_motor_kill_flag at the motor cutoff. nav/motion turns the motion hooks
+// into DriveCommands, reports missed tags to the state machine, and sets each
+// side's obstacle stop distance for the sensor task (lowered while creeping
+// into the elevator or dock).
 
 #pragma once
 
