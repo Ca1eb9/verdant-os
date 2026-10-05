@@ -15,6 +15,10 @@ export const TOPICS = {
   commands: {
     /** The only path the orchestrator accepts jog on */
     local: "farm/commands/local",
+    /** Remote commands, relayed from Supabase by the farm's bridge */
+    remote: "farm/commands/remote",
+    /** Commands from any source */
+    all: "farm/commands/+",
   },
   system: {
     /** The farm layout (retained, published by the orchestrator) */

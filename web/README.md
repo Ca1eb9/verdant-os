@@ -41,7 +41,7 @@ npm run start
 
 ## Live Farm Data On FarmNet
 
-Set `NEXT_PUBLIC_MQTT_WS_URL` (for example `ws://192.168.4.1:9001`, Mosquitto's WebSocket listener on the Pi) before `npm run dev` or `npm run build` to show live robots from MQTT and send commands, jog included, straight to the farm (`src/lib/farm/local-source.ts`). It's read at build time. Without it the app uses the default source. For the command history, also set `NEXT_PUBLIC_DASHBOARD_API_URL` to the Pi's Dashboard API (`GET /commands`, see `farm-controller/README.md`); until that exists, leave it unset and the history stays empty. The map uses the layout the orchestrator publishes, so start the orchestrator too.
+Set `NEXT_PUBLIC_MQTT_WS_URL` (for example `ws://192.168.4.1:9001`, Mosquitto's WebSocket listener on the Pi) before `npm run dev` or `npm run build` to show live robots from MQTT and send commands, jog included, straight to the farm (`src/lib/farm/local-source.ts`), with no operator key: only the farm network reaches the broker. It's read at build time. Without it the app uses the default source. The control panel's recent commands come live from `farm/commands/+`, so commands sent from other browsers or relayed from Supabase show up too. To also list the ones sent before the page opened, set `NEXT_PUBLIC_DASHBOARD_API_URL` to the Pi's Dashboard API (`GET /commands`, see `farm-controller/README.md`); it's asked once per robot. Until that exists, leave it unset and the list starts empty. The map uses the layout the orchestrator publishes, so start the orchestrator too.
 
 For `npm run dev` on your own machine, create `web/.env.local` (gitignored). Next only reads env files in `web/`, not the repo root's `.env`:
 
