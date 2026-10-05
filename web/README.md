@@ -43,6 +43,16 @@ npm run start
 
 Set `NEXT_PUBLIC_MQTT_WS_URL` (for example `ws://192.168.4.1:9001`, Mosquitto's WebSocket listener on the Pi) before `npm run dev` or `npm run build` to show live robots from MQTT and send commands, jog included, straight to the farm (`src/lib/farm/local-source.ts`). It's read at build time. Without it the app uses the default source. For the command history, also set `NEXT_PUBLIC_DASHBOARD_API_URL` to the Pi's Dashboard API (`GET /commands`, see `farm-controller/README.md`); until that exists, leave it unset and the history stays empty. The map uses the layout the orchestrator publishes, so start the orchestrator too.
 
+For `npm run dev` on your own machine, create `web/.env.local` (gitignored). Next only reads env files in `web/`, not the repo root's `.env`:
+
+```
+NEXT_PUBLIC_MQTT_WS_URL=ws://localhost:9001
+NEXT_PUBLIC_FARM_ID=your-farm-id
+NEXT_PUBLIC_FARM_NAME=Your Farm
+```
+
+Restart the dev server after changing it; its startup output lists `Environments: .env.local` when the file is read. A local Mosquitto needs the WebSocket listener from `farm-controller/README.md`; a stock install doesn't have one, and the dashboard stays "Disconnected". From another device, use this machine's LAN IP instead of `localhost`.
+
 Also set `NEXT_PUBLIC_FARM_ID` and `NEXT_PUBLIC_FARM_NAME` to that Pi's farm (its row in Supabase's `farms` table). On FarmNet the dashboard belongs to that one farm, and the header's farm picker is locked to it.
 
 ## Farms
