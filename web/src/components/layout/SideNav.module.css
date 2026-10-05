@@ -2,10 +2,15 @@
   display: none;
 }
 
+/* Fixed, not sticky: a sticky sidebar is held inside the page's height, which
+   ends on a fraction of a pixel, so it nudged up at the bottom of every page.
+   AppShell keeps its grid column empty for it. */
 @media (min-width: 980px) {
   .side {
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 0;
+    z-index: 2;
     display: flex;
     flex-direction: column;
     gap: 1rem;

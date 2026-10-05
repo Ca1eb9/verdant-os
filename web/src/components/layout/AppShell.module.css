@@ -24,6 +24,8 @@
   }
 
   .column {
+    /* the fixed sidebar is out of the grid, so keep its column clear */
+    grid-column: 2;
     padding: 0.8rem clamp(0.75rem, 1.8vw, 1.4rem) 2rem;
   }
 
