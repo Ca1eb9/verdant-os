@@ -1,5 +1,5 @@
-const SHELL_CACHE = "verdantos-shell-v5";
-const RUNTIME_CACHE = "verdantos-runtime-v5";
+const SHELL_CACHE = "verdantos-shell-v6";
+const RUNTIME_CACHE = "verdantos-runtime-v6";
 
 const PRECACHE_URLS = [
   "/",
@@ -9,10 +9,10 @@ const PRECACHE_URLS = [
   "/config",
   "/settings",
   "/manifest.webmanifest",
-  "/images/sprout-logo.webp",
   "/images/alert-danger.webp",
   "/images/app-icon.svg",
-  "/images/mask-icon.svg",
+  "/images/favicon.svg",
+  "/images/favicon-48.png",
   "/images/air-icon.svg",
   "/images/water-icon.svg",
   "/images/light-icon.svg",
@@ -25,7 +25,6 @@ const PRECACHE_URLS = [
   "/images/icon-512.png",
   "/images/icon-maskable-512.png",
   "/images/apple-touch-icon.png",
-  "/images/splash-screen.png",
 ];
 
 self.addEventListener("install", (event) => {

@@ -5,11 +5,10 @@ import { usePathname } from "next/navigation";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { isActive, NAV_ITEMS } from "@/components/layout/nav-items";
 import { InstallAppButton } from "@/components/pwa/InstallAppButton";
+import { VerdantMark } from "@/components/brand/VerdantMark";
 import { AssetImage } from "@/components/ui/AssetImage";
 import { useFarmConnection } from "@/hooks/useFarmConnection";
 import styles from "@/components/layout/TopNav.module.css";
-
-const LOGO_FALLBACK = "\uD83C\uDF3F";
 
 // The farm connection, not the browser's network: being online is no use
 // if the farm can't be reached.
@@ -30,13 +29,7 @@ export function TopNav() {
     <header className={styles.wrap}>
       <div className={`glassPanel ${styles.topBar}`}>
         <Link href="/" className={styles.brand}>
-          <AssetImage
-            src="/images/sprout-logo.webp"
-            alt="VerdantOS logo"
-            fallback={LOGO_FALLBACK}
-            className={styles.logo}
-            fallbackClassName={`${styles.logo} assetFallback`}
-          />
+          <VerdantMark className={styles.logo} />
           <div className={styles.brandMeta}>
             <span className="eyebrow">Vertical Farm Control</span>
             <strong className={styles.brandTitle}>VerdantOS</strong>

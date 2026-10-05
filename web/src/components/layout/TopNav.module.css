@@ -27,9 +27,6 @@
 .logo {
   width: 2.4rem;
   height: 2.4rem;
-  border-radius: var(--radius-md);
-  object-fit: cover;
-  border: 1px solid rgb(var(--highlight-rgb) / 0.08);
 }
 
 .brandMeta {

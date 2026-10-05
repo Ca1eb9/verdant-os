@@ -43,8 +43,11 @@
   --font-display: var(--font-sans), "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --font-body: var(--font-sans), "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --font-data: var(--font-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
-  --max-width: 1440px;
-  --sidebar-w: 232px;
+  --content-width: 1440px;
+  --sidebar-w-expanded: 232px;
+  --sidebar-w: var(--sidebar-w-expanded);
+  /* grows by whatever width the sidebar gives up (see below) */
+  --max-width: calc(var(--content-width) + var(--sidebar-w-expanded) - var(--sidebar-w));
 }
 
 /* Light theme: cool slate ground, white panels, deeper accents for contrast */
@@ -86,6 +89,20 @@ html[data-theme="light"] {
 
 * {
   box-sizing: border-box;
+}
+
+/* Collapsing gives the content the sidebar's width: the page keeps its right
+   edge (header, Farm page control panel) and its widest column grows.
+   --sidebar-w is the one value that animates; the sidebar, the grid and the
+   content width all follow it, so every frame agrees and nothing wobbles. */
+@property --sidebar-w {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 232px;
+}
+
+html {
+  transition: --sidebar-w 180ms ease;
 }
 
 html[data-sidebar="collapsed"] {
