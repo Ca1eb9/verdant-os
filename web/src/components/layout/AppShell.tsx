@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { FarmLoadingOverlay } from "@/components/layout/FarmLoadingOverlay";
 import { FarmStatusBanner } from "@/components/layout/FarmStatusBanner";
 import { SideNav } from "@/components/layout/SideNav";
 import { TopNav } from "@/components/layout/TopNav";
@@ -11,7 +12,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className={styles.column}>
         <TopNav />
         <FarmStatusBanner />
-        <main className={styles.main}>{children}</main>
+        <main className={styles.main}>
+          <FarmLoadingOverlay>{children}</FarmLoadingOverlay>
+        </main>
       </div>
     </div>
   );
