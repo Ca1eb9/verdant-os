@@ -13,6 +13,7 @@
   z-index: 1;
   width: min(100%, var(--max-width));
   margin: 0.65rem auto 0;
+  transition: width 180ms ease;
 }
 
 /* desktop: sidebar column + content; no bottom dock to clear */
