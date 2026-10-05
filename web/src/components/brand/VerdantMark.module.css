@@ -1,0 +1,150 @@
+/* Dark theme: white glass edges and a glowing white sprout */
+.mark {
+  --mark-edge: #ffffff;
+  --mark-edge-opacity: 0.75;
+  --mark-glass-opacity: 0.32;
+  --mark-side-opacity: 0.5;
+  --mark-stem: #ffffff;
+  --mark-sprout-from: #ffffff;
+  --mark-sprout-to: #c9ff6b;
+  --mark-halo-opacity: 0.5;
+  display: block;
+  overflow: visible;
+}
+
+/* Light theme: white would vanish, so dark green edges and a green sprout */
+:global(:root[data-theme="light"]) .mark {
+  --mark-edge: #0b5e3e;
+  --mark-edge-opacity: 0.95;
+  --mark-glass-opacity: 0.5;
+  --mark-side-opacity: 0.85;
+  --mark-stem: #15803d;
+  --mark-sprout-from: #9be86a;
+  --mark-sprout-to: #16a34a;
+  --mark-halo-opacity: 0.35;
+}
+
+.halo {
+  opacity: var(--mark-halo-opacity);
+}
+
+.sideLeft {
+  fill: #0e6e4c;
+  fill-opacity: var(--mark-side-opacity);
+}
+
+.sideRight {
+  fill: #0a5e52;
+  fill-opacity: var(--mark-side-opacity);
+}
+
+.glass {
+  fill-opacity: var(--mark-glass-opacity);
+  stroke: var(--mark-edge);
+  stroke-opacity: var(--mark-edge-opacity);
+  stroke-width: 5;
+  stroke-linejoin: round;
+}
+
+.stem {
+  stroke: var(--mark-stem);
+}
+
+.sproutFrom {
+  stop-color: var(--mark-sprout-from);
+}
+
+.sproutTo {
+  stop-color: var(--mark-sprout-to);
+}
+
+.light {
+  opacity: 0.85;
+}
+
+.sprout {
+  transform-origin: 0 0;
+}
+
+/* lights: each grow light pulses, the upper one half a beat later */
+.lights .light {
+  animation: pulse 3s ease-in-out infinite;
+}
+
+.lights .light2 {
+  animation-delay: 0.5s;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* grow: the lights switch on shelf by shelf, then the sprout pops up */
+.grow .light1 {
+  animation: growLight1 5s infinite;
+}
+
+.grow .light2 {
+  animation: growLight2 5s infinite;
+}
+
+.grow .sprout {
+  animation: growSprout 5s infinite;
+}
+
+@keyframes growLight1 {
+  0%,
+  20% {
+    opacity: 0;
+  }
+  28%,
+  92% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes growLight2 {
+  0%,
+  32% {
+    opacity: 0;
+  }
+  40%,
+  92% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes growSprout {
+  0%,
+  38% {
+    transform: scale(0);
+  }
+  55% {
+    transform: scale(1.1);
+  }
+  64%,
+  92% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mark * {
+    animation: none !important;
+  }
+}

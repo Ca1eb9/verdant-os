@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { isActive, NAV_ITEMS } from "@/components/layout/nav-items";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
+import { VerdantMark } from "@/components/brand/VerdantMark";
 import { AssetImage } from "@/components/ui/AssetImage";
 import styles from "@/components/layout/SideNav.module.css";
 
@@ -31,13 +32,7 @@ export function SideNav() {
     <aside className={styles.side} aria-label="Main navigation">
       <div className={styles.header}>
         <Link href="/" className={styles.brand} title="VerdantOS">
-          <AssetImage
-            src="/images/sprout-logo.webp"
-            alt="VerdantOS logo"
-            fallback={"\uD83C\uDF3F"}
-            className={styles.logo}
-            fallbackClassName={`${styles.logo} assetFallback`}
-          />
+          <VerdantMark className={styles.logo} />
           <strong className={styles.brandText}>VerdantOS</strong>
         </Link>
 
@@ -61,13 +56,7 @@ export function SideNav() {
           aria-expanded="false"
           title="Expand sidebar"
         >
-          <AssetImage
-            src="/images/sprout-logo.webp"
-            alt=""
-            fallback={"\uD83C\uDF3F"}
-            className={`${styles.logo} ${styles.expandLogo}`}
-            fallbackClassName={`${styles.logo} ${styles.expandLogo} assetFallback`}
-          />
+          <VerdantMark className={`${styles.logo} ${styles.expandLogo}`} />
           <span className={styles.expandArrow}>
             <Arrow direction="right" />
           </span>

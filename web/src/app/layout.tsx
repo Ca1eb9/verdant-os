@@ -45,10 +45,11 @@ export const metadata: Metadata = {
   applicationName: "VerdantOS Control Room",
   manifest: "/manifest.webmanifest",
   icons: {
+    // favicon.svg switches to its glowing dark version on a dark browser theme;
+    // the PNG is the light-safe fallback for browsers without SVG favicons
     icon: [
-      { url: "/images/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/images/icon-512.png", sizes: "512x512", type: "image/png" },
-      { url: "/images/app-icon.svg", type: "image/svg+xml" },
+      { url: "/images/favicon.svg", type: "image/svg+xml" },
+      { url: "/images/favicon-48.png", sizes: "48x48", type: "image/png" },
     ],
     apple: [
       {
@@ -58,11 +59,6 @@ export const metadata: Metadata = {
       },
     ],
     other: [
-      {
-        rel: "mask-icon",
-        url: "/images/mask-icon.svg",
-        color: "#6ff7c3",
-      },
       {
         rel: "apple-touch-startup-image",
         url: "/images/splash-screen.png",
