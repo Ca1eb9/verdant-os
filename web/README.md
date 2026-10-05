@@ -55,6 +55,8 @@ One Supabase project serves every farm, and each farm has its own Pi. Every Supa
 
 The header pill shows the farm connection, never the browser's network: "Connected" while the active data source reaches the farm (the MQTT broker here; the Supabase bridge's presence remotely, once the remote source exists), "Connecting" on the first attempt, and "Disconnected" otherwise, with a banner on every page saying why. Data sources report it through `FarmDataSource.subscribeConnection()`.
 
+On the farm pages (Dashboard, Farm, History, Alerts), the growing logo covers the page while the farm loads, and again while it's disconnected, with the same reason and a "Show the page anyway" button that holds until the farm is back (`src/components/layout/FarmLoadingOverlay.tsx`). It waits 400 ms first, so a quick load doesn't flash it. Settings and Config never show it.
+
 ## Verification
 
 Run the full handoff check before opening a pull request or handing off the repo:

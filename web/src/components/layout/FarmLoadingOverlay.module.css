@@ -1,0 +1,73 @@
+/* Covers the page content (not the header or navigation), dimmed behind the mark */
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  min-height: min(70vh, 40rem);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(6px);
+  animation: fadeIn 220ms ease;
+}
+
+/* stays in view while a long page scrolls under it */
+.content {
+  position: sticky;
+  top: 24vh;
+  display: grid;
+  justify-items: center;
+  gap: 0.55rem;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.mark {
+  width: 9rem;
+  height: 9rem;
+  margin-bottom: 0.4rem;
+}
+
+.title {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.reason {
+  margin: 0;
+  max-width: 22rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.dismiss {
+  margin-top: 0.5rem;
+  min-height: 2.6rem;
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius-control);
+  border: 1px solid rgb(var(--line-rgb) / 0.16);
+  background: rgb(var(--surface-rgb) / 0.72);
+  color: var(--text);
+  transition: border-color 180ms ease;
+}
+
+.dismiss:hover {
+  border-color: rgb(var(--teal-rgb) / 0.4);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay {
+    animation: none;
+  }
+}
