@@ -360,7 +360,7 @@ export function ControlPanel({
   const aisleOf = (n: GraphNode | undefined) => (n ? scene.aisles.find((a) => a.y === n.y)?.name : undefined);
 
   return (
-    <aside className={`glassPanel ${styles.panel}`} aria-label="Robot control">
+    <aside className={`glassPanel ${styles.panel}`} aria-label="Robot control" data-keep-target>
       <section className={styles.section}>
         <div className={styles.sectionHead}>
           <span className="eyebrow">Robot</span>

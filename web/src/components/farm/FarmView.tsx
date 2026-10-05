@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ControlPanel } from "@/components/farm/ControlPanel";
 import { FarmMap } from "@/components/farm/FarmMap";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
@@ -33,6 +33,17 @@ export function FarmView() {
   const selectRobot = useCallback((id: string) => {
     setPickedRobotId(id);
     setManualAisle(null);
+  }, []);
+
+  // A click anywhere but a map pick, the map's controls or the control panel
+  // drops the picked target
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      if (event.target instanceof Element && event.target.closest(".fw-hit, [data-robot], [data-keep-target]")) return;
+      setTargetNodeId(null);
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
   }, []);
 
   const targetable = useMemo(

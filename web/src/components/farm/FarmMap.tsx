@@ -111,7 +111,7 @@ export function FarmMap({
 
   return (
     <div className={styles.map}>
-      <div className={styles.toolbar}>
+      <div className={styles.toolbar} data-keep-target>
         <span className={styles.toolLabel}>Aisle</span>
         <div className="segmented" role="tablist" aria-label="Aisle">
           {scene.aisles.map((aisle) => (
