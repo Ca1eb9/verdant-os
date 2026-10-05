@@ -52,6 +52,9 @@ as administrator), then restart the Mosquitto service.
 
 If it doesn't start, run `mosquitto -c <that file> -v` to see the config error.
 
+Then point the dashboard at it with `web/.env.local` (see "Live Farm Data On
+FarmNet" in [web/README.md](../web/README.md)).
+
 ### Verify Mosquitto is running
 
 Open two terminals:
