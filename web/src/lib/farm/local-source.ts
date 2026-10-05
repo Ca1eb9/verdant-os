@@ -6,10 +6,12 @@
 // to farm/commands/local, the path the orchestrator accepts jog on. The
 // broker is only reachable on FarmNet, so no operator key is needed.
 //
-// The ingester saves every command to SQLite; the history comes from the
-// Pi's Dashboard API, GET {apiUrl}/commands?robot_id=, which returns
-// { commands: CommandRecord[] } newest first, like this app's /api/commands.
-// With no apiUrl (the API isn't built yet) the history is empty.
+// The command history is kept in memory from farm/commands/+, so commands
+// from every browser and the remote bridge show up live. What was sent
+// before this page loaded comes once per robot from the Pi's Dashboard API,
+// GET {apiUrl}/commands?robot_id=, which returns { commands: CommandRecord[] }
+// newest first, like this app's /api/commands. With no apiUrl (the API isn't
+// built yet) the history starts empty and fills as commands are sent.
 
 import mqtt, { type MqttClient } from "mqtt";
 import {
@@ -31,18 +33,24 @@ import type {
 } from "@/lib/farm/types";
 
 const RECONNECT_MS = 2_000;
+/** Commands listed per robot: the Dashboard API returns the same */
+const RECENT_COMMANDS = 10;
+/** Commands kept in memory across all robots */
+const KEPT_COMMANDS = 200;
 
 const STATUSES: RobotStatus[] = [
   "idle", "en_route", "working", "returning_to_dock", "docking", "charging",
   "stopped", "lost", "error", "manual", "initializing",
 ];
 const NODE_TYPES = ["checkpoint", "elevator", "dock", "water"];
+const COMMANDS = ["navigate", "return_to_dock", "stop", "resume", "cancel", "jog"];
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const isStrOrNull = (v: unknown) => v === null || typeof v === "string";
+const isOptStr = (v: unknown) => v === undefined || typeof v === "string";
 
 function isTelemetry(v: unknown): v is RobotTelemetry {
   return isRecord(v) &&
@@ -65,6 +73,15 @@ function isTopology(v: unknown): v is FarmTopology {
     v.nodes.every((n) => isRecord(n) && typeof n.id === "string" && isNum(n.x) && isNum(n.y) &&
       isNum(n.z) && NODE_TYPES.includes(n.type as string)) &&
     v.edges.every((e) => isRecord(e) && typeof e.from === "string" && typeof e.to === "string");
+}
+
+// Only the fields the history shows; the orchestrator validates the rest
+function isCommand(v: unknown): v is RemoteCommand {
+  if (!isRecord(v) || !isRecord(v.command)) return false;
+  const c = v.command;
+  return typeof v.id === "string" && typeof v.robot_id === "string" && typeof v.issued_by === "string" &&
+    isNum(v.issued_at) && COMMANDS.includes(c.command as string) && isOptStr(c.target_node) &&
+    isOptStr(c.task_id) && (c.immediate === undefined || typeof c.immediate === "boolean");
 }
 
 interface Entry {
@@ -119,6 +136,15 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
   };
   let topology: FarmTopology | null = null;
   const warned = new Set<string>();
+  /** Newest received first: issued_at comes from other clocks */
+  let commands: CommandRecord[] = [];
+  /** Robots whose earlier commands were loaded from the Dashboard API ("" = all) */
+  const loadedHistory = new Set<string>();
+
+  const recordCommand = (record: CommandRecord) => {
+    if (commands.some((c) => c.id === record.id)) return;
+    commands = [record, ...commands].slice(0, KEPT_COMMANDS);
+  };
 
   const emit = () => {
     const list = [...robots].map(([id, e]) => toView(id, e));
@@ -146,6 +172,12 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       topologyWaiters.forEach((resolve) => resolve(msg));
       topologyWaiters.clear();
       updateConnection();
+      return;
+    }
+    if (topic === TOPICS.commands.local || topic === TOPICS.commands.remote) {
+      if (!isCommand(msg)) return ignore(topic);
+      // jogs repeat while held; they'd push everything else out
+      if (msg.command.command !== "jog") recordCommand({ ...msg, status: "sent" });
       return;
     }
     const id = extractIdFromTopic(topic);
@@ -178,7 +210,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
         setConnection(OFFLINE);
       });
       client.on("error", (err) => console.warn(`[local-source] ${err.message}`));
-      client.subscribe([TOPICS.robot.telemetryAll, TOPICS.robot.stateAll, TOPICS.system.topology]);
+      client.subscribe([TOPICS.robot.telemetryAll, TOPICS.robot.stateAll, TOPICS.system.topology, TOPICS.commands.all]);
     } else if (!needed && client) {
       client.end(true);
       client = null;
@@ -226,13 +258,34 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
             reject(new CommandError(`Could not send the command: ${err.message}`, 502));
             return;
           }
-          resolve({ ...remote, status: "sent" });
+          const record: CommandRecord = { ...remote, status: "sent" };
+          // listed now; the broker's echo of it is a duplicate
+          if (remote.command.command !== "jog") recordCommand(record);
+          resolve(record);
         });
       });
     },
 
     async listRecentCommands(robotId) {
-      return apiUrl ? listCommandsFrom(`${apiUrl}/commands`, robotId) : [];
+      const key = robotId ?? "";
+      if (apiUrl && !loadedHistory.has(key)) {
+        try {
+          // older than anything heard live, so they go after it
+          const loaded: unknown[] = await listCommandsFrom(`${apiUrl}/commands`, robotId);
+          loaded.filter(isCommand).forEach((record) => {
+            if (commands.some((c) => c.id === record.id)) return;
+            commands = [...commands, { ...record, status: "sent" as const }].slice(0, KEPT_COMMANDS);
+          });
+          loadedHistory.add(key);
+        } catch (err) {
+          // retried on the next refresh; the live history still fills meanwhile
+          if (!warned.has("history")) {
+            warned.add("history");
+            console.warn(`[local-source] no command history from the Dashboard API: ${err instanceof Error ? err.message : err}`);
+          }
+        }
+      }
+      return commands.filter((c) => !robotId || c.robot_id === robotId).slice(0, RECENT_COMMANDS);
     },
 
     subscribeConnection(onChange) {
