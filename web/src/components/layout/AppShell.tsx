@@ -13,8 +13,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <TopNav />
         <FarmStatusBanner />
         <main className={styles.main}>
-          {children}
-          <FarmLoadingOverlay />
+          <FarmLoadingOverlay>{children}</FarmLoadingOverlay>
         </main>
       </div>
     </div>
