@@ -21,7 +21,6 @@
     background: rgb(var(--surface-rgb) / 0.78);
     backdrop-filter: blur(12px);
     overflow: hidden;
-    transition: width 180ms ease;
   }
 }
 

@@ -6,7 +6,6 @@
 
 .topBar {
   width: min(100%, var(--max-width));
-  transition: width 180ms ease;
   margin: 0 auto;
   padding: 0.6rem 0.75rem;
   display: flex;
