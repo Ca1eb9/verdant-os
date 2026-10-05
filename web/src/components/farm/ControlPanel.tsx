@@ -119,6 +119,9 @@ export function ControlPanel({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [recent, setRecent] = useState<CommandRecord[]>([]);
+  // On FarmNet commands go straight to the broker, which only the farm network reaches
+  const localMode = source.mode === "local";
+  const needsKey = !localMode && !operatorKey;
 
   useEffect(() => setOperatorKey(readKey()), []);
 
@@ -169,7 +172,7 @@ export function ControlPanel({
 
   const send = async (request: CommandRequest, after?: () => void) => {
     if (!robot) return;
-    if (!operatorKey) {
+    if (needsKey) {
       setShowKey(true);
       setMessage({ tone: "error", text: "Enter the operator key to send commands." });
       return;
@@ -230,7 +233,6 @@ export function ControlPanel({
     robot && send({ robot_id: robot.id, command: { command: "resume", priority: "critical", immediate: true } });
 
   // --- Manual control (farm network only) ---
-  const localMode = source.mode === "local";
   const inManual = status === "manual";
   const canJog = localMode && online && Boolean(status && JOGGABLE.includes(status));
   const manualTitle = !online
@@ -252,17 +254,11 @@ export function ControlPanel({
       .sendCommand({ robot_id: robotId, command: { command: "jog", direction, priority: "critical", immediate: true } }, operatorKey)
       .catch((err) => {
         stopJog();
-        if (err instanceof CommandError && err.status === 401) setShowKey(true);
         setMessage({ tone: "error", text: err instanceof Error ? err.message : "Could not send the command." });
       });
 
   const startJog = (direction: JogDirection) => {
     if (!robot || !canJog || jogTimer.current !== null) return;
-    if (!operatorKey) {
-      setShowKey(true);
-      setMessage({ tone: "error", text: "Enter the operator key to send commands." });
-      return;
-    }
     setMessage(null);
     const robotId = robot.id;
     void sendJog(robotId, direction);
@@ -657,34 +653,36 @@ export function ControlPanel({
         )}
       </section>
 
-      <section className={styles.keyRow}>
-        {showKey ? (
-          <form
-            className={styles.keyForm}
-            onSubmit={(event) => {
-              event.preventDefault();
-              saveKey();
-            }}
-          >
-            <input
-              id="operator-key"
-              className="controlSelect"
-              type="password"
-              autoComplete="off"
-              placeholder="Operator key"
-              value={keyDraft}
-              onChange={(event) => setKeyDraft(event.target.value)}
-            />
-            <button type="submit" className={styles.btn}>
-              Save
+      {localMode ? null : (
+        <section className={styles.keyRow}>
+          {showKey ? (
+            <form
+              className={styles.keyForm}
+              onSubmit={(event) => {
+                event.preventDefault();
+                saveKey();
+              }}
+            >
+              <input
+                id="operator-key"
+                className="controlSelect"
+                type="password"
+                autoComplete="off"
+                placeholder="Operator key"
+                value={keyDraft}
+                onChange={(event) => setKeyDraft(event.target.value)}
+              />
+              <button type="submit" className={styles.btn}>
+                Save
+              </button>
+            </form>
+          ) : (
+            <button type="button" className={styles.linkBtn} onClick={() => setShowKey(true)}>
+              {operatorKey ? "Change operator key" : "Set operator key"}
             </button>
-          </form>
-        ) : (
-          <button type="button" className={styles.linkBtn} onClick={() => setShowKey(true)}>
-            {operatorKey ? "Change operator key" : "Set operator key"}
-          </button>
-        )}
-      </section>
+          )}
+        </section>
+      )}
     </aside>
   );
 }
