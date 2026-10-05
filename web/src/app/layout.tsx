@@ -6,6 +6,7 @@ import { FarmProvider } from "@/components/farms/FarmContext";
 import { PreferencesProvider } from "@/components/preferences/PreferencesProvider";
 import { AppShell } from "@/components/layout/AppShell";
 import { PwaRegistrar } from "@/components/pwa/PwaRegistrar";
+import { SPLASH_SCREENS } from "@/lib/splash-screens";
 
 // applies the saved theme and sidebar state before first paint so neither flashes.
 // Theme: saved choice, else the browser's preference, else dark.
@@ -58,17 +59,13 @@ export const metadata: Metadata = {
         type: "image/png",
       },
     ],
-    other: [
-      {
-        rel: "apple-touch-startup-image",
-        url: "/images/splash-screen.png",
-      },
-    ],
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "VerdantOS",
+    // the home-screen app's launch screen, one per iPhone and iPad screen size
+    startupImage: SPLASH_SCREENS,
   },
   formatDetection: {
     telephone: false,
