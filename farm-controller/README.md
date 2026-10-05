@@ -23,6 +23,35 @@ sudo systemctl start mosquitto
 **Windows:**
 Download and install from https://mosquitto.org/download — it runs as a service automatically.
 
+### Add the WebSocket listener (for the dashboard)
+
+The services use port 1883, but a browser can only reach the broker over
+WebSockets. A fresh install only listens on 1883, so the dashboard's live
+data (`web/README.md`) can't connect until you add port 9001, the same
+listeners as the Pi ([docs/WIFI-SETUP.md](../docs/WIFI-SETUP.md)):
+
+```
+listener 1883
+listener 9001
+protocol websockets
+allow_anonymous true
+```
+
+Mosquitto 2.x rejects clients without a username once any `listener` is set,
+so keep `allow_anonymous true`. Only use it on a trusted network.
+
+**Mac:** append to `$(brew --prefix)/etc/mosquitto/mosquitto.conf`, then
+`brew services restart mosquitto`.
+
+**Ubuntu / WSL / Raspberry Pi:** put the lines in
+`/etc/mosquitto/conf.d/verdant.conf` (`sudo nano`), then
+`sudo systemctl restart mosquitto`.
+
+**Windows:** append to `C:\Program Files\mosquitto\mosquitto.conf` (editor run
+as administrator), then restart the Mosquitto service.
+
+If it doesn't start, run `mosquitto -c <that file> -v` to see the config error.
+
 ### Verify Mosquitto is running
 
 Open two terminals:
