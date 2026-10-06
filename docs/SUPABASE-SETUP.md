@@ -1,13 +1,8 @@
 # Supabase setup
 
-Supabase is the farm's cloud side: the dashboard on Vercel reads farm data from it and sends commands through it, and the Supabase bridge on the Pi keeps it in sync with the farm's MQTT bus. This doc sets up the one team project, which serves every farm: each farm has its own Pi and bridge, and every row carries its `farm_id`. About an hour and a quarter, most of it pasting SQL.
+Supabase is the farm's cloud side: the dashboard on Vercel reads farm data from it and sends commands through it, and the Supabase bridge on the Pi keeps it in sync with the farm's MQTT bus. This doc sets up a single project that serves every farm: each farm has its own Pi and bridge, and every row carries its `farm_id`. Setup takes about an hour and a quarter, most of it pasting SQL.
 
-| Who | What |
-|---|---|
-| **Caleb** | Owns the organization and the project (as with the repo), the keys and the settings |
-| Team members | Invited to the organization; read keys from the project settings themselves |
-
-Nobody shares a login or pastes keys into chat or git.
+One account owns the organization, the project, its keys and its settings. Anyone else working on it is invited to the organization and reads the keys from the project settings. Don't share logins, and never paste keys into chat or git.
 
 ## 1. Create the project (15 min)
 
@@ -15,9 +10,9 @@ Nobody shares a login or pastes keys into chat or git.
 2. **New project**: name `verdant-os`, the region closest to the farm, and a generated database password. Save the password in a password manager; nothing in the farm uses it, but you need it to reset or connect directly.
 3. Wait for the project to finish provisioning (a couple of minutes).
 
-## 2. Invite the team (5 min)
+## 2. Invite collaborators (5 min)
 
-**Organization settings → Team → Invite**: Adi as **Developer** (tables, SQL editor and logs; no billing, team or project-settings changes). If his role can't reveal the secret key, share it through a password manager rather than chat. Add Jameson the same way if he needs it.
+**Organization settings → Team → Invite**: add each person who needs access as **Developer** (tables, SQL editor and logs; no billing, team or project-settings changes). If that role can't reveal the secret key, share it through a password manager rather than chat. Skip this step if you're working alone.
 
 ## 3. Create the tables (15 min)
 
@@ -79,7 +74,7 @@ Also on Vercel: `OPERATOR_KEY`, the passphrase the dashboard asks for before sen
 - **Free projects pause after about a week without activity.** The bridge keeps the project active once it runs; until then, un-pause it from the dashboard (one click, data kept).
 - **Size.** The free tier has 500 MB. Robots publish telemetry every second, so the bridge sends at most one row per robot every few seconds (configurable), and the cleanup jobs delete telemetry after 14 days, sensor events and commands after 30, alerts after 90. The Pi's SQLite database keeps the full history.
 - **Multiple farms.** One project, one `farms` row and one Pi per farm. MQTT carries no farm id; each farm's bridge stamps its `FARM_ID` on what it writes and relays only its own farm's commands. Remotely the dashboard can switch between farms; on FarmNet it shows only its Pi's farm. Robot ids only need to be unique within a farm.
-- **Only the farms' Pis write farm data to Supabase** (the dashboard's command route only adds `remote_commands` rows). The old laptop serial bridge is retired: the shelf sensors go through the Pi's shelf bridge and MQTT like everything else.
+- **Only the farms' Pis write farm data to Supabase** (the dashboard's command route only adds `remote_commands` rows). The shelf sensors go through the Pi's shelf bridge and MQTT like everything else.
 - **Anyone with the dashboard's URL can read farm data.** The publishable key is in the page and RLS allows reads (there's no login). Commands still need `OPERATOR_KEY`, and nothing but the secret key can write.
 - **Backups.** The free tier has no downloadable backups. The schema is in git (step 3) and the Pi keeps the history, so a lost project means recreating it from this doc, not lost data.
 - **Clocks.** `created_at` and `updated_at` are Supabase's clock. Compare ages in SQL with `now()`, never against a robot's or the Pi's clock (e.g. the bridge's stale-command check).
