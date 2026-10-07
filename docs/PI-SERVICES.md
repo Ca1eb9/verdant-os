@@ -77,7 +77,7 @@ sudo nano /etc/verdant/dashboard.env
 sudo nano /etc/verdant/shelf-bridge-config.json
 ```
 
-In `dashboard.env`, set `OPERATOR_KEY` (the dashboard asks for it before sending robot commands; `openssl rand -hex 16` makes a good one) and the Supabase values. `NEXT_PUBLIC_MQTT_WS_URL` (the broker's WebSocket listener) gives the dashboard live farm data on FarmNet; the example's `ws://192.168.4.1:9001` is right for the setup in [WIFI-SETUP.md](WIFI-SETUP.md). Set `NEXT_PUBLIC_FARM_ID` and `NEXT_PUBLIC_FARM_NAME` to this farm's row in Supabase's `farms` table ([SUPABASE-SETUP.md](SUPABASE-SETUP.md)): the dashboard shows only this farm. These are fixed when the dashboard is built, so after changing them run the deploy script, not just a restart.
+In `dashboard.env`, set the Supabase values (the URL and the publishable key, never the secret key: [SUPABASE-SETUP.md](SUPABASE-SETUP.md) step 5). It needs no `OPERATOR_KEY`: on FarmNet the dashboard sends commands straight over MQTT. `NEXT_PUBLIC_MQTT_WS_URL` (the broker's WebSocket listener) gives the dashboard live farm data on FarmNet; the example's `ws://192.168.4.1:9001` is right for the setup in [WIFI-SETUP.md](WIFI-SETUP.md). Set `NEXT_PUBLIC_FARM_ID` and `NEXT_PUBLIC_FARM_NAME` to this farm's row in Supabase's `farms` table ([SUPABASE-SETUP.md](SUPABASE-SETUP.md)): the dashboard shows only this farm. These are fixed when the dashboard is built, so after changing them run the deploy script, not just a restart. Leave `NEXT_PUBLIC_DASHBOARD_API_URL` unset until the Dashboard API exists. The deploy script reads this file with bash, so quote any value with spaces: `NEXT_PUBLIC_FARM_NAME="North Farm"`.
 
 In `shelf-bridge-config.json`, set each shelf's `port` to its node's stable path (plug the Uno in, then `ls /dev/serial/by-id/`) and its pH calibration ([shelf-sensors.md](shelf-sensors.md#ph-calibration)). This copy belongs to this Pi; the repo's file is only the template, and a deploy never touches this one. The service can open serial ports through the `dialout` group (set in its unit).
 
@@ -184,6 +184,8 @@ sudo -u farm -H bash -c 'cd /opt/verdant-os/farm-controller/orchestrator && set 
 
 ### Adding a service (e.g. the Supabase bridge)
 
+The Dashboard API is added the same way, as `farm-dashboard-api` on its own port. It serves data only; the dashboard stays on `farm-dashboard`. Once it runs, set `NEXT_PUBLIC_DASHBOARD_API_URL` in `dashboard.env` to `http://192.168.4.1:<its port>` and deploy.
+
 1. Copy `deploy/systemd/farm-ingester.service` to `farm-<name>.service` and change the description, `WorkingDirectory` and `EnvironmentFile`.
 2. Add `deploy/env/<name>.env.example`, and create `/etc/verdant/<name>.env` from it on the Pi (step 4).
 3. Add `farm-<name>` to `SERVICES` in `scripts/pi-deploy.sh`, then deploy.
@@ -220,9 +222,10 @@ SD cards fail from sudden power loss during a write and from wear. With this set
 | `farmnet.local` doesn't resolve over the uplink | The mDNS firewall rule (step 7) is missing. |
 | FarmNet missing after a reboot, or the uplink on the wrong radio | `wlan0` and `wlan1` swapped names. See step 4 of the USB adapter section in [WIFI-SETUP.md](WIFI-SETUP.md#no-ethernet-use-a-usb-wifi-adapter). |
 | Can't SSH over the uplink | The uplink's address changes with DHCP; use `farmnet.local`, or SSH over FarmNet at `192.168.4.1`. |
-| Robot commands fail with "Remote commands are turned off" | `OPERATOR_KEY` is empty in `/etc/verdant/dashboard.env`. Set it, then `sudo systemctl restart farm-dashboard`. |
 | Shelf bridge logs `can't open /dev/...` | The node isn't plugged in, or `port` in `/etc/verdant/shelf-bridge-config.json` is wrong (`ls /dev/serial/by-id/`). It keeps retrying every few seconds. |
 | Shelf readings never appear | The node needs the shelf firmware (`firmware/shelf-sensor`); see "What happens when things fail" in [shelf-sensors.md](shelf-sensors.md). |
+| Deploy prints `dashboard.env: line N: ...: command not found` | A value on that line has a space and no quotes, so it wasn't set. Quote it (`NEXT_PUBLIC_FARM_NAME="North Farm"`) and rerun the deploy script. |
+| Dashboard still shows the old farm id or name after editing `dashboard.env` | `NEXT_PUBLIC_*` values are fixed at build time: rerun the deploy script (a restart isn't enough), then hard-refresh the page. |
 | Dashboard says "No farm to show" on FarmNet | `NEXT_PUBLIC_FARM_ID` is empty or not a valid id (lowercase letters, digits, dashes) in `/etc/verdant/dashboard.env`. Set it and rerun the deploy script. |
 | Dashboard says "Disconnected" on FarmNet | Mosquitto is down or its port 9001 listener is missing ([WIFI-SETUP.md](WIFI-SETUP.md) step 5), or `NEXT_PUBLIC_MQTT_WS_URL` is wrong in `/etc/verdant/dashboard.env`; fix it and rerun the deploy script (it's fixed at build time). |
 | Dashboard map shows "Default farm layout" | The orchestrator isn't running, or Mosquitto lost its retained messages (persistence off): restart the orchestrator. |
