@@ -495,7 +495,7 @@ gantt
 
 <div class="task">
   <div class="task-header"><h3>Dashboard API</h3></div>
-  <p class="what">A REST server on the Pi that serves stored telemetry and alert data to the web dashboard. Also serves the dashboard's static files so the site is accessible on the farm's local network. This is a Node.js/TypeScript service — review the shared package for the data types the API will serve.</p>
+  <p class="what">A REST server on the Pi that serves stored telemetry, alert and command data to the web dashboard. It serves data only: the dashboard itself keeps its own service (<code>farm-dashboard</code>, Next.js on port 3000, <code>docs/PI-SERVICES.md</code>), and the browser calls this API at its own address. This is a Node.js/TypeScript service — review the shared package for the data types the API will serve.</p>
   <details>
     <summary>Requirements</summary>
     <ul>
@@ -503,14 +503,14 @@ gantt
       <li>Serve REST endpoints for: latest robot state, telemetry history over a time range, recent alerts (with optional filtering), and the command history</li>
       <li>Read data from the SQLite database that the ingester populates. Open it in read-only mode so the API and ingester don't conflict.</li>
       <li><strong>Command history:</strong> the ingester saves every operator command in the <code>commands</code> table. Serve it as <code>GET /commands?robot_id=</code> (the filter optional), returning <code>{ "commands": [...] }</code>, newest <code>received_at</code> first, at most 10, each <code>{ id, robot_id, command, issued_by, issued_at, status: "sent" }</code> with <code>command</code> parsed from JSON — the same shape as the dashboard's own <code>/api/commands</code> (see <code>farm-controller/README.md</code>). The dashboard reads it from <code>NEXT_PUBLIC_DASHBOARD_API_URL</code>. No command endpoint is needed: on FarmNet the dashboard sends commands straight over MQTT.</li>
-      <li>Serve the dashboard's built frontend files as static assets on the root route, so the dashboard is accessible at this server's address</li>
-      <li>Enable CORS for local development</li>
+      <li>Run as its own systemd unit, <code>farm-dashboard-api</code>, with its port and the database path in <code>/etc/verdant/dashboard-api.env</code> (see "Adding a service" in <code>docs/PI-SERVICES.md</code>). Then set <code>NEXT_PUBLIC_DASHBOARD_API_URL</code> in the dashboard's env file to its address on FarmNet (<code>http://192.168.4.1:&lt;port&gt;</code>) and redeploy.</li>
+      <li>Enable CORS for the dashboard's origins, listed in its env file (<code>http://farmnet.local:3000</code> and <code>http://192.168.4.1:3000</code> on the Pi, <code>http://localhost:3000</code> in development). The dashboard and the API are on different ports, so the browser treats them as different origins on the Pi too.</li>
     </ul>
   </details>
   <details>
     <summary>Approach</summary>
     <ul>
-      <li>Use Fastify or Express. Research the framework's patterns for route handlers and static file serving.</li>
+      <li>Use Fastify or Express. Research the framework's patterns for route handlers and CORS.</li>
       <li>Start with one endpoint (e.g. latest robot state), verify it returns JSON, then add the rest</li>
       <li>Each endpoint is a SQL query in a route handler — research SQLite query patterns for time-series data</li>
     </ul>
