@@ -106,7 +106,8 @@ stateDiagram-v2
   toward is set (front or rear sensor). The status doesn't change. After the
   elevator or dock tag, the robot creeps in closer than that instead (ToF
   approach). `[obstacle_detected]` is sent once, then `[path_blocked]` if still
-  blocked after a timeout.
+  blocked after a timeout. In `manual` the motors stop the same way, and the
+  events are sent when a jog runs into the obstacle.
 - **Telemetry** is sent every 1 s and on every status or node change, and always
   reports the current `task_id` and `last_completed_task_id`. The robot never
   reports `lost`.

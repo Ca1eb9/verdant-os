@@ -111,6 +111,8 @@ class NavCore {
   // True while driving backward (a backward edge or jog), and after it until
   // the next move: obstacle_cm comes from the rear sensor.
   bool reversing() const { return reversing_; }
+  // The last jog (or Bluetooth input) in manual: its pulse drives JOG_PULSE_MS.
+  uint32_t last_manual_input_ms() const { return last_manual_input_ms_; }
   const TaskContext& context() const { return ctx_; }
   // The task_id telemetry reports: the current task, else the kept task.
   const char* reported_task_id() const;

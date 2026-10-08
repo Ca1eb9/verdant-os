@@ -344,9 +344,9 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
   drive direction: front, or rear after reversing (kept while stopped). Note
   this is the drive direction, not `heading`, which doesn't change when the
   robot reverses. The robot keeps its status (e.g. `en_route`) and publishes
-  `obstacle_detected` once. If it is still blocked after a timeout, it publishes
-  `path_blocked` and keeps waiting. The orchestrator only raises alerts for
-  these.
+  `obstacle_detected` once, also when a jog runs into it in `manual`. If it is
+  still blocked after a timeout, it publishes `path_blocked` and keeps waiting.
+  The orchestrator only raises alerts for these.
 
 ### Faults
 
@@ -408,7 +408,9 @@ dashboard asks for confirmation again before the next session.
      latch is kept); `resume` clears the latch and continues the task instead.
    - nothing: `idle`.
 
-**Safety in manual:** the obstacle flag still hard-stops the motors. Battery
+**Safety in manual:** the obstacle flag still hard-stops the motors, and a jog
+that runs into an obstacle publishes `obstacle_detected` (then `path_blocked`),
+so an operator who didn't see it knows why the robot stopped. Battery
 survival is limited to the motor cutoff (about 5%): there is no forced return to
 dock while an operator is driving, but `battery_critical` is still published.
 The forced return applies again once the robot leaves manual.

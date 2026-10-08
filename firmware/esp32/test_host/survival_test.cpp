@@ -63,6 +63,11 @@ class Rig : public NavOutput {
     killed = survival.check(battery_pct, blocked, now);
   }
   void command(CommandType type) { core.on_command(make(type, ""), now); }
+  void jog() {
+    Command c = make(CommandType::Jog, "");
+    c.direction = JogDirection::Forward;
+    core.on_command(c, now);
+  }
 
   int count(RobotEventType type) const {
     int n = 0;
@@ -213,6 +218,18 @@ static void test_obstacle() {
   s.command(CommandType::Stop);
   s.check(80, true, PATH_BLOCKED_TIMEOUT_MS * 2);
   CHECK(s.count(RobotEventType::ObstacleDetected) == 0);
+
+  // Jogged into it: reported, so the operator knows why it stopped.
+  Rig m;
+  m.en_route();
+  m.jog();
+  m.check(80, true);
+  CHECK(m.status() == RobotStatus::Manual);
+  CHECK(m.count(RobotEventType::ObstacleDetected) == 1);
+  // Parked in manual after the pulse, obstacle still there: nothing new.
+  m.check(80, false);
+  m.check(80, true, JOG_PULSE_MS);
+  CHECK(m.count(RobotEventType::ObstacleDetected) == 1);
 }
 
 int main() {
