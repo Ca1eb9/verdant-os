@@ -84,7 +84,7 @@ ToF approach: while driving an edge it slows to `APPROACH_SPEED` once anything a
 | battery at or below `BATTERY_WARN_PCT` | `battery_low`, once until the next charge complete; not while docking or charging |
 | battery at or below `BATTERY_RETURN_PCT` | `NavCore::survival_return()`: `battery_critical` and back to the dock, keeping the task. Ignored while stopped, in manual and on a dock trip |
 | battery at or below `BATTERY_CUTOFF_PCT` | `g_motor_kill_flag` set in every status, until the battery is back above `BATTERY_RETURN_PCT`. Whenever the robot is driving itself, `error` ("motor cutoff"), so it doesn't wait forever with the motors off. Not while charging |
-| obstacle flag ahead while `en_route` or `returning_to_dock` | `obstacle_detected` once, then `path_blocked` after `PATH_BLOCKED_TIMEOUT_MS`; status kept |
+| obstacle flag ahead while `en_route`, `returning_to_dock` or a jog pulse in `manual` | `obstacle_detected` once, then `path_blocked` after `PATH_BLOCKED_TIMEOUT_MS`; status kept |
 
 Hooks and inputs still owned by later work (placeholders for now):
 

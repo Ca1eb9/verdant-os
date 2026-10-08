@@ -154,6 +154,10 @@ constexpr uint32_t JOG_PULSE_MS = 500;          // each jog drives this long fro
 constexpr int16_t JOG_SPEED = 120;              // TBD: tune on the robot (0..255)
 constexpr uint32_t MANUAL_TIMEOUT_MS = 5000;    // leave manual after this long without input
 
+// ---- Motor task (tasks/motor_task.h) ------------------------------------------------
+
+constexpr uint32_t REVERSE_RAMP_MS = 150;       // TBD: slow to 0 over this before reversing
+
 // ---- Status LED (README "Status LED") ----------------------------------------------
 
 constexpr uint8_t STATUS_LED_BRIGHTNESS = 40;   // 0-255 cap, so it isn't blinding on the bench

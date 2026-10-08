@@ -479,6 +479,7 @@ gantt
     <ul>
       <li>Read <code>DriveCommand</code>s from the drive mailbox (<code>types.h</code>): <code>Stop</code>, or <code>Drive</code> with a signed speed (−255..255; <code>left_speed</code> and <code>right_speed</code> are always equal). The newest command replaces the last. Nav never sends <code>Turn</code> (turns are a placeholder).</li>
       <li>A <code>Drive</code> with <code>duration_ms</code> stops by itself when the time runs out (a jog pulse), then sets <code>g_drive_done_seq</code> to its <code>seq</code>; <code>duration_ms</code> 0 drives until replaced</li>
+      <li><strong>Changing direction</strong>: a <code>Drive</code> the opposite way to the motor's current direction (e.g. a backward jog straight after a forward one) first slows to 0 over <code>REVERSE_RAMP_MS</code> (<code>config.h</code>), then drives the new way. A timed <code>Drive</code>'s <code>duration_ms</code> still counts from receipt, ramp included. Never ramp a kill or obstacle stop: those stop at once.</li>
       <li><strong>Before every cycle</strong>: stop the motor while <code>g_motor_kill_flag</code> is set (the battery cutoff), or while the obstacle flag for the side it's driving toward is set (front for a positive speed, rear for a negative one). It must still be able to back away from an obstacle in front.</li>
       <li>Control the motor driver (TB6612 or L298N) via PWM and direction pins</li>
     </ul>
@@ -488,6 +489,7 @@ gantt
     <ul>
       <li>Test with a standalone sketch: drive forward, stop, reverse. Get the basic motor control working before integrating with FreeRTOS.</li>
       <li>Then check each flag on the bench: the kill flag stops it in both directions; an obstacle in front stops forward driving but not reversing</li>
+      <li>Check the reversal ramp on the bench: forward, then backward straight away, slows down before reversing; an obstacle during the ramp still stops it at once</li>
     </ul>
   </details>
   <p class="deps">Depends on: queue struct definitions from FreeRTOS skeleton, motor driver wired to ESP32, motor type confirmed by ME team</p>

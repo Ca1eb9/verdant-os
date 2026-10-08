@@ -46,9 +46,13 @@ void Survival::check_battery(float battery_pct, uint32_t now) {
 }
 
 void Survival::check_obstacle(bool blocked, uint32_t now) {
-  // Only while driving on its own: in manual the operator can see it.
+  // While driving on its own, and during a jog pulse: the operator may not
+  // have seen the obstacle, so tell them why it stopped.
   RobotStatus status = core_.status();
-  bool driving = status == RobotStatus::EnRoute || status == RobotStatus::ReturningToDock;
+  bool jogging = status == RobotStatus::Manual &&
+                 now - core_.last_manual_input_ms() < JOG_PULSE_MS;
+  bool driving =
+      status == RobotStatus::EnRoute || status == RobotStatus::ReturningToDock || jogging;
   if (!blocked || !driving) {
     obstacle_reported_ = false;
     path_blocked_reported_ = false;

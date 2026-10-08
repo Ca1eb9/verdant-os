@@ -17,7 +17,7 @@
 //                                  noise near the cutoff can't toggle the
 //                                  motors.
 //   blocked while driving itself   obstacle_detected once, path_blocked
-//                                  after PATH_BLOCKED_TIMEOUT_MS; status kept
+//   or during a jog pulse          after PATH_BLOCKED_TIMEOUT_MS; status kept
 //
 // Pure C++ (no Arduino or FreeRTOS calls), so test_host can drive it.
 

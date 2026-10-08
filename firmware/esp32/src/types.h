@@ -112,6 +112,11 @@ struct SensorData {
 // A Drive with duration_ms stops by itself when the time runs out, so a jog
 // pulse ends even if the nav task stalls. When a Turn or a timed Drive
 // finishes, the motor task sets g_drive_done_seq to its seq.
+//
+// A Drive the opposite way to the motor's current direction (e.g. a backward
+// jog straight after a forward one) first slows to 0 over REVERSE_RAMP_MS, then
+// drives the new way. duration_ms still counts from receipt, ramp included. A
+// kill or obstacle stop is never ramped: the motors stop at once.
 
 enum class DriveMode : uint8_t {
   Stop,   // motors off
