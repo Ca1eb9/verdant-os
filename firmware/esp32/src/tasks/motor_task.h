@@ -5,7 +5,8 @@
 // Every cycle, before anything else, it stops the motors if
 // g_motor_kill_flag is set, or if the obstacle flag on the side it's driving
 // toward is set. A timed Drive stops by itself; a finished Turn or timed
-// Drive sets g_drive_done_seq.
+// Drive sets g_drive_done_seq. Reversing slows to 0 over REVERSE_RAMP_MS
+// first (types.h).
 //
 // Highest priority, core 1.
 //

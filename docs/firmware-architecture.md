@@ -29,7 +29,7 @@ Four FreeRTOS tasks. `loop()` is empty.
 
 | Task | Priority | Core | Responsibility |
 |---|---|---|---|
-| Motor | Highest | 1 | Drives motors from the drive queue. Checks safety flags every cycle and stops immediately if one is set. |
+| Motor | Highest | 1 | Drives motors from the drive queue. Checks safety flags every cycle and stops immediately if one is set. Slows to 0 briefly before reversing (`REVERSE_RAMP_MS`). |
 | Sensor | High | 1 | RFID reads, battery voltage, front and rear obstacle distance. Writes the sensor queue and sets safety flags. |
 | Navigation | Medium | 1 | Robot state machine, survival overrides, path following, turn decisions. Produces telemetry and events. |
 | Comms | Lowest | 0 | WiFi and MQTT. Publishes outbound messages and pushes received commands onto the command queue. |
