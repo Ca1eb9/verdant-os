@@ -9,6 +9,8 @@ import {
   type ElevatorTelemetry,
   type ShelfSensorData,
   type RemoteCommand,
+  type FarmAlert,
+  AlertSeverity,
   RobotStatus,
   Heading,
 } from "@farm/shared";
@@ -16,6 +18,8 @@ import {
 const STATUSES = new Set<string>(Object.values(RobotStatus));
 const HEADINGS = new Set<unknown>([Heading.NORTH, Heading.EAST, Heading.SOUTH, Heading.WEST]);
 const ELEVATOR_STATUSES = new Set(["idle", "moving", "loading", "error"]);
+const SEVERITIES = new Set<string>(Object.values(AlertSeverity));
+const ALERT_SOURCES = new Set(["robot", "elevator", "shelf", "system"]);
 
 type Obj = Record<string, unknown>;
 
@@ -81,5 +85,22 @@ export function isCommand(v: unknown): v is RemoteCommand {
     typeof v.command.command === "string" &&
     typeof v.issued_by === "string" &&
     isNum(v.issued_at)
+  );
+}
+
+// metric may be empty: alerts that aren't about a reading (e.g. the
+// orchestrator's) send "" with value and threshold 0
+export function isAlert(v: unknown): v is FarmAlert {
+  return (
+    isObj(v) &&
+    isStr(v.alert_id) &&
+    SEVERITIES.has(v.severity as string) &&
+    isStr(v.source) &&
+    ALERT_SOURCES.has(v.source_type as string) &&
+    isStr(v.message) &&
+    typeof v.metric === "string" &&
+    isNum(v.value) &&
+    isNum(v.threshold) &&
+    isNum(v.timestamp)
   );
 }
