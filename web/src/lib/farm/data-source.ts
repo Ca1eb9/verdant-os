@@ -10,7 +10,7 @@
 
 import { createLocalSource } from "@/lib/farm/local-source";
 import type { RobotView } from "@/lib/farm/robots";
-import type { FarmTopology, RobotCommand } from "@/lib/farm/types";
+import type { FarmAlert, FarmTopology, RobotCommand } from "@/lib/farm/types";
 
 export type CommandStatus = "pending" | "sent" | "failed";
 
@@ -53,6 +53,12 @@ export interface FarmDataSource {
   listRecentCommands(robotId?: string): Promise<CommandRecord[]>;
   /** Streams the farm connection state, starting with the current one. Returns unsubscribe. */
   subscribeConnection(onChange: (connection: FarmConnection) => void): () => void;
+  /**
+   * Streams the farm's alerts from its services (orchestrator, alert engine),
+   * newest first, whenever one arrives; null when this source has no alerts
+   * yet. Returns unsubscribe.
+   */
+  subscribeAlerts(onAlerts: (alerts: FarmAlert[] | null) => void): () => void;
 }
 
 export class CommandError extends Error {
@@ -117,6 +123,10 @@ export function createDashboardApiSource(farmId: string): FarmDataSource {
       });
       return () => undefined;
     },
+    subscribeAlerts(onAlerts) {
+      onAlerts(null);
+      return () => undefined;
+    },
   };
 }
 
@@ -139,6 +149,10 @@ function noFarmSource(connection: FarmConnection): FarmDataSource {
     },
     subscribeConnection(onChange) {
       onChange(connection);
+      return () => undefined;
+    },
+    subscribeAlerts(onAlerts) {
+      onAlerts(null);
       return () => undefined;
     },
   };

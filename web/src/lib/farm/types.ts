@@ -39,6 +39,8 @@ export type TaskPriority = "low" | "normal" | "high" | "critical";
 
 export type CommandSource = "scheduler" | "alert" | "remote" | "local";
 
+export type AlertSeverity = "info" | "warning" | "critical";
+
 export type PlantType =
   | "basil"
   | "lettuce"
@@ -138,6 +140,19 @@ export interface RemoteCommand {
   command: RobotCommand;
   issued_by: string;
   issued_at: number;
+}
+
+/** Published to farm/alerts by any service (orchestrator, alert engine) */
+export interface FarmAlert {
+  alert_id: string;
+  severity: AlertSeverity;
+  source: string;
+  source_type: "robot" | "elevator" | "shelf" | "system";
+  message: string;
+  metric: string;
+  value: number;
+  threshold: number;
+  timestamp: number;
 }
 
 export interface PlantRecord {

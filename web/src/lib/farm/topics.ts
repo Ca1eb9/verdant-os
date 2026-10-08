@@ -24,6 +24,8 @@ export const TOPICS = {
     /** The farm layout (retained, published by the orchestrator) */
     topology: "farm/system/topology",
   },
+  /** Alerts from every service; not retained */
+  alerts: "farm/alerts",
 } as const;
 
 /** "farm/robot/robot-1/telemetry" → "robot-1" */
