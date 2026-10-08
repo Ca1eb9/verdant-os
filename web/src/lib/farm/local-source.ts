@@ -12,6 +12,9 @@
 // GET {apiUrl}/commands?robot_id=, which returns { commands: CommandRecord[] }
 // newest first, like this app's /api/commands. With no apiUrl (the API isn't
 // built yet) the history starts empty and fills as commands are sent.
+//
+// Alerts are kept in memory the same way, from farm/alerts (not retained), so
+// only those raised since the dashboard opened are listed.
 
 import mqtt, { type MqttClient } from "mqtt";
 import {
@@ -25,6 +28,8 @@ import {
 import type { RobotTask, RobotView } from "@/lib/farm/robots";
 import { TOPICS, extractIdFromTopic } from "@/lib/farm/topics";
 import type {
+  AlertSeverity,
+  FarmAlert,
   FarmTopology,
   RemoteCommand,
   RobotStateUpdate,
@@ -37,6 +42,8 @@ const RECONNECT_MS = 2_000;
 const RECENT_COMMANDS = 10;
 /** Commands kept in memory across all robots */
 const KEPT_COMMANDS = 200;
+/** Alerts kept in memory */
+const KEPT_ALERTS = 100;
 
 const STATUSES: RobotStatus[] = [
   "idle", "en_route", "working", "returning_to_dock", "docking", "charging",
@@ -44,6 +51,8 @@ const STATUSES: RobotStatus[] = [
 ];
 const NODE_TYPES = ["checkpoint", "elevator", "dock", "water"];
 const COMMANDS = ["navigate", "return_to_dock", "stop", "resume", "cancel", "jog"];
+const SEVERITIES: AlertSeverity[] = ["info", "warning", "critical"];
+const ALERT_SOURCES = ["robot", "elevator", "shelf", "system"];
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -84,6 +93,13 @@ function isCommand(v: unknown): v is RemoteCommand {
     isOptStr(c.task_id) && (c.immediate === undefined || typeof c.immediate === "boolean");
 }
 
+function isAlert(v: unknown): v is FarmAlert {
+  return isRecord(v) && typeof v.alert_id === "string" && v.alert_id.length > 0 &&
+    SEVERITIES.includes(v.severity as AlertSeverity) && typeof v.source === "string" &&
+    ALERT_SOURCES.includes(v.source_type as string) && typeof v.message === "string" &&
+    typeof v.metric === "string" && isNum(v.value) && isNum(v.threshold) && isNum(v.timestamp);
+}
+
 interface Entry {
   telemetry?: RobotTelemetry;
   /** Browser receive time of the last telemetry: there's no clock sync. 0 = none yet */
@@ -116,6 +132,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
   const listeners = new Set<(robots: RobotView[]) => void>();
   const topologyWaiters = new Set<(topology: FarmTopology | null) => void>();
   const connectionListeners = new Set<(connection: FarmConnection) => void>();
+  const alertListeners = new Set<(alerts: FarmAlert[]) => void>();
   const host = (() => {
     try {
       return new URL(url).host;
@@ -140,6 +157,8 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
   let commands: CommandRecord[] = [];
   /** Robots whose earlier commands were loaded from the Dashboard API ("" = all) */
   const loadedHistory = new Set<string>();
+  /** Newest received first: timestamp comes from other clocks */
+  let alerts: FarmAlert[] = [];
 
   const recordCommand = (record: CommandRecord) => {
     if (commands.some((c) => c.id === record.id)) return;
@@ -174,6 +193,13 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       updateConnection();
       return;
     }
+    if (topic === TOPICS.alerts) {
+      if (!isAlert(msg)) return ignore(topic);
+      if (alerts.some((a) => a.alert_id === msg.alert_id)) return;
+      alerts = [msg, ...alerts].slice(0, KEPT_ALERTS);
+      alertListeners.forEach((listener) => listener(alerts));
+      return;
+    }
     if (topic === TOPICS.commands.local || topic === TOPICS.commands.remote) {
       if (!isCommand(msg)) return ignore(topic);
       // jogs repeat while held; they'd push everything else out
@@ -195,10 +221,11 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
     emit();
   };
 
-  // Connected while anything needs it: the robot list, a pending layout or
-  // the connection status
+  // Connected while anything needs it: the robot list, a pending layout, the
+  // connection status or the alerts
   const updateConnection = () => {
-    const needed = listeners.size > 0 || topologyWaiters.size > 0 || connectionListeners.size > 0;
+    const needed = listeners.size > 0 || topologyWaiters.size > 0 || connectionListeners.size > 0 ||
+      alertListeners.size > 0;
     if (needed && !client) {
       connection = CONNECTING;
       client = mqtt.connect(url, { reconnectPeriod: RECONNECT_MS, connectTimeout: RECONNECT_MS * 2 });
@@ -210,7 +237,9 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
         setConnection(OFFLINE);
       });
       client.on("error", (err) => console.warn(`[local-source] ${err.message}`));
-      client.subscribe([TOPICS.robot.telemetryAll, TOPICS.robot.stateAll, TOPICS.system.topology, TOPICS.commands.all]);
+      client.subscribe([
+        TOPICS.robot.telemetryAll, TOPICS.robot.stateAll, TOPICS.system.topology, TOPICS.commands.all, TOPICS.alerts,
+      ]);
     } else if (!needed && client) {
       client.end(true);
       client = null;
@@ -294,6 +323,16 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       onChange(connection);
       return () => {
         connectionListeners.delete(onChange);
+        updateConnection();
+      };
+    },
+
+    subscribeAlerts(onAlerts) {
+      alertListeners.add(onAlerts);
+      updateConnection();
+      onAlerts(alerts);
+      return () => {
+        alertListeners.delete(onAlerts);
         updateConnection();
       };
     },

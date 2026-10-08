@@ -156,6 +156,7 @@ function getOrCreateRobot(robotId: string): RobotState {
       waypoints_hit: [],
       last_seen: Date.now(),
       dock_requested_at: null,
+      battery_critical_alerted: false,
     };
     robots.set(robotId, state);
     console.log(`[ORCH] Tracking new robot: ${robotId}`);

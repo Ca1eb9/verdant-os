@@ -81,7 +81,7 @@ That runs lint, TypeScript, and production build validation.
 
 - `/` - live dashboard
 - `/history` - historical charts (mock data only, for now)
-- `/alerts` - current and stored alert review
+- `/alerts` - alerts from the farm's robots and services (`FarmDataSource.subscribeAlerts`: live from `farm/alerts` on FarmNet, not available remotely yet), and environment alerts worked out from the sensor readings
 - `/config` - deployment and ingestion readiness
 - `/api/farms` - the farms in Supabase's `farms` table
 - `/api/sensor-events/latest?farm_id=` - a farm's latest Supabase sensor event

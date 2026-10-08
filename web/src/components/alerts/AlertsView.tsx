@@ -5,6 +5,7 @@ import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { NoFarmNotice } from "@/components/farms/NoFarmNotice";
 import { readTelemetryAlerts } from "@/lib/alerts";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
+import { useFarmAlerts } from "@/hooks/useFarmAlerts";
 import { useFarmTelemetry } from "@/hooks/useFarmTelemetry";
 import type { TelemetryAlert } from "@/lib/types";
 import styles from "@/components/alerts/AlertsView.module.css";
@@ -18,6 +19,10 @@ export function AlertsView() {
   const { fmt } = usePreferences();
   const [limit, setLimit] = useState<10 | 20>(20);
   const { alerts: currentAlerts, lastUpdate } = useFarmTelemetry(activeFarmId);
+  // From the farm's services (orchestrator, alert engine); the list below is
+  // worked out here from the sensor readings
+  const farmAlerts = useFarmAlerts();
+  const visibleFarmAlerts = useMemo(() => farmAlerts?.slice(0, limit) ?? [], [farmAlerts, limit]);
   // stored alerts live in the browser, so build the list after mount to match the server render
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -45,13 +50,13 @@ export function AlertsView() {
     return deduped.slice(0, limit);
   }, [activeFarmId, currentAlerts, limit, mounted]);
 
-  const counts = useMemo(
-    () => ({
-      warning: alerts.filter((alert) => alert.severity === "warning").length,
-      critical: alerts.filter((alert) => alert.severity === "critical").length,
-    }),
-    [alerts],
-  );
+  const counts = useMemo(() => {
+    const severities = [...alerts, ...visibleFarmAlerts].map((alert) => alert.severity);
+    return {
+      warning: severities.filter((severity) => severity === "warning").length,
+      critical: severities.filter((severity) => severity === "critical").length,
+    };
+  }, [alerts, visibleFarmAlerts]);
 
   if (!farm) return <NoFarmNotice title="System alerts" />;
 
@@ -62,7 +67,7 @@ export function AlertsView() {
           <span className="eyebrow">System alerts</span>
           <h1 className="pageTitle">Alerts</h1>
           <p className="pageLead">
-            Review the latest ingestion and sensor warnings for {farm.name}.
+            Alerts from {farm.name}&apos;s robots and services, and from its sensor readings.
           </p>
         </div>
       </header>
@@ -88,7 +93,7 @@ export function AlertsView() {
       <div className={styles.summaryGrid}>
         <article className={`glassPanel ${styles.summaryCard}`}>
           <span className={styles.summaryLabel}>Visible alerts</span>
-          <strong className={styles.summaryValue}>{alerts.length}</strong>
+          <strong className={styles.summaryValue}>{alerts.length + visibleFarmAlerts.length}</strong>
           <span className={styles.summaryDetail}>Newest recognized warnings first</span>
         </article>
         <article className={`glassPanel ${styles.summaryCard}`}>
@@ -111,10 +116,57 @@ export function AlertsView() {
       </div>
 
       <div className={styles.list}>
+        <span className="eyebrow">Robots and services</span>
+        {farmAlerts === null ? (
+          <article className={`glassPanel ${styles.emptyState}`}>
+            <strong>Robot and service alerts aren&apos;t available here yet.</strong>
+            <span>They show on the farm&apos;s Wi-Fi.</span>
+          </article>
+        ) : visibleFarmAlerts.length === 0 ? (
+          <article className={`glassPanel ${styles.emptyState}`}>
+            <strong>No robot or service alerts.</strong>
+            <span>Alerts raised since the dashboard opened show here.</span>
+          </article>
+        ) : (
+          visibleFarmAlerts.map((alert) => (
+            <article key={alert.alert_id} className={`glassPanel ${styles.alertCard}`}>
+              <div className={styles.alertHead}>
+                <div>
+                  <span className="eyebrow">
+                    {alert.source_type} · {alert.source}
+                  </span>
+                  <h2 className={styles.alertTitle}>{alert.message}</h2>
+                </div>
+                <span className={`${styles.severity} ${styles[alert.severity]}`}>{alert.severity}</span>
+              </div>
+
+              <div className={styles.alertMeta}>
+                <span>
+                  <strong>Raised:</strong> {fmt.time(alert.timestamp)}
+                </span>
+                {/* metric is empty for alerts that aren't about a reading */}
+                {alert.metric ? (
+                  <>
+                    <span>
+                      <strong>Value:</strong> {alert.value}
+                    </span>
+                    <span>
+                      <strong>Threshold:</strong> {alert.threshold}
+                    </span>
+                  </>
+                ) : null}
+              </div>
+            </article>
+          ))
+        )}
+      </div>
+
+      <div className={styles.list}>
+        <span className="eyebrow">Environment</span>
         {alerts.length === 0 ? (
           <article className={`glassPanel ${styles.emptyState}`}>
-            <strong>No alerts right now.</strong>
-            <span>System is within range for the selected farm.</span>
+            <strong>No environment alerts right now.</strong>
+            <span>Sensor readings are within range for the selected farm.</span>
           </article>
         ) : (
           alerts.map((alert) => (

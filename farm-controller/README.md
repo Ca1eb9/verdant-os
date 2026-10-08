@@ -110,8 +110,13 @@ AUTONOMOUS=false npm run sim
 
 ### Ingester (telemetry recorder)
 
-Subscribes to all telemetry topics, and to operator commands
-(`farm/commands/+`, jogs excepted), and writes them to a local SQLite database.
+Subscribes to all telemetry topics, to operator commands
+(`farm/commands/+`, jogs excepted) and to alerts (`farm/alerts`), and writes
+them to a local SQLite database.
+
+The `alerts` table holds every `FarmAlert` (stored once per `alert_id`) with
+its `received_at`, for the Dashboard API's `GET /alerts` (see the Dashboard
+API task in `docs/dev-team-timeline.html`).
 
 The `commands` table is the dashboard's command history on FarmNet. The
 Dashboard API (to be built) should serve it as `GET /commands?robot_id=` (the

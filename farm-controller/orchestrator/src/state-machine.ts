@@ -131,6 +131,17 @@ export function processTelemetry(
     state.dock_requested_at = null;
   }
 
+  // Critical battery: one alert per drop, in every status, including those
+  // that get no low-battery return (manual, stopped, ...). Re-armed above
+  // battery_low_pct, so voltage sag under load can't repeat it.
+  let alertCritical = false;
+  if (state.battery_pct > config.battery_low_pct) {
+    state.battery_critical_alerted = false;
+  } else if (!state.battery_critical_alerted && state.battery_pct <= config.battery_critical_pct) {
+    state.battery_critical_alerted = true;
+    alertCritical = true;
+  }
+
   // Battery preemption — only when idle or on a task. Idle robots use the
   // assignment threshold so a robot too low to take work still goes to charge.
   // A pending stop wins; the firmware's survival override doesn't beat a stop
@@ -144,12 +155,19 @@ export function processTelemetry(
        state.status === RobotStatus.EN_ROUTE ||
        state.status === RobotStatus.WORKING)
   ) {
+    if (alertCritical) {
+      effects.push({
+        type: "publish_alert",
+        robotId: state.id,
+        severity: AlertSeverity.CRITICAL,
+        message: `Battery critical (${msg.battery_pct}%), returning to dock`,
+      });
+    }
     // Send once, then only resend if the robot hasn't acted on it
     if (state.dock_requested_at !== null &&
         now - state.dock_requested_at <= config.command_ack_timeout_ms) {
       return { state, effects };
     }
-    const firstRequest = state.dock_requested_at === null;
     state.dock_requested_at = now;
 
     effects.push({
@@ -161,16 +179,17 @@ export function processTelemetry(
         source: CommandSource.SCHEDULER,
       },
     });
-    if (firstRequest && state.battery_pct <= config.battery_critical_pct) {
-      effects.push({
-        type: "publish_alert",
-        robotId: state.id,
-        severity: AlertSeverity.CRITICAL,
-        message: `Battery critical (${msg.battery_pct}%), returning to dock`,
-      });
-    }
 
     return { state, effects };
+  }
+
+  if (alertCritical) {
+    effects.push({
+      type: "publish_alert",
+      robotId: state.id,
+      severity: AlertSeverity.CRITICAL,
+      message: `Battery critical (${msg.battery_pct}%), status: ${state.status}`,
+    });
   }
 
   // Robot reports idle: give it the next task (no-op if it already has one)

@@ -250,6 +250,8 @@ export interface RobotState {
   last_seen: number;
   /** When the orchestrator last sent a low-battery return_to_dock */
   dock_requested_at: number | null;
+  /** Critical-battery alert sent; re-armed above battery_low_pct */
+  battery_critical_alerted: boolean;
   plant?: PlantRecord;
 }
 

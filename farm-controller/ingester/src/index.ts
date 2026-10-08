@@ -1,16 +1,16 @@
 // ============================================================
 // Telemetry ingester
 //
-// Subscribes to all robot, elevator, and shelf sensor telemetry, and
-// to operator commands. Logs to console and writes to SQLite for
-// persistence.
+// Subscribes to all robot, elevator, and shelf sensor telemetry, to
+// operator commands and to alerts. Logs to console and writes to SQLite
+// for persistence.
 //
 // Run:  npx tsx src/index.ts
 // ============================================================
 
 import Database from "better-sqlite3";
 import { TOPICS, extractIdFromTopic, createMqttClient } from "@farm/shared";
-import { isCommand, isElevatorTelemetry, isRobotTelemetry, isShelfSensorData } from "./validate.js";
+import { isAlert, isCommand, isElevatorTelemetry, isRobotTelemetry, isShelfSensorData } from "./validate.js";
 
 // --- Config --------------------------------------------------
 
@@ -103,8 +103,23 @@ db.exec(`
     received_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000)
   );
 
-  -- Sort by received_at: issued_at is the sender's clock (no clock sync)
+  -- FarmAlerts from farm/alerts, from every service.
+  CREATE TABLE IF NOT EXISTS alerts (
+    alert_id TEXT PRIMARY KEY,
+    severity TEXT NOT NULL,
+    source TEXT NOT NULL,
+    source_type TEXT NOT NULL,
+    message TEXT NOT NULL,
+    metric TEXT NOT NULL,
+    value REAL NOT NULL,
+    threshold REAL NOT NULL,
+    timestamp INTEGER NOT NULL,
+    received_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000)
+  );
+
+  -- Sort by received_at: issued_at / timestamp is the sender's clock (no clock sync)
   CREATE INDEX IF NOT EXISTS idx_commands_robot ON commands(robot_id, received_at);
+  CREATE INDEX IF NOT EXISTS idx_alerts_received ON alerts(received_at);
   CREATE INDEX IF NOT EXISTS idx_robot_ts ON robot_telemetry(timestamp);
   CREATE INDEX IF NOT EXISTS idx_shelf_ts ON shelf_sensors(timestamp);
   CREATE INDEX IF NOT EXISTS idx_robot_id ON robot_telemetry(robot_id, timestamp);
@@ -158,9 +173,15 @@ const insertCommand = db.prepare(`
   VALUES (?, ?, ?, ?, ?, ?, ?)
 `);
 
+// Same as commands: a redelivered alert is stored once, received_at in ms
+const insertAlert = db.prepare(`
+  INSERT OR IGNORE INTO alerts (alert_id, severity, source, source_type, message, metric, value, threshold, timestamp, received_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+
 // --- Counters for logging ------------------------------------
 
-let counts = { robot: 0, shelf: 0, elevator: 0, command: 0 };
+let counts = { robot: 0, shelf: 0, elevator: 0, command: 0, alert: 0 };
 
 // --- Main ----------------------------------------------------
 
@@ -271,14 +292,27 @@ async function main() {
     console.log(`Command: ${msg.robot_id ?? "any"} | ${msg.command.command} (${channel})`);
   });
 
+  // --- Alerts ---
+  mqtt.subscribe<unknown>(TOPICS.alerts, (msg, topic) => {
+    if (!isAlert(msg)) {
+      console.warn(`Ignoring malformed alert on ${topic}`);
+      return;
+    }
+    const { changes } = insertAlert.run(msg.alert_id, msg.severity, msg.source, msg.source_type,
+      msg.message, msg.metric, msg.value, msg.threshold, msg.timestamp, Date.now());
+    if (!changes) return; // already stored
+    counts.alert++;
+    console.log(`Alert: ${msg.severity} | ${msg.source} | ${msg.message}`);
+  });
+
   // --- Stats logging ---
   setInterval(() => {
-    const total = counts.robot + counts.shelf + counts.elevator + counts.command;
+    const total = counts.robot + counts.shelf + counts.elevator + counts.command + counts.alert;
     if (total > 0) {
       console.log(
         `\nMessages ingested: ${total} total ` +
         `(robot: ${counts.robot}, shelf: ${counts.shelf}, elevator: ${counts.elevator}, ` +
-        `command: ${counts.command})\n`
+        `command: ${counts.command}, alert: ${counts.alert})\n`
       );
     }
   }, 1_000);
@@ -286,7 +320,7 @@ async function main() {
   // --- Graceful shutdown ---
   process.on("SIGINT", async () => {
     console.log("\nIngester shutting down");
-    const total = counts.robot + counts.shelf + counts.elevator + counts.command;
+    const total = counts.robot + counts.shelf + counts.elevator + counts.command + counts.alert;
     console.log(`   Total messages stored: ${total}`);
     db.close();
     await mqtt.disconnect();
