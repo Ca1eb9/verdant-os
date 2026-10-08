@@ -59,9 +59,14 @@ receive time).
 | `lost` (orchestrator only) | No | No | Kept | — |
 
 The low-battery return is skipped while a stop task is queued or assigned for the
-robot, is sent once and only resent if the robot hasn't acted on it within
-`command_ack_timeout_ms`, and raises a CRITICAL alert the first time if the
-battery is at or below `battery_critical_pct`.
+robot, and is sent once and only resent if the robot hasn't acted on it within
+`command_ack_timeout_ms`.
+
+A CRITICAL alert is raised once when the battery drops to `battery_critical_pct`,
+in **every** status, including those with no low-battery return (`manual`,
+`stopped`, …): "returning to dock" when the return is sent with it, otherwise
+with the status. It's re-armed once the battery is back above `battery_low_pct`,
+so voltage sag under load can't repeat it.
 
 ## 2. Task lifecycle
 
@@ -151,13 +156,16 @@ flowchart TD
     O --> Q
     P2 --> Q
     Q{Returning, docking<br/>or charging?} -- yes --> Q2[Clear dock request]
-    Q -- no --> R
-    Q2 --> R{No stop pending, battery at threshold,<br/>idle / en_route / working?}
-    R -- yes --> S{Dock request sent<br/>within grace period?}
+    Q2 --> Q3[First drop to critical since above low?<br/>Arm the CRITICAL alert]
+    Q -- no --> Q3
+    Q3 --> R{No stop pending, battery at threshold,<br/>idle / en_route / working?}
+    R -- yes --> R1[Alert if armed: returning to dock]
+    R1 --> S{Dock request sent<br/>within grace period?}
     S -- yes --> Y
-    S -- no --> T[Send return_to_dock;<br/>CRITICAL alert first time if critical]
+    S -- no --> T[Send return_to_dock]
     T --> Y
-    R -- no --> U{idle?}
+    R -- no --> R2[Alert if armed, with the status]
+    R2 --> U{idle?}
     U -- yes --> V[Assign next task]
     U -- no --> Y
     V --> Y{Robot still reports<br/>a cancelled task?}
