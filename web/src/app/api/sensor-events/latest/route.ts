@@ -32,7 +32,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from("sensor_events")
     .select(
-      "id,created_at,device,source,ts,air_temp_c,air_temp_f,humidity_pct,water_temp_c,water_temp_f,water_level_ok,water_level_text,ph_voltage,ph,light_lux,light_ppfd,raw_text",
+      "id,created_at,device,source,ts,air_temp_c,humidity_pct,water_temp_c,water_level_ok,ph,light_lux",
     )
     .eq("farm_id", farmId)
     .order("created_at", { ascending: false })
