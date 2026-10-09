@@ -15,6 +15,10 @@ import { formatMetric } from "@/lib/format";
 import type { HistoryPoint, HistoryRange } from "@/lib/types";
 import styles from "@/components/history/HistoryView.module.css";
 
+// Axis ticks are 44px wide: light readings run to five digits, so 16,500 shows as 17K
+const AXIS_THOUSANDS = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 0 });
+const formatAxisTick = (value: number) => (Math.abs(value) >= 1000 ? AXIS_THOUSANDS.format(value) : String(value));
+
 interface SeriesConfig {
   key: string;
   label: string;
@@ -110,6 +114,7 @@ export function MetricChartPanel({
               tickLine={false}
               width={44}
               tick={{ fill: axis.tick, fontSize: 12 }}
+              tickFormatter={formatAxisTick}
             />
             {hasRightAxis ? (
               <YAxis
@@ -119,6 +124,7 @@ export function MetricChartPanel({
                 tickLine={false}
                 width={44}
                 tick={{ fill: axis.tick, fontSize: 12 }}
+                tickFormatter={formatAxisTick}
               />
             ) : null}
             <Tooltip content={<ChartTooltip series={series} />} />

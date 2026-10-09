@@ -53,11 +53,9 @@ export function HistoryView() {
     if (!data.length) return [];
     const airTemp = data.map((point) => point.air.temperature);
     const humidity = data.map((point) => point.air.humidity);
-    const pressure = data.map((point) => point.air.pressure);
     const waterTemp = data.map((point) => point.water.temperature);
     const waterPh = data.map((point) => point.water.ph);
-    const waterEc = data.map((point) => point.water.ec);
-    const waterLevel = data.map((point) => point.water.level);
+    const lux = data.map((point) => point.light.lux);
 
     return [
       {
@@ -66,19 +64,14 @@ export function HistoryView() {
         detail: "Average air temperature and humidity",
       },
       {
-        label: "Pressure band",
-        value: `${formatMetric(minimum(pressure), "hPa", 1)} ${RANGE_ARROW} ${formatMetric(maximum(pressure), "hPa", 1)}`,
-        detail: "Observed atmospheric swing",
+        label: "Reservoir",
+        value: `${formatMetric(average(waterTemp), DEGREE, 1)} ${MID_DOT} ${formatMetric(average(waterPh), "", 2)} pH`,
+        detail: "Average water temperature and pH",
       },
       {
-        label: "Nutrient chemistry",
-        value: `${formatMetric(average(waterPh), "", 2)} pH ${MID_DOT} ${formatMetric(maximum(waterEc), "mS/cm", 2)}`,
-        detail: "Average pH and peak EC",
-      },
-      {
-        label: "Reservoir reserve",
-        value: `${formatMetric(average(waterTemp), DEGREE, 1)} ${MID_DOT} ${formatMetric(minimum(waterLevel), "%", 0)}`,
-        detail: "Average water temp and minimum level",
+        label: "Light range",
+        value: `${formatMetric(minimum(lux), "lux", 0)} ${RANGE_ARROW} ${formatMetric(maximum(lux), "lux", 0)}`,
+        detail: "Lowest and highest light reading",
       },
     ];
   }, [DEGREE, data]);
@@ -107,22 +100,8 @@ export function HistoryView() {
       ],
     },
     {
-      title: "Atmospheric Pressure",
-      description: "Pressure shifts that influence airflow stability and climate control.",
-      series: [
-        {
-          key: "air.pressure",
-          label: "Pressure",
-          color: color.amber,
-          unit: "hPa",
-          precision: 1,
-          axisId: "left" as const,
-        },
-      ],
-    },
-    {
-      title: "Water Loop",
-      description: "Reservoir thermal response and fill level across the circulation loop.",
+      title: "Reservoir",
+      description: "Water temperature and pH of the nutrient reservoir.",
       series: [
         {
           key: "water.temperature",
@@ -133,46 +112,24 @@ export function HistoryView() {
           axisId: "left" as const,
         },
         {
-          key: "water.level",
-          label: "Water Level",
-          color: color.teal,
-          unit: "%",
-          precision: 0,
-          axisId: "right" as const,
-        },
-      ],
-    },
-    {
-      title: "Water Chemistry",
-      description: "pH and EC tracking for nutrient recipe verification.",
-      series: [
-        {
           key: "water.ph",
           label: "pH",
           color: color.lime,
           unit: "",
           precision: 2,
-          axisId: "left" as const,
-        },
-        {
-          key: "water.ec",
-          label: "EC",
-          color: color.cyan,
-          unit: "mS/cm",
-          precision: 2,
           axisId: "right" as const,
         },
       ],
     },
     {
-      title: "Canopy Light",
-      description: "PPFD history for fixture output and photoperiod consistency.",
+      title: "Light",
+      description: "Light at the shelf, for spotting lights that are off or dimming.",
       series: [
         {
-          key: "light.ppfd",
-          label: "PPFD",
-          color: color.lime,
-          unit: "PPFD",
+          key: "light.lux",
+          label: "Light",
+          color: color.amber,
+          unit: "lux",
           precision: 0,
           axisId: "left" as const,
         },

@@ -34,13 +34,6 @@ const THRESHOLDS = {
     criticalMax: 7.2,
     unit: "pH",
   },
-  ppfd: {
-    warningMin: 180,
-    warningMax: 550,
-    criticalMin: 150,
-    criticalMax: 650,
-    unit: "PPFD",
-  },
 } as const;
 
 type StoredAlertState = {
@@ -235,7 +228,6 @@ export function evaluateTelemetryAlerts(
     ["air.humidity", "Humidity", reading.humidity, THRESHOLDS.humidity],
     ["water.temperature", "Water temperature", reading.waterTemperature, THRESHOLDS.waterTemperature],
     ["water.ph", "pH", reading.ph, THRESHOLDS.ph],
-    ["light.ppfd", "PPFD", reading.ppfd, THRESHOLDS.ppfd],
   ] as const;
 
   for (const [metric, label, value, band] of ranges) {
@@ -254,7 +246,7 @@ export function evaluateTelemetryAlerts(
     if (alert) alerts.push(alert);
   }
 
-  // The reservoir has a float switch, not a level gauge: below it is already critical
+  // The reservoir has a level switch, not a gauge: below it is already critical
   if (reading.waterLevelOk === false) {
     alerts.push(
       makeAlert(

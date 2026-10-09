@@ -1,6 +1,5 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { RobotsCard } from "@/components/dashboard/RobotsCard";
 import { SensorCard } from "@/components/dashboard/SensorCard";
@@ -14,10 +13,6 @@ import styles from "@/components/dashboard/DashboardView.module.css";
 const AIR_FALLBACK = "\uD83C\uDF2C\uFE0F";
 const WATER_FALLBACK = "\uD83D\uDCA7";
 const LIGHT_FALLBACK = "\uD83D\uDCA1";
-
-// The reservoir has a float switch, not a gauge: the tank drawing shows above or below it
-const RESERVOIR_FILL_OK = 72;
-const RESERVOIR_FILL_LOW = 18;
 
 function formatOptionalMetric(value: number | null, unit: string, precision = 1) {
   return value === null ? "No reading" : formatMetric(value, unit, precision);
@@ -35,16 +30,10 @@ export function DashboardView() {
 
   const airTemperature = reading?.airTemperature ?? null;
   const humidity = reading?.humidity ?? null;
-  const pressure = reading?.pressure ?? null;
   const waterTemperature = reading?.waterTemperature ?? null;
   const waterPh = reading?.ph ?? null;
-  const waterEc = reading?.ec ?? null;
-  const lightPpfd = reading?.ppfd ?? null;
+  const lightLux = reading?.lightLux ?? null;
   const waterLevelOk = reading?.waterLevelOk ?? null;
-  const reservoirLevel = waterLevelOk === null ? 0 : waterLevelOk ? RESERVOIR_FILL_OK : RESERVOIR_FILL_LOW;
-  const waterLevelText =
-    reading?.waterLevelText ??
-    (waterLevelOk === null ? "No reading" : waterLevelOk ? "Liquid detected" : "No liquid detected");
 
   const sensorCards = useMemo(
     () => [
@@ -61,11 +50,6 @@ export function DashboardView() {
             value: formatOptionalMetric(humidity, "%", 0),
             tone: "stable" as const,
           },
-          {
-            label: "Pressure",
-            value: formatOptionalMetric(pressure, "hPa", 1),
-            tone: "focus" as const,
-          },
         ],
       },
       {
@@ -75,60 +59,11 @@ export function DashboardView() {
         accent: "teal" as const,
         heroLabel: "Water Temperature",
         heroValue: fmt.temp(waterTemperature, 1),
-        visual: (
-          <div
-            className={styles.waterChamber}
-            suppressHydrationWarning
-            style={{ "--reservoir-level": `${reservoirLevel}%` } as CSSProperties}
-          >
-            <div className={styles.chamberHeader}>
-              <span>Reservoir volume</span>
-              <div
-                className={`${styles.reservoirStatus} ${
-                  waterLevelOk === null ? "" : waterLevelOk ? styles.reserveGood : styles.reserveLow
-                }`}
-              >
-                <span className="statusDot" />
-                <strong>{waterLevelOk === null ? "No reading" : waterLevelOk ? "Enough water" : "Refill soon"}</strong>
-              </div>
-            </div>
-            <div className={styles.waterSystemGrid}>
-              <div className={styles.reservoirBlock}>
-                <span className={styles.visualLabel}>Main reservoir</span>
-                <div className={styles.reservoirTank}>
-                  <div className={styles.reservoirColumn}>
-                    <div className={styles.reservoirThreshold}>
-                      <span className={styles.reservoirThresholdLine} />
-                      <span className={styles.reservoirThresholdLabel}>Level sensor</span>
-                    </div>
-                    <div className={styles.reservoirFill}>
-                      <span className={styles.chamberWave} />
-                      <span className={styles.chamberWaveAlt} />
-                    </div>
-                  </div>
-                  <div className={styles.reservoirScale}>
-                    <span>100</span>
-                    <span>50</span>
-                    <span>0</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className={styles.chamberStats}>
-              <span>{waterLevelText}</span>
-            </div>
-          </div>
-        ),
         metrics: [
           {
             label: "pH",
             value: formatOptionalMetric(waterPh, "", 2),
             tone: "stable" as const,
-          },
-          {
-            label: "EC",
-            value: formatOptionalMetric(waterEc, "mS/cm", 2),
-            tone: "focus" as const,
           },
           {
             label: "Water Level",
@@ -142,8 +77,8 @@ export function DashboardView() {
         icon: "/images/light-icon.svg",
         fallback: LIGHT_FALLBACK,
         accent: "lime" as const,
-        heroLabel: "Canopy PPFD",
-        heroValue: formatOptionalMetric(lightPpfd, "PPFD", 1),
+        heroLabel: "Light",
+        heroValue: formatOptionalMetric(lightLux, "lux", 0),
         metrics: [],
       },
     ],
@@ -151,12 +86,8 @@ export function DashboardView() {
       airTemperature,
       fmt,
       humidity,
-      lightPpfd,
-      pressure,
-      reservoirLevel,
-      waterEc,
+      lightLux,
       waterLevelOk,
-      waterLevelText,
       waterPh,
       waterTemperature,
     ],

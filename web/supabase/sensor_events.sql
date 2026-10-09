@@ -11,18 +11,23 @@ create table if not exists public.sensor_events (
   source text,
   ts timestamptz,
   air_temp_c numeric,
-  air_temp_f numeric,
   humidity_pct numeric,
   water_temp_c numeric,
-  water_temp_f numeric,
   water_level_ok boolean,
-  water_level_text text,
-  ph_voltage numeric,
   ph numeric,
-  light_lux numeric,
-  light_ppfd numeric,
-  raw_text text
+  light_lux numeric
 );
+
+-- Columns from the retired laptop serial bridge. The dashboard derives °F from
+-- °C and the level text from water_level_ok, the Pi converts pH, and light is
+-- shown as lux (a PPFD estimate from lux doesn't hold under grow lights)
+alter table public.sensor_events
+  drop column if exists air_temp_f,
+  drop column if exists water_temp_f,
+  drop column if exists water_level_text,
+  drop column if exists ph_voltage,
+  drop column if exists light_ppfd,
+  drop column if exists raw_text;
 
 create index if not exists sensor_events_created_at_desc_idx
   on public.sensor_events (created_at desc);

@@ -21,7 +21,7 @@ In **SQL Editor**, run these files from the repo, in this order (paste each, **R
 | File | Creates |
 |---|---|
 | [`web/supabase/farms.sql`](../web/supabase/farms.sql) | `farms`: one row per farm, the list the dashboard's farm picker shows. Every other table's `farm_id` must name one |
-| [`web/supabase/sensor_events.sql`](../web/supabase/sensor_events.sql) | `sensor_events`: shelf sensor readings, the dashboard's environment feed. The Supabase bridge mirrors them from `farm/shelf/+/sensors` ([shelf-sensors.md](shelf-sensors.md)) |
+| [`web/supabase/sensor_events.sql`](../web/supabase/sensor_events.sql) | `sensor_events`: shelf sensor readings, the dashboard's environment feed. The Supabase bridge mirrors them from `farm/shelf/+/sensors` ([shelf-sensors.md](shelf-sensors.md)). On an older project, running it again drops the retired columns (`light_ppfd`, `ph_voltage`, …) |
 | [`web/supabase/remote_commands.sql`](../web/supabase/remote_commands.sql) | `remote_commands`: commands the dashboard sends from anywhere; the bridge relays them to the farm |
 | [`web/supabase/farm_sync.sql`](../web/supabase/farm_sync.sql) | `robot_telemetry`, `robot_state`, `alerts`, `farm_topology` (what the bridge mirrors), Realtime for them, the presence rule and daily cleanup |
 

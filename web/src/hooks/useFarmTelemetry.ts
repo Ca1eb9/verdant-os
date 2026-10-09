@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { evaluateTelemetryAlerts, recordTelemetryAlerts } from "@/lib/alerts";
 import { getFarmDataSource, onFarmDataSourceChange, type ShelfReading } from "@/lib/farm/data-source";
-import { getCalibratedLightPpfd } from "@/lib/light-calibration";
 import { MOCK_DATA_ENABLED, buildLiveTelemetry } from "@/lib/mock-data";
 import type {
   LiveStatus,
@@ -27,14 +26,10 @@ function eventToReading(event: SensorEventRecord): SensorReading {
     device: event.device,
     airTemperature: event.air_temp_c,
     humidity: event.humidity_pct,
-    // the shelf node has no pressure or EC sensor
-    pressure: null,
     waterTemperature: event.water_temp_c,
     ph: event.ph,
-    ec: null,
     waterLevelOk: event.water_level_ok,
-    waterLevelText: event.water_level_text,
-    ppfd: getCalibratedLightPpfd(event.light_lux, event.light_ppfd),
+    lightLux: event.light_lux,
   };
 }
 
@@ -45,13 +40,10 @@ function shelfToReading({ data, receivedAt }: ShelfReading): SensorReading {
     device: data.shelf_id,
     airTemperature: data.temperature_c,
     humidity: data.humidity_pct,
-    pressure: null,
     waterTemperature: data.water_temp_c,
     ph: data.ph,
-    ec: null,
     waterLevelOk: data.water_level_ok,
-    waterLevelText: null,
-    ppfd: getCalibratedLightPpfd(data.light_lux, null),
+    lightLux: data.light_lux,
   };
 }
 
@@ -61,17 +53,14 @@ function snapshotToReading(snapshot: TelemetrySnapshot): SensorReading {
     device: snapshot.deviceId,
     airTemperature: snapshot.air.temperature,
     humidity: snapshot.air.humidity,
-    pressure: snapshot.air.pressure,
     waterTemperature: snapshot.water.temperature,
     ph: snapshot.water.ph,
-    ec: snapshot.water.ec,
     waterLevelOk: snapshot.water.levelFloat === 1,
-    waterLevelText: snapshot.water.levelText ?? null,
-    ppfd: snapshot.light.ppfd,
+    lightLux: snapshot.light.lux,
   };
 }
 
-const NUMBER_FIELDS = ["airTemperature", "humidity", "pressure", "waterTemperature", "ph", "ec", "ppfd"] as const;
+const NUMBER_FIELDS = ["airTemperature", "humidity", "waterTemperature", "ph", "lightLux"] as const;
 
 function isReading(value: unknown): value is SensorReading {
   if (typeof value !== "object" || value === null) return false;
@@ -81,8 +70,7 @@ function isReading(value: unknown): value is SensorReading {
     !Number.isNaN(new Date(r.timestamp).getTime()) &&
     (r.device === null || typeof r.device === "string") &&
     NUMBER_FIELDS.every((key) => r[key] === null || (typeof r[key] === "number" && Number.isFinite(r[key]))) &&
-    (r.waterLevelOk === null || typeof r.waterLevelOk === "boolean") &&
-    (r.waterLevelText === null || typeof r.waterLevelText === "string")
+    (r.waterLevelOk === null || typeof r.waterLevelOk === "boolean")
   );
 }
 

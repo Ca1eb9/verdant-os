@@ -21,7 +21,6 @@ interface ConfigStatus {
       source: string | null;
       ts: string | null;
       light_lux: number | null;
-      light_ppfd: number | null;
     } | null;
     latestAgeSeconds: number | null;
     error: string | null;
@@ -40,11 +39,8 @@ const schemaColumns = [
   "humidity_pct",
   "water_temp_c",
   "water_level_ok",
-  "ph_voltage",
   "ph",
   "light_lux",
-  "light_ppfd",
-  "raw_text",
 ];
 
 function toneLabel(tone: StatusTone) {
@@ -213,9 +209,9 @@ export function ConfigView() {
             <div className={styles.checkRow}>
               <span>Light</span>
               <strong>
-                {latestEvent?.light_ppfd === null || latestEvent?.light_ppfd === undefined
+                {latestEvent?.light_lux === null || latestEvent?.light_lux === undefined
                   ? "No reading"
-                  : `${latestEvent.light_ppfd.toFixed(1)} PPFD`}
+                  : `${latestEvent.light_lux.toFixed(0)} lux`}
               </strong>
             </div>
           </div>

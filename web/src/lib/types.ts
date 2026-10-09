@@ -9,8 +9,7 @@ export type AlertMetric =
   | "air.humidity"
   | "water.temperature"
   | "water.ph"
-  | "water.level"
-  | "light.ppfd";
+  | "water.level";
 
 /** A row of Supabase's farms table (or the Pi's own farm on FarmNet) */
 export interface FarmIdentity {
@@ -24,14 +23,11 @@ export interface SensorReading {
   device: string | null;
   airTemperature: number | null;
   humidity: number | null;
-  pressure: number | null;
   waterTemperature: number | null;
   ph: number | null;
-  ec: number | null;
-  /** False when the reservoir is below the float sensor */
+  /** False when the reservoir is below the level sensor */
   waterLevelOk: boolean | null;
-  waterLevelText: string | null;
-  ppfd: number | null;
+  lightLux: number | null;
 }
 
 export interface TelemetrySnapshot {
@@ -44,19 +40,14 @@ export interface TelemetrySnapshot {
   air: {
     temperature: number;
     humidity: number;
-    pressure: number;
   };
   water: {
     temperature: number;
     ph: number;
-    ec: number;
-    level: number;
     levelFloat: FloatSensorState;
-    levelText?: string;
   };
   light: {
     lux: number;
-    ppfd: number;
   };
 }
 
@@ -67,17 +58,11 @@ export interface SensorEventRecord {
   source: string | null;
   ts: string | null;
   air_temp_c: number | null;
-  air_temp_f: number | null;
   humidity_pct: number | null;
   water_temp_c: number | null;
-  water_temp_f: number | null;
   water_level_ok: boolean | null;
-  water_level_text: string | null;
-  ph_voltage: number | null;
   ph: number | null;
   light_lux: number | null;
-  light_ppfd: number | null;
-  raw_text: string | null;
 }
 
 export interface HistoryPoint extends TelemetrySnapshot {
@@ -105,16 +90,13 @@ export interface SensorEventPayload {
   air: {
     t_c: number;
     rh_pct: number;
-    p_hpa: number;
   };
   water: {
     t_c: number;
     ph: number;
-    ec_ms_cm: number;
   };
   light: {
     lux: number;
-    ppfd: number;
   };
   level: {
     float: FloatSensorState;
