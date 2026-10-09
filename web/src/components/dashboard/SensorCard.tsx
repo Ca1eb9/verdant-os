@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties } from "react";
 import { AssetImage } from "@/components/ui/AssetImage";
 import { MetricValue } from "@/components/ui/MetricValue";
 import styles from "@/components/dashboard/DashboardView.module.css";
@@ -20,7 +20,6 @@ interface SensorCardProps {
   heroLabel: string;
   heroValue: string;
   metrics: SensorCardMetric[];
-  visual?: ReactNode;
 }
 
 const accentMap: Record<CardAccent, string> = {
@@ -37,7 +36,6 @@ export function SensorCard({
   icon,
   metrics,
   title,
-  visual,
 }: SensorCardProps) {
   return (
     <article
@@ -64,7 +62,6 @@ export function SensorCard({
         </strong>
       </div>
 
-      {visual ? <div className={styles.sensorVisual}>{visual}</div> : null}
 
       <div className={styles.metricGrid}>
         {metrics.map((metric) => (
