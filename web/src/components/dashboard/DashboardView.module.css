@@ -81,6 +81,22 @@
   background: rgb(var(--amber-rgb) / 0.12);
 }
 
+/* alert severities */
+.info {
+  color: var(--cyan);
+  background: rgb(var(--cyan-rgb) / 0.12);
+}
+
+.warning {
+  color: var(--amber);
+  background: rgb(var(--amber-rgb) / 0.12);
+}
+
+.critical {
+  color: var(--danger);
+  background: rgb(var(--danger-rgb) / 0.1);
+}
+
 .sensorGrid {
   display: grid;
   grid-template-columns: 1fr;
@@ -192,8 +208,13 @@
   box-shadow: 0 0 6px rgb(var(--cyan-rgb) / 0.45);
 }
 
-.robotsCard {
+.robotsCard,
+.mapCard {
   --accent-rgb: 217 114 46;
+}
+
+.alertsCard {
+  --accent-rgb: var(--danger-rgb);
 }
 
 .cardLink {
@@ -228,25 +249,41 @@
   line-height: 1.5;
 }
 
+/* robots and alerts, stacked beside the map on wide screens */
+.sideStack {
+  display: grid;
+  gap: 0.9rem;
+  align-content: start;
+}
+
 @media (min-width: 760px) {
   .sensorGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .sensorGrid > .mapCard,
+  .sideStack {
+    grid-column: span 2;
+  }
+
+  .sideStack {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
+/* sensors across the top; the map below them, with robots and alerts beside it */
 @media (min-width: 1180px) {
   .sensorGrid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-template-rows: auto 1fr;
-    grid-auto-flow: dense;
-    align-items: start;
   }
 
-  .sensorGrid > :nth-child(2) {
-    grid-row: span 2;
+  .sensorGrid > .mapCard {
+    grid-column: span 2;
   }
 
-  .sensorGrid > .robotsCard {
-    grid-column: 1;
+  .sideStack {
+    grid-column: auto;
+    grid-template-columns: 1fr;
   }
 }

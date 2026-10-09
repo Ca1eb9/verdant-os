@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { AlertsCard } from "@/components/dashboard/AlertsCard";
+import { FarmMapCard } from "@/components/dashboard/FarmMapCard";
 import { RobotsCard } from "@/components/dashboard/RobotsCard";
 import { SensorCard } from "@/components/dashboard/SensorCard";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
@@ -26,7 +28,7 @@ export function DashboardView() {
   // readings load in the browser; the prerendered page shows placeholders instead
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const { reading, lastUpdate, liveStatus } = useFarmTelemetry(farm?.id ?? null);
+  const { reading, lastUpdate, liveStatus, alerts } = useFarmTelemetry(farm?.id ?? null);
 
   const airTemperature = reading?.airTemperature ?? null;
   const humidity = reading?.humidity ?? null;
@@ -122,7 +124,11 @@ export function DashboardView() {
         {mounted
           ? sensorCards.map((card) => <SensorCard key={card.title} {...card} />)
           : sensorCards.map((card) => <div key={card.title} className="loadingCard" aria-hidden />)}
-        <RobotsCard />
+        <FarmMapCard />
+        <div className={styles.sideStack}>
+          <RobotsCard />
+          <AlertsCard environmentAlerts={alerts} />
+        </div>
       </div>
     </section>
   );

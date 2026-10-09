@@ -134,6 +134,10 @@ export interface RendererOptions {
   accent?: string;
   beamOpacity?: number;
   showBeams?: boolean;
+  /** Leave a fading trail behind moving rovers (default on) */
+  trails?: boolean;
+  /** Draw the slots: empty-slot outlines, names on hover, click targets (default on) */
+  slots?: boolean;
   onNodeClick?: (nodeId: string) => void;
   onRobotClick?: (robotId: string) => void;
 }
@@ -175,6 +179,7 @@ export class FarmRenderer {
       opts.accent !== this.opts.accent ||
       opts.beamOpacity !== this.opts.beamOpacity ||
       opts.showBeams !== this.opts.showBeams ||
+      opts.slots !== this.opts.slots ||
       opts.theme !== this.opts.theme;
     this.opts = opts;
     this.PAL = opts.theme === "light" ? PAL_LIGHT : PAL_DARK;
@@ -325,7 +330,7 @@ export class FarmRenderer {
 
   // faint dotted breadcrumb of the segment just travelled, fading out over ~3s
   private addTrail(sx: number, sy: number, tx: number, ty: number) {
-    if (!this.trailLayer) return;
+    if (!this.trailLayer || this.opts.trails === false) return;
     const h = W / 2;
     const seg = this.mk(
       "line",
@@ -573,7 +578,7 @@ export class FarmRenderer {
     const body = opts.active ? this.accent() : P.parked;
     const trayW = Math.round(w * 0.75);
     const boxX = trayW + 1;
-    const g = this.mk("g", { transform: "translate(" + Math.round(x) + "," + Math.round(ty) + ")", "data-robot": data.id, style: "cursor:pointer" }, p);
+    const g = this.mk("g", { transform: "translate(" + Math.round(x) + "," + Math.round(ty) + ")", "data-robot": data.id, style: this.opts.onRobotClick ? "cursor:pointer" : "" }, p);
     if (!opts.active) g.setAttribute("opacity", "0.82");
     const title = this.mk("title", {}, g);
     title.textContent = data.id + " · " + data.action;
@@ -710,6 +715,7 @@ export class FarmRenderer {
     const input = this.input;
     if (!layer || !input) return;
     layer.innerHTML = "";
+    if (this.opts.slots === false) return;
     const occupied = this.occupied();
 
     for (const slot of input.scene.slots.values()) {
