@@ -18,6 +18,7 @@ import styles from "@/components/history/HistoryView.module.css";
 // Axis ticks are 44px wide: light readings run to five digits, so 16,500 shows as 17K
 const AXIS_THOUSANDS = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 0 });
 const formatAxisTick = (value: number) => (Math.abs(value) >= 1000 ? AXIS_THOUSANDS.format(value) : String(value));
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 interface SeriesConfig {
   key: string;
@@ -86,6 +87,9 @@ export function MetricChartPanel({
   title,
 }: MetricChartPanelProps) {
   const hasRightAxis = series.some((item) => item.axisId === "right");
+  // times of day, unless the points cover more than a day of the 7-day range
+  const spanMs = data.length ? new Date(data[data.length - 1].timestamp).getTime() - new Date(data[0].timestamp).getTime() : 0;
+  const showTime = range !== "7d" || spanMs < DAY_MS;
   const { fmt, theme } = usePreferences();
   const axis = theme === "light" ? { grid: "rgba(15,23,42,0.08)", tick: "#56667a" } : { grid: "rgba(255,255,255,0.06)", tick: "#8aa3bc" };
 
@@ -106,7 +110,7 @@ export function MetricChartPanel({
               tickLine={false}
               minTickGap={24}
               tick={{ fill: axis.tick, fontSize: 12 }}
-              tickFormatter={(value) => fmt.tick(value, range !== "7d")}
+              tickFormatter={(value) => fmt.tick(value, showTime)}
             />
             <YAxis
               yAxisId="left"

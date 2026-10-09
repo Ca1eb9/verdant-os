@@ -5,6 +5,7 @@ import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { NoFarmNotice } from "@/components/farms/NoFarmNotice";
 import { MetricChartPanel } from "@/components/history/MetricChartPanel";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
+import { useShelfHistory } from "@/hooks/useShelfHistory";
 import {
   HISTORY_RANGE_HOURS,
   MOCK_DATA_ENABLED,
@@ -36,41 +37,49 @@ export function HistoryView() {
   const color = SERIES_COLORS[theme];
   const DEGREE = fmt.tempUnit;
 
+  // On FarmNet: the shelf readings received since the dashboard opened. Stored
+  // history (Dashboard API / Supabase) comes with the dashboard data-flow work.
+  const { points: livePoints, live } = useShelfHistory(range);
+
   // temperatures are stored in °C; convert once for display
-  // No history source yet: it comes with the dashboard data-flow work (Dashboard API / Supabase)
   const data = useMemo(() => {
-    if (!MOCK_DATA_ENABLED || !activeFarmId) return [];
-    const series = buildHistoricalSeries(activeFarmId, HISTORY_RANGE_HOURS[range]);
+    if (!activeFarmId) return [];
+    const series = MOCK_DATA_ENABLED ? buildHistoricalSeries(activeFarmId, HISTORY_RANGE_HOURS[range]) : livePoints;
     if (prefs.temperatureUnit === "C") return series;
+    const toUnit = (celsius: number | null) => (celsius === null ? null : fmt.tempValue(celsius));
     return series.map((point) => ({
       ...point,
-      air: { ...point.air, temperature: fmt.tempValue(point.air.temperature) },
-      water: { ...point.water, temperature: fmt.tempValue(point.water.temperature) },
+      air: { ...point.air, temperature: toUnit(point.air.temperature) },
+      water: { ...point.water, temperature: toUnit(point.water.temperature) },
     }));
-  }, [activeFarmId, fmt, prefs.temperatureUnit, range]);
+  }, [activeFarmId, fmt, livePoints, prefs.temperatureUnit, range]);
 
   const summary = useMemo(() => {
     if (!data.length) return [];
-    const airTemp = data.map((point) => point.air.temperature);
-    const humidity = data.map((point) => point.air.humidity);
-    const waterTemp = data.map((point) => point.water.temperature);
-    const waterPh = data.map((point) => point.water.ph);
-    const lux = data.map((point) => point.light.lux);
+    // a sensor that never read in the range shows "No reading"
+    const read = (values: (number | null)[]) => values.filter((value): value is number => value !== null);
+    const airTemp = read(data.map((point) => point.air.temperature));
+    const humidity = read(data.map((point) => point.air.humidity));
+    const waterTemp = read(data.map((point) => point.water.temperature));
+    const waterPh = read(data.map((point) => point.water.ph));
+    const lux = read(data.map((point) => point.light.lux));
+    const metric = (values: number[], pick: (values: number[]) => number, unit: string, precision: number) =>
+      values.length ? formatMetric(pick(values), unit, precision) : "No reading";
 
     return [
       {
         label: "Climate average",
-        value: `${formatMetric(average(airTemp), DEGREE, 1)} ${MID_DOT} ${formatMetric(average(humidity), "%", 0)}`,
+        value: `${metric(airTemp, average, DEGREE, 1)} ${MID_DOT} ${metric(humidity, average, "%", 0)}`,
         detail: "Average air temperature and humidity",
       },
       {
         label: "Reservoir",
-        value: `${formatMetric(average(waterTemp), DEGREE, 1)} ${MID_DOT} ${formatMetric(average(waterPh), "", 2)} pH`,
+        value: `${metric(waterTemp, average, DEGREE, 1)} ${MID_DOT} ${metric(waterPh, average, "pH", 2)}`,
         detail: "Average water temperature and pH",
       },
       {
         label: "Light range",
-        value: `${formatMetric(minimum(lux), "lux", 0)} ${RANGE_ARROW} ${formatMetric(maximum(lux), "lux", 0)}`,
+        value: lux.length ? `${metric(lux, minimum, "lux", 0)} ${RANGE_ARROW} ${metric(lux, maximum, "lux", 0)}` : "No reading",
         detail: "Lowest and highest light reading",
       },
     ];
@@ -146,7 +155,11 @@ export function HistoryView() {
           <div className={styles.heading}>
             <span className="eyebrow">Historical analytics</span>
             <h1 className="pageTitle">Sensor History</h1>
-            <p className="pageLead">Review time-series performance for {farm.name}.</p>
+            <p className="pageLead">
+              {live
+                ? `Readings from ${farm.name} since this dashboard opened. Earlier history isn't loaded yet.`
+                : `Review time-series performance for ${farm.name}.`}
+            </p>
           </div>
 
           <div className={styles.controlStack}>
@@ -182,7 +195,11 @@ export function HistoryView() {
       {data.length === 0 ? (
         <div className={`glassPanel ${styles.emptyState}`} role="status">
           <strong>No sensor history yet.</strong>
-          <span>The dashboard doesn&apos;t read stored history for {farm.name} yet; it will once the history feed is built.</span>
+          <span>
+            {live
+              ? `The charts fill as ${farm.name}'s shelf sensors report.`
+              : `The dashboard doesn't read stored history for ${farm.name} yet; it will once the history feed is built.`}
+          </span>
         </div>
       ) : null}
 

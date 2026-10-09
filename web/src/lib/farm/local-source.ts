@@ -17,7 +17,9 @@
 // only those raised since the dashboard opened are listed.
 //
 // Shelf readings come from farm/shelf/+/sensors (not retained, one per shelf
-// every few seconds), so the first arrives within a report interval.
+// every few seconds), so the first arrives within a report interval. Every
+// reading is also kept, for the History page's charts, while the connection
+// pill keeps the source connected on any page.
 
 import mqtt, { type MqttClient } from "mqtt";
 import {
@@ -49,6 +51,8 @@ const RECENT_COMMANDS = 10;
 const KEPT_COMMANDS = 200;
 /** Alerts kept in memory */
 const KEPT_ALERTS = 100;
+/** Shelf readings kept for history: a day of one shelf reporting every 5 s */
+const KEPT_SHELF_READINGS = 17_280;
 
 const STATUSES: RobotStatus[] = [
   "idle", "en_route", "working", "returning_to_dock", "docking", "charging",
@@ -148,6 +152,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
   const connectionListeners = new Set<(connection: FarmConnection) => void>();
   const alertListeners = new Set<(alerts: FarmAlert[]) => void>();
   const shelfListeners = new Set<(shelves: ShelfReading[]) => void>();
+  const historyListeners = new Set<(readings: ShelfReading[]) => void>();
   const host = (() => {
     try {
       return new URL(url).host;
@@ -176,6 +181,8 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
   let alerts: FarmAlert[] = [];
   /** Latest reading per shelf_id */
   const shelves = new Map<string, ShelfReading>();
+  /** Every shelf reading since the page opened, oldest first */
+  let shelfHistory: ShelfReading[] = [];
 
   const recordCommand = (record: CommandRecord) => {
     if (commands.some((c) => c.id === record.id)) return;
@@ -219,9 +226,12 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
     }
     if (topic.endsWith("/sensors")) {
       if (!isShelfData(msg)) return ignore(topic);
-      shelves.set(msg.shelf_id, { data: msg, receivedAt: Date.now() });
+      const reading = { data: msg, receivedAt: Date.now() };
+      shelves.set(msg.shelf_id, reading);
       const list = [...shelves.values()];
       shelfListeners.forEach((listener) => listener(list));
+      shelfHistory = [...shelfHistory, reading].slice(-KEPT_SHELF_READINGS);
+      historyListeners.forEach((listener) => listener(shelfHistory));
       return;
     }
     if (topic === TOPICS.commands.local || topic === TOPICS.commands.remote) {
@@ -246,10 +256,10 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
   };
 
   // Connected while anything needs it: the robot list, a pending layout, the
-  // connection status, the alerts or the shelf readings
+  // connection status, the alerts, the shelf readings or their history
   const updateConnection = () => {
     const needed = listeners.size > 0 || topologyWaiters.size > 0 || connectionListeners.size > 0 ||
-      alertListeners.size > 0 || shelfListeners.size > 0;
+      alertListeners.size > 0 || shelfListeners.size > 0 || historyListeners.size > 0;
     if (needed && !client) {
       connection = CONNECTING;
       client = mqtt.connect(url, { reconnectPeriod: RECONNECT_MS, connectTimeout: RECONNECT_MS * 2 });
@@ -368,6 +378,16 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       onShelves([...shelves.values()]);
       return () => {
         shelfListeners.delete(onShelves);
+        updateConnection();
+      };
+    },
+
+    subscribeShelfHistory(onHistory) {
+      historyListeners.add(onHistory);
+      updateConnection();
+      onHistory(shelfHistory);
+      return () => {
+        historyListeners.delete(onHistory);
         updateConnection();
       };
     },

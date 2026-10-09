@@ -72,6 +72,12 @@ export interface FarmDataSource {
    * Returns unsubscribe.
    */
   subscribeShelves(onShelves: (shelves: ShelfReading[] | null) => void): () => void;
+  /**
+   * Streams every shelf reading received since the dashboard opened, oldest
+   * first, whenever one arrives; null when this source has no live shelf feed.
+   * Returns unsubscribe.
+   */
+  subscribeShelfHistory(onHistory: (readings: ShelfReading[] | null) => void): () => void;
 }
 
 export class CommandError extends Error {
@@ -144,6 +150,10 @@ export function createDashboardApiSource(farmId: string): FarmDataSource {
       onShelves(null);
       return () => undefined;
     },
+    subscribeShelfHistory(onHistory) {
+      onHistory(null);
+      return () => undefined;
+    },
   };
 }
 
@@ -174,6 +184,10 @@ function noFarmSource(connection: FarmConnection): FarmDataSource {
     },
     subscribeShelves(onShelves) {
       onShelves(null);
+      return () => undefined;
+    },
+    subscribeShelfHistory(onHistory) {
+      onHistory(null);
       return () => undefined;
     },
   };

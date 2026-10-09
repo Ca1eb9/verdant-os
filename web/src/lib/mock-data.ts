@@ -142,9 +142,11 @@ export function buildHistoricalSeries(farmId: string, hours = 168): HistoryPoint
   const now = Math.floor(Date.now() / hourMs) * hourMs;
   const rawEvents = buildHistoricalSensorEvents(farmId, hours, now);
 
-  return rawEvents.map((event, index) => ({
-    index,
-    ...mapEventToTelemetrySnapshot(farmId, event),
+  return rawEvents.map((event) => ({
+    timestamp: event.ts,
+    air: { temperature: event.air.t_c, humidity: event.air.rh_pct },
+    water: { temperature: event.water.t_c, ph: event.water.ph },
+    light: { lux: event.light.lux },
   }));
 }
 
