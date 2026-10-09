@@ -29,8 +29,37 @@
 .summaryLabel,
 .chartDescription,
 .summaryDetail,
+/* each series name sits over its own axis: left-axis series left, right-axis series right */
+.axisLegend {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.axisLegendGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+}
+
+.axisLegendRight {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
 .legendLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   color: var(--muted);
+}
+
+.legendSwatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 
 .rangeRow {

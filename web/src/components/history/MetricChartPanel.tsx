@@ -2,7 +2,6 @@
 
 import {
   CartesianGrid,
-  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -79,6 +78,21 @@ function ChartTooltip({
   );
 }
 
+/** One axis's series names, with their units, on that axis's side of the chart */
+function AxisLegend({ series, side }: { series: SeriesConfig[]; side: "left" | "right" }) {
+  return (
+    <div className={`${styles.axisLegendGroup} ${side === "right" ? styles.axisLegendRight : ""}`}>
+      {series.map((item) => (
+        <span key={item.key} className={styles.legendLabel}>
+          <i className={styles.legendSwatch} style={{ backgroundColor: item.color }} aria-hidden />
+          {item.label}
+          {item.unit ? ` (${item.unit})` : ""}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function MetricChartPanel({
   data,
   description,
@@ -86,7 +100,9 @@ export function MetricChartPanel({
   series,
   title,
 }: MetricChartPanelProps) {
-  const hasRightAxis = series.some((item) => item.axisId === "right");
+  const leftSeries = series.filter((item) => (item.axisId ?? "left") === "left");
+  const rightSeries = series.filter((item) => item.axisId === "right");
+  const hasRightAxis = rightSeries.length > 0;
   // times of day, unless the points cover more than a day of the 7-day range
   const spanMs = data.length ? new Date(data[data.length - 1].timestamp).getTime() - new Date(data[0].timestamp).getTime() : 0;
   const showTime = range !== "7d" || spanMs < DAY_MS;
@@ -98,6 +114,11 @@ export function MetricChartPanel({
       <div className={styles.chartHeader}>
         <h2 className={styles.chartTitle}>{title}</h2>
         <p className={styles.chartDescription}>{description}</p>
+      </div>
+
+      <div className={styles.axisLegend}>
+        <AxisLegend series={leftSeries} side="left" />
+        {hasRightAxis ? <AxisLegend series={rightSeries} side="right" /> : null}
       </div>
 
       <div className={styles.chartBody}>
@@ -132,18 +153,6 @@ export function MetricChartPanel({
               />
             ) : null}
             <Tooltip content={<ChartTooltip series={series} />} />
-            <Legend
-              verticalAlign="top"
-              align="right"
-              iconType="circle"
-              iconSize={8}
-              wrapperStyle={{ paddingBottom: 12, fontSize: 13 }}
-              formatter={(value) => (
-                <span className={styles.legendLabel}>
-                  {series.find((item) => item.key === value)?.label ?? value}
-                </span>
-              )}
-            />
 
             {series.map((item) => (
               <Line

@@ -193,19 +193,24 @@
   border-radius: 999px;
 }
 
-.tonestable {
+.toneok {
   background: var(--teal);
   box-shadow: 0 0 6px rgb(var(--teal-rgb) / 0.48);
 }
 
-.tonewatch {
+.tonewarning {
   background: var(--amber);
   box-shadow: 0 0 6px rgb(var(--amber-rgb) / 0.45);
 }
 
-.tonefocus {
-  background: var(--cyan);
-  box-shadow: 0 0 6px rgb(var(--cyan-rgb) / 0.45);
+.tonecritical {
+  background: var(--danger);
+  box-shadow: 0 0 6px rgb(var(--danger-rgb) / 0.5);
+}
+
+.tonenone {
+  background: var(--muted);
+  opacity: 0.45;
 }
 
 .robotsCard,

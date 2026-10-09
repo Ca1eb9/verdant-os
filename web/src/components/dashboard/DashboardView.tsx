@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertsCard } from "@/components/dashboard/AlertsCard";
 import { FarmMapCard } from "@/components/dashboard/FarmMapCard";
 import { RobotsCard } from "@/components/dashboard/RobotsCard";
-import { SensorCard } from "@/components/dashboard/SensorCard";
+import { SensorCard, type MetricTone } from "@/components/dashboard/SensorCard";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { NoFarmNotice } from "@/components/farms/NoFarmNotice";
 import { useFarmTelemetry } from "@/hooks/useFarmTelemetry";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { formatMetric } from "@/lib/format";
+import type { AlertMetric, TelemetryAlert } from "@/lib/types";
 import styles from "@/components/dashboard/DashboardView.module.css";
 
 const AIR_FALLBACK = "\uD83C\uDF2C\uFE0F";
@@ -18,6 +19,12 @@ const LIGHT_FALLBACK = "\uD83D\uDCA1";
 
 function formatOptionalMetric(value: number | null, unit: string, precision = 1) {
   return value === null ? "No reading" : formatMetric(value, unit, precision);
+}
+
+/** A dot shows its reading's alert, so a dot and the Alerts card always agree */
+function toneOf(alerts: TelemetryAlert[], metric: AlertMetric, value: number | boolean | null): MetricTone {
+  if (value === null) return "none";
+  return alerts.find((alert) => alert.metric === metric)?.severity ?? "ok";
 }
 
 const STATUS_LABEL = { live: "Live feed", stale: "Stale snapshot", waiting: "Waiting for data" };
@@ -46,11 +53,12 @@ export function DashboardView() {
         accent: "cyan" as const,
         heroLabel: "Air Temperature",
         heroValue: fmt.temp(airTemperature, 1),
+        heroTone: toneOf(alerts, "air.temperature", airTemperature),
         metrics: [
           {
             label: "Humidity",
             value: formatOptionalMetric(humidity, "%", 0),
-            tone: "stable" as const,
+            tone: toneOf(alerts, "air.humidity", humidity),
           },
         ],
       },
@@ -61,16 +69,17 @@ export function DashboardView() {
         accent: "teal" as const,
         heroLabel: "Water Temperature",
         heroValue: fmt.temp(waterTemperature, 1),
+        heroTone: toneOf(alerts, "water.temperature", waterTemperature),
         metrics: [
           {
             label: "pH",
             value: formatOptionalMetric(waterPh, "", 2),
-            tone: "stable" as const,
+            tone: toneOf(alerts, "water.ph", waterPh),
           },
           {
             label: "Water Level",
             value: waterLevelOk === null ? "No reading" : waterLevelOk ? "OK" : "LOW",
-            tone: "watch" as const,
+            tone: toneOf(alerts, "water.level", waterLevelOk),
           },
         ],
       },
@@ -86,6 +95,7 @@ export function DashboardView() {
     ],
     [
       airTemperature,
+      alerts,
       fmt,
       humidity,
       lightLux,
