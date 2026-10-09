@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
-import { evaluateTelemetryAlerts, recordTelemetryAlerts } from "@/lib/alerts";
+import { evaluateTelemetryAlerts, keepFirstDetection, recordTelemetryAlerts } from "@/lib/alerts";
 import { getFarmDataSource, onFarmDataSourceChange, type ShelfReading } from "@/lib/farm/data-source";
 import { MOCK_DATA_ENABLED, buildLiveTelemetry } from "@/lib/mock-data";
 import type {
@@ -215,7 +215,10 @@ export function useFarmTelemetry(farmId: string | null) {
   const alerts = useMemo<TelemetryAlert[]>(
     () =>
       farm?.id === farmId && polled && reading && lastUpdate
-        ? evaluateTelemetryAlerts(farm, reading, lastUpdate, MOCK_DATA_ENABLED ? lastUpdate.getTime() : now)
+        ? keepFirstDetection(
+            farmId,
+            evaluateTelemetryAlerts(farm, reading, lastUpdate, MOCK_DATA_ENABLED ? lastUpdate.getTime() : now),
+          )
         : [],
     [farm, farmId, lastUpdate, now, polled, reading],
   );
