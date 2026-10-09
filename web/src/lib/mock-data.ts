@@ -1,12 +1,10 @@
 import type {
   FarmIdentity,
-  FloatSensorState,
   HistoryPoint,
   HistoryRange,
   SensorEventPayload,
   TelemetrySnapshot,
 } from "@/lib/types";
-import { calibrateLightPpfd } from "@/lib/light-calibration";
 
 export const HISTORY_RANGE_HOURS: Record<HistoryRange, number> = {
   "24h": 24,
@@ -78,12 +76,6 @@ function mapDeviceId(farmId: string) {
   return farmId === "atlas-north" ? "arduino-uno-r3-1" : `${farmId}-sensor-1`;
 }
 
-function buildReservoirPercent(levelFloat: FloatSensorState, nextRandom: () => number) {
-  return levelFloat === 1
-    ? round(68 + nextRandom() * 24, 0)
-    : round(14 + nextRandom() * 26, 0);
-}
-
 export class MockSensorGenerator {
   private readonly deviceId: string;
   private sequence = 0;
@@ -97,7 +89,6 @@ export class MockSensorGenerator {
     const eventSeed = hashSeed(`${this.deviceId}:${this.sequence}:${timestamp.getTime()}`);
     const nextRandom = createSeededRandom(eventSeed);
     const lux = randomInteger(nextRandom, 18_000, 26_500);
-    const ppfd = calibrateLightPpfd(lux);
 
     return {
       type: "sensor",
@@ -107,16 +98,13 @@ export class MockSensorGenerator {
       air: {
         t_c: randomBetween(nextRandom, 22.0, 26.0, 2),
         rh_pct: randomBetween(nextRandom, 45.0, 65.0, 2),
-        p_hpa: randomBetween(nextRandom, 1000.0, 1015.0, 2),
       },
       water: {
         t_c: randomBetween(nextRandom, 18.0, 22.0, 2),
         ph: randomBetween(nextRandom, 5.8, 6.8, 2),
-        ec_ms_cm: randomBetween(nextRandom, 1.0, 1.8, 2),
       },
       light: {
         lux,
-        ppfd: round(ppfd, 1),
       },
       level: {
         float: nextRandom() > 0.24 ? 1 : 0,
@@ -125,13 +113,7 @@ export class MockSensorGenerator {
   }
 }
 
-function mapEventToTelemetrySnapshot(
-  farmId: string,
-  event: SensorEventPayload,
-  nextRandom: () => number,
-): TelemetrySnapshot {
-  const lightPpfd = event.light.ppfd || round(calibrateLightPpfd(event.light.lux), 1);
-
+function mapEventToTelemetrySnapshot(farmId: string, event: SensorEventPayload): TelemetrySnapshot {
   return {
     farmId,
     deviceId: event.device,
@@ -142,18 +124,14 @@ function mapEventToTelemetrySnapshot(
     air: {
       temperature: event.air.t_c,
       humidity: event.air.rh_pct,
-      pressure: event.air.p_hpa,
     },
     water: {
       temperature: event.water.t_c,
       ph: event.water.ph,
-      ec: event.water.ec_ms_cm,
-      level: buildReservoirPercent(event.level.float, nextRandom),
       levelFloat: event.level.float,
     },
     light: {
       lux: event.light.lux,
-      ppfd: lightPpfd,
     },
   };
 }
@@ -166,22 +144,12 @@ export function buildHistoricalSeries(farmId: string, hours = 168): HistoryPoint
 
   return rawEvents.map((event, index) => ({
     index,
-    ...mapEventToTelemetrySnapshot(
-      farmId,
-      event,
-      createSeededRandom(hashSeed(`${farmId}:${event.seq}:reservoir`)),
-    ),
+    ...mapEventToTelemetrySnapshot(farmId, event),
   }));
 }
 
 export function buildLiveTelemetry(farmId: string, frames = 30): TelemetrySnapshot[] {
-  return buildLiveSensorEvents(farmId, frames).map((event) =>
-    mapEventToTelemetrySnapshot(
-      farmId,
-      event,
-      createSeededRandom(hashSeed(`${farmId}:${event.seq}:reservoir`)),
-    ),
-  );
+  return buildLiveSensorEvents(farmId, frames).map((event) => mapEventToTelemetrySnapshot(farmId, event));
 }
 
 export function buildHistoricalSensorEvents(farmId: string, hours = 168, now = Date.now()) {

@@ -21,7 +21,6 @@ interface ConfigStatus {
       source: string | null;
       ts: string | null;
       light_lux: number | null;
-      light_ppfd: number | null;
     } | null;
     latestAgeSeconds: number | null;
     error: string | null;
@@ -213,9 +212,9 @@ export function ConfigView() {
             <div className={styles.checkRow}>
               <span>Light</span>
               <strong>
-                {latestEvent?.light_ppfd === null || latestEvent?.light_ppfd === undefined
+                {latestEvent?.light_lux === null || latestEvent?.light_lux === undefined
                   ? "No reading"
-                  : `${latestEvent.light_ppfd.toFixed(1)} PPFD`}
+                  : `${latestEvent.light_lux.toFixed(0)} lux`}
               </strong>
             </div>
           </div>

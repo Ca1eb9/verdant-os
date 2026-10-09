@@ -39,10 +39,10 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("sensor_events")
-    .select("id,created_at,device,source,ts,light_lux,light_ppfd")
+    .select("id,created_at,device,source,ts,light_lux")
     .order("created_at", { ascending: false })
     .limit(1)
-    .maybeSingle<Pick<SensorEventRecord, "created_at" | "device" | "source" | "ts" | "light_lux" | "light_ppfd">>();
+    .maybeSingle<Pick<SensorEventRecord, "created_at" | "device" | "source" | "ts" | "light_lux">>();
 
   if (error) {
     return NextResponse.json({
