@@ -26,7 +26,7 @@ export interface FarmMapProps {
   route?: RouteDraw | null;
   /** Shown over the map when there is nothing live to draw */
   emptyMessage?: string | null;
-  /** Watch-only (the dashboard): no selection, status line or trails */
+  /** Watch-only (the dashboard): no selection, slots, legend, status line or trails */
   overview?: boolean;
 }
 
@@ -64,7 +64,7 @@ export function FarmMap({
     theme: current,
     // overview: nothing on the map reacts to the pointer
     ...(overviewRef.current
-      ? { trails: false }
+      ? { trails: false, slots: false }
       : {
           onNodeClick: (id: string) => handlers.current.onNodeClick?.(id),
           onRobotClick: (id: string) => handlers.current.onRobotClick?.(id),
@@ -153,20 +153,16 @@ export function FarmMap({
         />
       </div>
 
-      <div className={styles.legend}>
-        <span><i style={{ background: "#8B7FD4" }} /> Grow lights</span>
-        <span><i style={{ background: "#5A93B5" }} /> Water basin</span>
-        {overview ? (
-          <span><i style={{ background: "#9A938C" }} /> Rovers</span>
-        ) : (
-          <>
-            <span><i style={{ background: ACCENT }} /> Selected rover</span>
-            <span><i style={{ background: "#9A938C" }} /> Other rovers</span>
-          </>
-        )}
-        <span><i style={{ background: "#C9A227" }} /> Charging dock</span>
-        <span><i className={styles.dashed} /> Empty slot</span>
-      </div>
+      {overview ? null : (
+        <div className={styles.legend}>
+          <span><i style={{ background: "#8B7FD4" }} /> Grow lights</span>
+          <span><i style={{ background: "#5A93B5" }} /> Water basin</span>
+          <span><i style={{ background: ACCENT }} /> Selected rover</span>
+          <span><i style={{ background: "#9A938C" }} /> Other rovers</span>
+          <span><i style={{ background: "#C9A227" }} /> Charging dock</span>
+          <span><i className={styles.dashed} /> Empty slot</span>
+        </div>
+      )}
 
       {overview ? null : (
         <div className={styles.status}>

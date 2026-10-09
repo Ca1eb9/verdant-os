@@ -136,6 +136,8 @@ export interface RendererOptions {
   showBeams?: boolean;
   /** Leave a fading trail behind moving rovers (default on) */
   trails?: boolean;
+  /** Draw the slots: empty-slot outlines, names on hover, click targets (default on) */
+  slots?: boolean;
   onNodeClick?: (nodeId: string) => void;
   onRobotClick?: (robotId: string) => void;
 }
@@ -177,6 +179,7 @@ export class FarmRenderer {
       opts.accent !== this.opts.accent ||
       opts.beamOpacity !== this.opts.beamOpacity ||
       opts.showBeams !== this.opts.showBeams ||
+      opts.slots !== this.opts.slots ||
       opts.theme !== this.opts.theme;
     this.opts = opts;
     this.PAL = opts.theme === "light" ? PAL_LIGHT : PAL_DARK;
@@ -712,6 +715,7 @@ export class FarmRenderer {
     const input = this.input;
     if (!layer || !input) return;
     layer.innerHTML = "";
+    if (this.opts.slots === false) return;
     const occupied = this.occupied();
 
     for (const slot of input.scene.slots.values()) {
