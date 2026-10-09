@@ -20,6 +20,10 @@ export const TOPICS = {
     /** Commands from any source */
     all: "farm/commands/+",
   },
+  shelf: {
+    /** Every shelf's sensor readings (from the Pi's shelf bridge) */
+    sensorsAll: "farm/shelf/+/sensors",
+  },
   system: {
     /** The farm layout (retained, published by the orchestrator) */
     topology: "farm/system/topology",

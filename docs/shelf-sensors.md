@@ -111,6 +111,5 @@ Restart the bridge after editing the config: `sudo systemctl restart farm-shelf-
 The readings reach the dashboard two ways: on FarmNet straight from
 `farm/shelf/+/sensors` over MQTT, and remotely through the Supabase bridge,
 which mirrors them into Supabase's `sensor_events` table
-([SUPABASE-SETUP.md](SUPABASE-SETUP.md)). Both belong to the Supabase bridge
-and dashboard data-flow tasks; until then the dashboard's environment feed has
-no live source.
+([SUPABASE-SETUP.md](SUPABASE-SETUP.md)). On FarmNet the dashboard shows the
+newest reading of any shelf; the remote path waits on the Supabase bridge.

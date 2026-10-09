@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { evaluateTelemetryAlerts, recordTelemetryAlerts } from "@/lib/alerts";
+import { getFarmDataSource, onFarmDataSourceChange, type ShelfReading } from "@/lib/farm/data-source";
 import { getCalibratedLightPpfd } from "@/lib/light-calibration";
 import { MOCK_DATA_ENABLED, buildLiveTelemetry } from "@/lib/mock-data";
 import type {
@@ -34,6 +35,23 @@ function eventToReading(event: SensorEventRecord): SensorReading {
     waterLevelOk: event.water_level_ok,
     waterLevelText: event.water_level_text,
     ppfd: getCalibratedLightPpfd(event.light_lux, event.light_ppfd),
+  };
+}
+
+function shelfToReading({ data, receivedAt }: ShelfReading): SensorReading {
+  return {
+    // the browser's receive time, so staleness never depends on the Pi's clock
+    timestamp: new Date(receivedAt).toISOString(),
+    device: data.shelf_id,
+    airTemperature: data.temperature_c,
+    humidity: data.humidity_pct,
+    pressure: null,
+    waterTemperature: data.water_temp_c,
+    ph: data.ph,
+    ec: null,
+    waterLevelOk: data.water_level_ok,
+    waterLevelText: null,
+    ppfd: getCalibratedLightPpfd(data.light_lux, null),
   };
 }
 
@@ -102,12 +120,17 @@ interface FeedState {
 }
 
 /**
- * The selected farm's latest environment reading, polled from its newest
- * sensor_events row. Null until the farm has reported one.
+ * The selected farm's latest environment reading: streamed from the data
+ * source when it has a shelf feed (FarmNet: the newest reading of any shelf),
+ * otherwise polled from the farm's newest sensor_events row. Null until the
+ * farm has reported one.
  */
 export function useFarmTelemetry(farmId: string | null) {
   const { farm } = useSelectedFarm();
   const [feed, setFeed] = useState<FeedState>({ farmId: null, reading: null, polled: false });
+  const [source, setSource] = useState(getFarmDataSource);
+  /** Whether the source streams shelf readings; null until it has said */
+  const [hasShelfFeed, setHasShelfFeed] = useState<boolean | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [now, setNow] = useState(() => Date.now());
 
@@ -121,6 +144,27 @@ export function useFarmTelemetry(farmId: string | null) {
       setFeed({ farmId, reading: readStoredReading(farmId), polled: false });
     }
   }, [farmId]);
+
+  useEffect(() => onFarmDataSourceChange(() => setSource(getFarmDataSource())), []);
+
+  useEffect(() => {
+    if (MOCK_DATA_ENABLED || !farmId) return undefined;
+    return source.subscribeShelves((shelves) => {
+      setHasShelfFeed(shelves !== null);
+      if (!shelves) return;
+      const newest = shelves.reduce<ShelfReading | null>(
+        (latest, shelf) => (!latest || shelf.receivedAt > latest.receivedAt ? shelf : latest),
+        null,
+      );
+      if (!newest) {
+        setFeed((current) => (current.farmId === farmId ? { ...current, polled: true } : current));
+        return;
+      }
+      const next = shelfToReading(newest);
+      setFeed({ farmId, reading: next, polled: true });
+      storeReading(farmId, next);
+    });
+  }, [source, farmId]);
 
   useEffect(() => {
     const syncNetworkState = () => setIsOnline(window.navigator.onLine);
@@ -139,7 +183,7 @@ export function useFarmTelemetry(farmId: string | null) {
   }, []);
 
   useEffect(() => {
-    if (MOCK_DATA_ENABLED || !farmId || !isOnline) return undefined;
+    if (MOCK_DATA_ENABLED || !farmId || !isOnline || hasShelfFeed !== false) return undefined;
 
     let isCancelled = false;
 
@@ -171,7 +215,7 @@ export function useFarmTelemetry(farmId: string | null) {
       isCancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [farmId, isOnline]);
+  }, [farmId, isOnline, hasShelfFeed]);
 
   const current = feed.farmId === farmId ? feed : null;
   const reading = current?.reading ?? null;

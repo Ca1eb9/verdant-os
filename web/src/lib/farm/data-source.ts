@@ -10,7 +10,7 @@
 
 import { createLocalSource } from "@/lib/farm/local-source";
 import type { RobotView } from "@/lib/farm/robots";
-import type { FarmAlert, FarmTopology, RobotCommand } from "@/lib/farm/types";
+import type { FarmAlert, FarmTopology, RobotCommand, ShelfSensorData } from "@/lib/farm/types";
 
 export type CommandStatus = "pending" | "sent" | "failed";
 
@@ -28,6 +28,13 @@ export interface CommandRecord {
 export interface CommandRequest {
   robot_id: string;
   command: Omit<RobotCommand, "source">;
+}
+
+/** A shelf's latest reading */
+export interface ShelfReading {
+  data: ShelfSensorData;
+  /** Browser receive time: there's no clock sync with the Pi */
+  receivedAt: number;
 }
 
 /**
@@ -59,6 +66,12 @@ export interface FarmDataSource {
    * yet. Returns unsubscribe.
    */
   subscribeAlerts(onAlerts: (alerts: FarmAlert[] | null) => void): () => void;
+  /**
+   * Streams each shelf's latest sensor reading whenever one arrives; null when
+   * this source has no shelf feed (the dashboard then polls sensor_events).
+   * Returns unsubscribe.
+   */
+  subscribeShelves(onShelves: (shelves: ShelfReading[] | null) => void): () => void;
 }
 
 export class CommandError extends Error {
@@ -127,6 +140,10 @@ export function createDashboardApiSource(farmId: string): FarmDataSource {
       onAlerts(null);
       return () => undefined;
     },
+    subscribeShelves(onShelves) {
+      onShelves(null);
+      return () => undefined;
+    },
   };
 }
 
@@ -153,6 +170,10 @@ function noFarmSource(connection: FarmConnection): FarmDataSource {
     },
     subscribeAlerts(onAlerts) {
       onAlerts(null);
+      return () => undefined;
+    },
+    subscribeShelves(onShelves) {
+      onShelves(null);
       return () => undefined;
     },
   };

@@ -15,6 +15,9 @@
 //
 // Alerts are kept in memory the same way, from farm/alerts (not retained), so
 // only those raised since the dashboard opened are listed.
+//
+// Shelf readings come from farm/shelf/+/sensors (not retained, one per shelf
+// every few seconds), so the first arrives within a report interval.
 
 import mqtt, { type MqttClient } from "mqtt";
 import {
@@ -24,6 +27,7 @@ import {
   type CommandRequest,
   type FarmConnection,
   type FarmDataSource,
+  type ShelfReading,
 } from "@/lib/farm/data-source";
 import type { RobotTask, RobotView } from "@/lib/farm/robots";
 import { TOPICS, extractIdFromTopic } from "@/lib/farm/topics";
@@ -35,6 +39,7 @@ import type {
   RobotStateUpdate,
   RobotStatus,
   RobotTelemetry,
+  ShelfSensorData,
 } from "@/lib/farm/types";
 
 const RECONNECT_MS = 2_000;
@@ -60,6 +65,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const isStrOrNull = (v: unknown) => v === null || typeof v === "string";
 const isOptStr = (v: unknown) => v === undefined || typeof v === "string";
+const isNumOrNull = (v: unknown) => v === null || isNum(v);
 
 function isTelemetry(v: unknown): v is RobotTelemetry {
   return isRecord(v) &&
@@ -100,6 +106,14 @@ function isAlert(v: unknown): v is FarmAlert {
     typeof v.metric === "string" && isNum(v.value) && isNum(v.threshold) && isNum(v.timestamp);
 }
 
+function isShelfData(v: unknown): v is ShelfSensorData {
+  return isRecord(v) && typeof v.shelf_id === "string" && v.shelf_id.length > 0 &&
+    Number.isInteger(v.level) && isNumOrNull(v.temperature_c) && isNumOrNull(v.humidity_pct) &&
+    isNumOrNull(v.light_lux) && isNumOrNull(v.water_temp_c) &&
+    (v.water_level_ok === null || typeof v.water_level_ok === "boolean") && isNumOrNull(v.ph) &&
+    isNum(v.timestamp);
+}
+
 interface Entry {
   telemetry?: RobotTelemetry;
   /** Browser receive time of the last telemetry: there's no clock sync. 0 = none yet */
@@ -133,6 +147,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
   const topologyWaiters = new Set<(topology: FarmTopology | null) => void>();
   const connectionListeners = new Set<(connection: FarmConnection) => void>();
   const alertListeners = new Set<(alerts: FarmAlert[]) => void>();
+  const shelfListeners = new Set<(shelves: ShelfReading[]) => void>();
   const host = (() => {
     try {
       return new URL(url).host;
@@ -159,6 +174,8 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
   const loadedHistory = new Set<string>();
   /** Newest received first: timestamp comes from other clocks */
   let alerts: FarmAlert[] = [];
+  /** Latest reading per shelf_id */
+  const shelves = new Map<string, ShelfReading>();
 
   const recordCommand = (record: CommandRecord) => {
     if (commands.some((c) => c.id === record.id)) return;
@@ -200,6 +217,13 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       alertListeners.forEach((listener) => listener(alerts));
       return;
     }
+    if (topic.endsWith("/sensors")) {
+      if (!isShelfData(msg)) return ignore(topic);
+      shelves.set(msg.shelf_id, { data: msg, receivedAt: Date.now() });
+      const list = [...shelves.values()];
+      shelfListeners.forEach((listener) => listener(list));
+      return;
+    }
     if (topic === TOPICS.commands.local || topic === TOPICS.commands.remote) {
       if (!isCommand(msg)) return ignore(topic);
       // jogs repeat while held; they'd push everything else out
@@ -222,10 +246,10 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
   };
 
   // Connected while anything needs it: the robot list, a pending layout, the
-  // connection status or the alerts
+  // connection status, the alerts or the shelf readings
   const updateConnection = () => {
     const needed = listeners.size > 0 || topologyWaiters.size > 0 || connectionListeners.size > 0 ||
-      alertListeners.size > 0;
+      alertListeners.size > 0 || shelfListeners.size > 0;
     if (needed && !client) {
       connection = CONNECTING;
       client = mqtt.connect(url, { reconnectPeriod: RECONNECT_MS, connectTimeout: RECONNECT_MS * 2 });
@@ -239,6 +263,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       client.on("error", (err) => console.warn(`[local-source] ${err.message}`));
       client.subscribe([
         TOPICS.robot.telemetryAll, TOPICS.robot.stateAll, TOPICS.system.topology, TOPICS.commands.all, TOPICS.alerts,
+        TOPICS.shelf.sensorsAll,
       ]);
     } else if (!needed && client) {
       client.end(true);
@@ -333,6 +358,16 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       onAlerts(alerts);
       return () => {
         alertListeners.delete(onAlerts);
+        updateConnection();
+      };
+    },
+
+    subscribeShelves(onShelves) {
+      shelfListeners.add(onShelves);
+      updateConnection();
+      onShelves([...shelves.values()]);
+      return () => {
+        shelfListeners.delete(onShelves);
         updateConnection();
       };
     },
