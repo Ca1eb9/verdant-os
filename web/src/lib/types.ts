@@ -65,8 +65,12 @@ export interface SensorEventRecord {
   light_lux: number | null;
 }
 
-export interface HistoryPoint extends TelemetrySnapshot {
-  index: number;
+/** One point of a history chart: the average of the readings in its time bucket, null where none read */
+export interface HistoryPoint {
+  timestamp: string;
+  air: { temperature: number | null; humidity: number | null };
+  water: { temperature: number | null; ph: number | null };
+  light: { lux: number | null };
 }
 
 export interface TelemetryAlert {

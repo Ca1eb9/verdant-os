@@ -77,7 +77,7 @@ export function formatChartTick(value: string, prefs: Preferences, compact = fal
   if (Number.isNaN(date.getTime())) return "";
   const zone = prefs.timeZone === "local" ? {} : { timeZone: prefs.timeZone };
   return new Intl.DateTimeFormat("en-US", {
-    ...(compact ? { hour: "numeric" } : { month: "short", day: "numeric" }),
+    ...(compact ? { hour: "numeric", minute: "2-digit" } : { month: "short", day: "numeric" }),
     hourCycle: prefs.timeFormat === "24h" ? "h23" : "h12",
     ...zone,
   }).format(date);
