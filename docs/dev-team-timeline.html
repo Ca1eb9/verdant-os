@@ -158,7 +158,7 @@ gantt
   <thead><tr><th>Team member</th><th>Deliverable by Oct 4</th><th>How to verify</th></tr></thead>
   <tbody>
     <tr><td class="name-cell"><span class="name-tag caleb">Caleb</span></td><td>Orchestrator tracks robot state and sends navigation commands. Simulator follows commands when run in non-autonomous mode. FreeRTOS task infrastructure and queue types defined.</td><td>Run orchestrator + simulator side by side. The robot moves on command.</td></tr>
-    <tr><td class="name-cell"><span class="name-tag adi">Adi</span></td><td>Alert engine running and publishing alerts when sensor values are out of range.</td><td>Use Mosquitto CLI tools to observe that alert messages appear on the correct topic when you send telemetry with extreme values.</td></tr>
+    <tr><td class="name-cell"><span class="name-tag adi">Adi</span></td><td>Alert engine running and publishing alerts when robot or shelf sensor values are out of range.</td><td>Use Mosquitto CLI tools to observe that alert messages appear on the correct topic when you send telemetry with extreme values.</td></tr>
     <tr><td class="name-cell"><span class="name-tag jameson">Jameson</span></td><td>Comms and sensor task firmware written and tested. If hardware has arrived, the ESP32 publishes telemetry visible in Mosquitto. If not, code is ready to flash.</td><td>Use Mosquitto CLI tools to confirm telemetry JSON matches the expected format from the shared types.</td></tr>
   </tbody>
 </table>
@@ -331,14 +331,18 @@ gantt
 
 <div class="task">
   <div class="task-header"><h3>Alert engine</h3></div>
-  <p class="what">A standalone service on the Pi that watches robot sensor data flowing through MQTT and publishes alert messages when any reading falls outside acceptable ranges. The service is stateless — it subscribes, evaluates, and publishes.</p>
+  <p class="what">A standalone service on the Pi that watches the robots' and the shelves' sensor data flowing through MQTT and publishes alert messages when any reading falls outside acceptable ranges. It subscribes, evaluates and publishes; the only state it keeps is in memory, per device and metric, for the hold time, deadband and cooldown below.</p>
   <details>
     <summary>Requirements</summary>
     <ul>
       <li>New service in <code>farm-controller/alert-engine</code> (use the ingester's project structure as a reference)</li>
       <li>Subscribe to robot telemetry on MQTT. Review the shared types to understand which fields contain sensor readings and which topic carries this data.</li>
+      <li><strong>Shelf sensors (required):</strong> also subscribe to <code>farm/shelf/+/sensors</code> (<code>ShelfSensorData</code>, from the shelf bridge, <code>docs/shelf-sensors.md</code>) and alert, per shelf, on <code>temperature_c</code>, <code>humidity_pct</code>, <code>water_temp_c</code> and <code>ph</code> outside their ranges, and on <code>water_level_ok: false</code> (critical: the reservoir is below the level sensor). A <code>null</code> field means that sensor didn't read: raise nothing for it (the shelf bridge already alerts when a shelf goes silent). There are no light thresholds yet. Start from the dashboard's ranges in <code>web/src/lib/alerts.ts</code> (<code>THRESHOLDS</code>, warning and critical, with their deadbands) so the dashboard and the Pi agree; the dashboard's own alerts are a stand-in until this service runs.</li>
       <li>Load a JSON config file that defines acceptable ranges for each sensor metric (e.g. minimum humidity, maximum temperature). Design the config format based on the threshold types already defined in the shared package.</li>
       <li>When a reading violates a threshold, construct an alert message (see the alert type in shared) and publish it to the appropriate alerts topic</li>
+      <li><strong>Hold time:</strong> raise an alert, or escalate a warning to critical, only after the readings have stayed out of range for a hold time (30 s on the dashboard), so a one-off spike or bad read raises nothing. Easing or clearing is immediate.</li>
+      <li><strong>Deadband:</strong> once raised, an alert clears only when the value is back inside its limit by a per-metric margin (dashboard: 1 °C air, 3 % humidity, 0.3 °C water, 0.1 pH), so a value sitting on a limit doesn't flap. The DHT11 reports whole degrees and percent, so without it air readings cross a limit on every report.</li>
+      <li>Hold time and deadbands go in the JSON config: <code>SensorThreshold</code> in the shared types has neither yet, so adding them is a shared-type change (update its copies in the same PR)</li>
       <li>Prevent alert spam: if the same metric on the same device is still out of range, don't re-alert within a cooldown window</li>
       <li><strong>Stretch:</strong> For critical-severity alerts, optionally send notifications via SMS or email to a contact list in the config. Research available APIs (Twilio, Resend, etc.) and choose one that fits.</li>
     </ul>
@@ -351,7 +355,7 @@ gantt
       <li>The whole service is roughly 80–100 lines of code</li>
     </ul>
   </details>
-  <p class="deps">Depends on: shared package, Mosquitto broker. Test against the simulator, which publishes telemetry with sensor readings.</p>
+  <p class="deps">Depends on: shared package, Mosquitto broker. Test against the simulator, which publishes telemetry with sensor readings, and publish shelf readings with <code>mosquitto_pub -t farm/shelf/shelf-1/sensors</code> (or run the shelf bridge with a node).</p>
 </div>
 
 <div class="task">

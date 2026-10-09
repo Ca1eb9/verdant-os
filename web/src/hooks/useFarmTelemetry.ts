@@ -217,7 +217,9 @@ export function useFarmTelemetry(farmId: string | null) {
       farm?.id === farmId && polled && reading && lastUpdate
         ? keepFirstDetection(
             farmId,
-            evaluateTelemetryAlerts(farm, reading, lastUpdate, MOCK_DATA_ENABLED ? lastUpdate.getTime() : now),
+            MOCK_DATA_ENABLED
+              ? evaluateTelemetryAlerts(farm, reading, lastUpdate, lastUpdate.getTime(), 0)
+              : evaluateTelemetryAlerts(farm, reading, lastUpdate, now),
           )
         : [],
     [farm, farmId, lastUpdate, now, polled, reading],

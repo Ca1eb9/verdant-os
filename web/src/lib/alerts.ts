@@ -4,13 +4,19 @@ const ALERT_STORAGE_PREFIX = "verdantos:alerts:v1:";
 const LAST_AGE_WARNING_MS = 10_000;
 const LAST_AGE_CRITICAL_MS = 30_000;
 const MAX_STORED_ALERTS = 50;
+/** A reading must stay out of range this long before it raises (or escalates) an alert */
+const HOLD_MS = 30_000;
 
+// deadband: once raised, an alert clears only when the value is back inside its
+// limit by this much. About one step of each sensor's noise: the DHT11 reports
+// whole degrees and whole percent, so its values otherwise flap across a limit.
 const THRESHOLDS = {
   airTemperature: {
     warningMin: 18,
     warningMax: 28,
     criticalMin: 16,
     criticalMax: 30,
+    deadband: 1,
     unit: "°C",
   },
   humidity: {
@@ -18,6 +24,7 @@ const THRESHOLDS = {
     warningMax: 70,
     criticalMin: 35,
     criticalMax: 80,
+    deadband: 3,
     unit: "%",
   },
   waterTemperature: {
@@ -25,6 +32,7 @@ const THRESHOLDS = {
     warningMax: 24,
     criticalMin: 16,
     criticalMax: 26,
+    deadband: 0.3,
     unit: "°C",
   },
   ph: {
@@ -32,9 +40,26 @@ const THRESHOLDS = {
     warningMax: 6.8,
     criticalMin: 5.2,
     criticalMax: 7.2,
+    deadband: 0.1,
     unit: "pH",
   },
 } as const;
+
+type Range = (typeof THRESHOLDS)[keyof typeof THRESHOLDS];
+type Band = "ok" | "warningLow" | "warningHigh" | "criticalLow" | "criticalHigh";
+
+const RANK: Record<Band, number> = { ok: 0, warningLow: 1, warningHigh: 1, criticalLow: 2, criticalHigh: 2 };
+
+/**
+ * Per farm and metric: the band its alert is raised at, and the band the
+ * readings are in now and since when. Kept for the page's lifetime, across pages.
+ */
+interface MetricState {
+  raised: Band;
+  candidate: Band;
+  since: number;
+}
+const metricStates = new Map<string, MetricState>();
 
 type StoredAlertState = {
   alerts: TelemetryAlert[];
@@ -125,73 +150,78 @@ function makeAlert(
   };
 }
 
-function outOfRangeAlert(
+function bandOf(value: number, range: Range): Band {
+  if (value < range.criticalMin) return "criticalLow";
+  if (value > range.criticalMax) return "criticalHigh";
+  if (value < range.warningMin) return "warningLow";
+  if (value > range.warningMax) return "warningHigh";
+  return "ok";
+}
+
+/** The value's band, except that a raised band holds until the value is past its limit by the deadband */
+function bandWithDeadband(value: number, range: Range, raised: Band): Band {
+  const band = bandOf(value, range);
+  if (raised === "ok" || band === raised) return band;
+  const nudged = raised.endsWith("High") ? value + range.deadband : value - range.deadband;
+  return bandOf(nudged, range) === raised ? raised : band;
+}
+
+/**
+ * The band to alert at. Raising or escalating waits until the readings have
+ * stayed in the new band for HOLD_MS, so a one-off spike raises nothing;
+ * easing or clearing is immediate (the deadband already keeps it steady).
+ */
+function settle(key: string, band: Band, now: number, holdMs: number): Band {
+  const state = metricStates.get(key) ?? { raised: "ok", candidate: "ok", since: now };
+  if (band !== state.candidate) {
+    state.candidate = band;
+    state.since = now;
+  }
+  if (RANK[band] < RANK[state.raised] || (band !== state.raised && now - state.since >= holdMs)) {
+    state.raised = band;
+  }
+  metricStates.set(key, state);
+  return state.raised;
+}
+
+function rangeAlert(
   farm: FarmIdentity,
   metric: TelemetryAlert["metric"],
   label: string,
   value: number,
-  warningMin: number,
-  warningMax: number,
-  criticalMin: number,
-  criticalMax: number,
-  unit: string,
+  band: Band,
+  range: Range,
 ) {
-  if (value < criticalMin) {
-    return makeAlert(
-      farm,
-      metric,
-      "critical",
-      `${label} too low`,
-      `${label} at ${toFixed(value)} ${unit} is below the critical floor.`,
-      `${toFixed(value)} ${unit}`,
-      `>= ${criticalMin} ${unit}`,
-    );
+  const { unit } = range;
+  const reading = `${toFixed(value)} ${unit}`;
+  switch (band) {
+    case "criticalLow":
+      return makeAlert(farm, metric, "critical", `${label} too low`,
+        `${label} at ${reading} is below the critical floor.`, reading, `>= ${range.criticalMin} ${unit}`);
+    case "criticalHigh":
+      return makeAlert(farm, metric, "critical", `${label} too high`,
+        `${label} at ${reading} is above the critical ceiling.`, reading, `<= ${range.criticalMax} ${unit}`);
+    case "warningLow":
+      return makeAlert(farm, metric, "warning", `${label} low`,
+        `${label} at ${reading} is below target band.`, reading, `>= ${range.warningMin} ${unit}`);
+    case "warningHigh":
+      return makeAlert(farm, metric, "warning", `${label} high`,
+        `${label} at ${reading} is above target band.`, reading, `<= ${range.warningMax} ${unit}`);
+    default:
+      return null;
   }
-
-  if (value > criticalMax) {
-    return makeAlert(
-      farm,
-      metric,
-      "critical",
-      `${label} too high`,
-      `${label} at ${toFixed(value)} ${unit} is above the critical ceiling.`,
-      `${toFixed(value)} ${unit}`,
-      `<= ${criticalMax} ${unit}`,
-    );
-  }
-
-  if (value < warningMin) {
-    return makeAlert(
-      farm,
-      metric,
-      "warning",
-      `${label} low`,
-      `${label} at ${toFixed(value)} ${unit} is below target band.`,
-      `${toFixed(value)} ${unit}`,
-      `>= ${warningMin} ${unit}`,
-    );
-  }
-
-  if (value > warningMax) {
-    return makeAlert(
-      farm,
-      metric,
-      "warning",
-      `${label} high`,
-      `${label} at ${toFixed(value)} ${unit} is above target band.`,
-      `${toFixed(value)} ${unit}`,
-      `<= ${warningMax} ${unit}`,
-    );
-  }
-
-  return null;
 }
 
+/**
+ * The farm's environment alerts for its latest reading. `holdMs` is 0 for mock
+ * data, whose clock stands still.
+ */
 export function evaluateTelemetryAlerts(
   farm: FarmIdentity,
   reading: SensorReading,
   lastUpdate: Date,
   now: number,
+  holdMs = HOLD_MS,
 ) {
   const alerts: TelemetryAlert[] = [];
   const ageMs = now - lastUpdate.getTime();
@@ -222,7 +252,8 @@ export function evaluateTelemetryAlerts(
     );
   }
 
-  // A sensor that didn't read raises nothing here; the shelf bridge alerts on silence
+  // A sensor that didn't read raises nothing here (the shelf bridge alerts on
+  // silence) and keeps its state, so its alert returns as soon as it reads again
   const ranges = [
     ["air.temperature", "Air temperature", reading.airTemperature, THRESHOLDS.airTemperature],
     ["air.humidity", "Humidity", reading.humidity, THRESHOLDS.humidity],
@@ -230,24 +261,18 @@ export function evaluateTelemetryAlerts(
     ["water.ph", "pH", reading.ph, THRESHOLDS.ph],
   ] as const;
 
-  for (const [metric, label, value, band] of ranges) {
+  for (const [metric, label, value, range] of ranges) {
     if (value === null) continue;
-    const alert = outOfRangeAlert(
-      farm,
-      metric,
-      label,
-      value,
-      band.warningMin,
-      band.warningMax,
-      band.criticalMin,
-      band.criticalMax,
-      band.unit,
-    );
+    const key = `${farm.id}|${metric}`;
+    const raised = metricStates.get(key)?.raised ?? "ok";
+    const band = settle(key, bandWithDeadband(value, range, raised), now, holdMs);
+    const alert = rangeAlert(farm, metric, label, value, band, range);
     if (alert) alerts.push(alert);
   }
 
   // The reservoir has a level switch, not a gauge: below it is already critical
-  if (reading.waterLevelOk === false) {
+  const levelBand: Band = reading.waterLevelOk === false ? "criticalLow" : "ok";
+  if (reading.waterLevelOk !== null && settle(`${farm.id}|water.level`, levelBand, now, holdMs) !== "ok") {
     alerts.push(
       makeAlert(
         farm,
