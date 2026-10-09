@@ -264,6 +264,23 @@ export function evaluateTelemetryAlerts(
   return alerts;
 }
 
+/**
+ * Alerts are re-evaluated every second, each time as new objects. One that was
+ * already active keeps its stored id and detection time, so lists don't show
+ * it as just detected or reorder it; its value and message stay current.
+ */
+export function keepFirstDetection(farmId: string, currentAlerts: TelemetryAlert[]) {
+  const state = readStoredState(farmId);
+  const active = new Set(state.activeSignatures);
+  const stored = new Map(state.alerts.map((alert) => [buildAlertSignature(alert), alert]));
+
+  return currentAlerts.map((alert) => {
+    const signature = buildAlertSignature(alert);
+    const first = active.has(signature) ? stored.get(signature) : undefined;
+    return first ? { ...alert, id: first.id, detectedAt: first.detectedAt } : alert;
+  });
+}
+
 export function recordTelemetryAlerts(
   farmId: string,
   currentAlerts: TelemetryAlert[],
