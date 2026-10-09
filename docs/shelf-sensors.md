@@ -22,10 +22,11 @@ flowchart LR
 | DHT11 module (blue, 3 pins) | Air temperature, humidity | `temperature_c`, `humidity_pct` |
 | BH1750 / GY-302 board | Light | `light_lux` |
 | DS18B20 steel probe | Reservoir water temperature | `water_temp_c` |
-| XKC-Y25 contactless level switch (white disc) | Reservoir above/below a line | `water_level_ok` |
-| pH electrode + PH-4502C board | Reservoir pH | `ph` |
+| DFRobot liquid level kit: XKC-Y25-V contactless switch (white disc) + adapter | Reservoir above/below a line | `water_level_ok` |
+| pH electrode + DFRobot pH meter V1.1 board | Reservoir pH | `ph` |
 
-Wiring, pins and the serial line format are in
+Wiring is in [wiring/shelf-sensor.md](wiring/shelf-sensor.md), the serial
+line format in
 [firmware/shelf-sensor/README.md](../firmware/shelf-sensor/README.md). The
 previous team's DS1307 RTC isn't used: the Pi timestamps readings on receipt
 (there is no clock sync, by design).
@@ -80,15 +81,16 @@ program can hold the port) and read `ph_mv` with `pio device monitor`.
 
 1. Unplug the probe and short the BNC socket's centre pin to its outer shell
    (a paperclip works). That's what the board sees at pH 7.
-2. Wait for `ph_mv` to settle and put it in `ph_neutral_mv`.
-3. Leave `ph_mv_per_unit` at the typical −175.
+2. Wait for `ph_mv` to settle (about 2000) and put it in `ph_neutral_mv`.
+3. Leave `ph_mv_per_unit` at the typical 286.
 
 **With pH 7 and pH 4 buffers (accurate):**
 
 1. Rinse the probe, put it in pH 7, wait a minute, note `ph_mv` as *mv7*.
 2. Rinse, put it in pH 4, wait, note *mv4*.
 3. Set `ph_neutral_mv` = *mv7* and `ph_mv_per_unit` = (*mv7* − *mv4*) / 3.
-   It comes out negative on this board.
+   It comes out positive on this board (the voltage rises with pH), about 286
+   unless the board's gain potentiometer has been turned.
 
 Restart the bridge after editing the config: `sudo systemctl restart farm-shelf-bridge`.
 
