@@ -4,7 +4,26 @@ import { MetricValue } from "@/components/ui/MetricValue";
 import styles from "@/components/dashboard/DashboardView.module.css";
 
 type CardAccent = "cyan" | "teal" | "lime";
-type MetricTone = "stable" | "watch" | "focus";
+/** A reading's alert state: in range, warning, critical, or no reading */
+export type MetricTone = "ok" | "warning" | "critical" | "none";
+
+const TONE_LABEL: Record<MetricTone, string> = {
+  ok: "In range",
+  warning: "Warning: outside the target range",
+  critical: "Critical: outside the safe range",
+  none: "No reading",
+};
+
+function ToneDot({ tone }: { tone: MetricTone }) {
+  return (
+    <span
+      className={`${styles.metricTone} ${styles[`tone${tone}`]}`}
+      role="img"
+      aria-label={TONE_LABEL[tone]}
+      title={TONE_LABEL[tone]}
+    />
+  );
+}
 
 interface SensorCardMetric {
   label: string;
@@ -19,6 +38,8 @@ interface SensorCardProps {
   accent: CardAccent;
   heroLabel: string;
   heroValue: string;
+  /** Omitted for readings with no alert range (light) */
+  heroTone?: MetricTone;
   metrics: SensorCardMetric[];
 }
 
@@ -32,6 +53,7 @@ export function SensorCard({
   accent,
   fallback,
   heroLabel,
+  heroTone,
   heroValue,
   icon,
   metrics,
@@ -56,7 +78,10 @@ export function SensorCard({
       </div>
 
       <div className={styles.heroValueBlock}>
-        <span className={styles.heroValueLabel}>{heroLabel}</span>
+        <div className={styles.metricLabelRow}>
+          <span className={styles.heroValueLabel}>{heroLabel}</span>
+          {heroTone ? <ToneDot tone={heroTone} /> : null}
+        </div>
         <strong className={styles.heroValue} suppressHydrationWarning>
           <MetricValue value={heroValue} />
         </strong>
@@ -68,7 +93,7 @@ export function SensorCard({
           <div key={metric.label} className={styles.metricTile}>
             <div className={styles.metricLabelRow}>
               <span className={styles.metricLabel}>{metric.label}</span>
-              <span className={`${styles.metricTone} ${styles[`tone${metric.tone}`]}`} />
+              <ToneDot tone={metric.tone} />
             </div>
             <strong className={styles.metricValue} suppressHydrationWarning>
               <MetricValue value={metric.value} />
