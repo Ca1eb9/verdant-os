@@ -26,6 +26,8 @@ export interface FarmMapProps {
   route?: RouteDraw | null;
   /** Shown over the map when there is nothing live to draw */
   emptyMessage?: string | null;
+  /** Watch-only (the dashboard): no selection, status line or trails */
+  overview?: boolean;
 }
 
 const EMPTY = new Set<string>();
@@ -44,6 +46,7 @@ export function FarmMap({
   onRobotClick,
   route = null,
   emptyMessage,
+  overview = false,
 }: FarmMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const rendererRef = useRef<FarmRenderer | null>(null);
@@ -53,12 +56,19 @@ export function FarmMap({
   const { theme } = usePreferences();
   const themeRef = useRef(theme);
   themeRef.current = theme;
+  const overviewRef = useRef(overview);
+  overviewRef.current = overview;
 
   const rendererOptions = (current: "light" | "dark"): RendererOptions => ({
     accent: ACCENT,
     theme: current,
-    onNodeClick: (id) => handlers.current.onNodeClick?.(id),
-    onRobotClick: (id) => handlers.current.onRobotClick?.(id),
+    // overview: nothing on the map reacts to the pointer
+    ...(overviewRef.current
+      ? { trails: false }
+      : {
+          onNodeClick: (id: string) => handlers.current.onNodeClick?.(id),
+          onRobotClick: (id: string) => handlers.current.onRobotClick?.(id),
+        }),
   });
 
   useEffect(() => {
@@ -146,28 +156,36 @@ export function FarmMap({
       <div className={styles.legend}>
         <span><i style={{ background: "#8B7FD4" }} /> Grow lights</span>
         <span><i style={{ background: "#5A93B5" }} /> Water basin</span>
-        <span><i style={{ background: ACCENT }} /> Selected rover</span>
-        <span><i style={{ background: "#9A938C" }} /> Other rovers</span>
+        {overview ? (
+          <span><i style={{ background: "#9A938C" }} /> Rovers</span>
+        ) : (
+          <>
+            <span><i style={{ background: ACCENT }} /> Selected rover</span>
+            <span><i style={{ background: "#9A938C" }} /> Other rovers</span>
+          </>
+        )}
         <span><i style={{ background: "#C9A227" }} /> Charging dock</span>
         <span><i className={styles.dashed} /> Empty slot</span>
       </div>
 
-      <div className={styles.status}>
-        {selected ? (
-          <>
-            <strong>{selected.id}</strong>
-            <span>
-              {selectedNode
-                ? `${selectedNode.id} (${selectedAisle ? `Aisle ${selectedAisle}, ` : ""}L${selectedLevel})`
-                : "Position unknown"}
-            </span>
-            <span>{selectedDraw?.action}</span>
-            <span>Battery {Math.round(selected.batteryPct)}%</span>
-          </>
-        ) : (
-          <span>No robot selected</span>
-        )}
-      </div>
+      {overview ? null : (
+        <div className={styles.status}>
+          {selected ? (
+            <>
+              <strong>{selected.id}</strong>
+              <span>
+                {selectedNode
+                  ? `${selectedNode.id} (${selectedAisle ? `Aisle ${selectedAisle}, ` : ""}L${selectedLevel})`
+                  : "Position unknown"}
+              </span>
+              <span>{selectedDraw?.action}</span>
+              <span>Battery {Math.round(selected.batteryPct)}%</span>
+            </>
+          ) : (
+            <span>No robot selected</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
