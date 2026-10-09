@@ -39,11 +39,8 @@ const schemaColumns = [
   "humidity_pct",
   "water_temp_c",
   "water_level_ok",
-  "ph_voltage",
   "ph",
   "light_lux",
-  "light_ppfd",
-  "raw_text",
 ];
 
 function toneLabel(tone: StatusTone) {

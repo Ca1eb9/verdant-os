@@ -58,17 +58,11 @@ export interface SensorEventRecord {
   source: string | null;
   ts: string | null;
   air_temp_c: number | null;
-  air_temp_f: number | null;
   humidity_pct: number | null;
   water_temp_c: number | null;
-  water_temp_f: number | null;
   water_level_ok: boolean | null;
-  water_level_text: string | null;
-  ph_voltage: number | null;
   ph: number | null;
   light_lux: number | null;
-  light_ppfd: number | null;
-  raw_text: string | null;
 }
 
 export interface HistoryPoint extends TelemetrySnapshot {
