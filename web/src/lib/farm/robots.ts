@@ -26,6 +26,9 @@ export interface RobotView {
   taskLabel?: string;
   /** Assigned task from the orchestrator; null or missing when it has none */
   task?: RobotTask | null;
+  /** Air around the robot (its AHT20); missing when it has no recent reading */
+  temperatureC?: number;
+  humidityPct?: number;
 }
 
 /** Same as orchestrator-config.json heartbeat_timeout_ms */

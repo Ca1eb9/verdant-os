@@ -125,6 +125,9 @@ interface Entry {
   state?: RobotStateUpdate;
 }
 
+/** Optional readings are dropped on their own when malformed, keeping the rest of the telemetry */
+const optNum = (v: unknown) => (isNum(v) ? v : undefined);
+
 function toView(id: string, e: Entry): RobotView {
   const t = e.telemetry;
   const s = e.state;
@@ -141,6 +144,8 @@ function toView(id: string, e: Entry): RobotView {
     lastSeen: e.seenAt,
     expectedPath: s?.expected_path.length ? s.expected_path : undefined,
     task,
+    temperatureC: optNum(t?.temperature_c),
+    humidityPct: optNum(t?.humidity_pct),
   };
 }
 

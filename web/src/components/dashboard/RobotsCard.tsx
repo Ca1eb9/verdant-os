@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { useFarmLive } from "@/hooks/useFarmLive";
 import { resolveNode } from "@/lib/farm/navigation";
+import { formatMetric } from "@/lib/format";
 import { isStale, statusLabel } from "@/lib/farm/robots";
 import styles from "@/components/dashboard/DashboardView.module.css";
 
 export function RobotsCard() {
   const { robots, graph, now } = useFarmLive();
+  const { fmt } = usePreferences();
 
   return (
     <article className={`glassPanel ${styles.sensorCard} ${styles.robotsCard}`}>
@@ -33,6 +36,8 @@ export function RobotsCard() {
                 </div>
                 <span className={styles.metricLabel}>
                   {node ? node.id : "Position unknown"} · Battery {Math.round(robot.batteryPct)}%
+                  {robot.temperatureC !== undefined && ` · ${fmt.temp(robot.temperatureC)}`}
+                  {robot.humidityPct !== undefined && ` · ${formatMetric(robot.humidityPct, "%", 0)}`}
                 </span>
               </li>
             );
