@@ -462,6 +462,7 @@ gantt
       <li>Read battery voltage through an ADC pin and a voltage divider. Convert the raw reading to a usable percentage.</li>
       <li>Read distance from the obstacle sensor (ultrasonic or IR). When the distance drops below a safety threshold, set the shared obstacle flag so the motor task stops immediately.</li>
       <li>Now done: two VL53L4CX sensors set a front and a rear flag. The nav task lowers a side's stop distance (<code>g_obstacle_*_stop_cm</code>) while it creeps into the elevator or onto the dock; the sensor task flags against it (see <code>COMMS-SENSOR.md</code>).</li>
+      <li>Now done: an AHT20 on the front sensor's I2C bus reports air temperature and humidity in telemetry, for the dashboard only (wiring in <code>docs/wiring/robot.md</code>).</li>
       <li>Write all sensor readings into a struct and push it to the sensor queue for the nav task</li>
     </ul>
   </details>

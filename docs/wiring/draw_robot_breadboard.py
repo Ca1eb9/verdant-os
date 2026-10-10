@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Draws robot-breadboard.svg: the robot's 3.3 V logic side on a full-size
-breadboard (ESP32-S3 DevKitC-1, PN532, two VL53L4CX, DRV8871 inputs and the
-two dividers). The 12 V side is robot-power.svg.
+breadboard (ESP32-S3 DevKitC-1, PN532, two VL53L4CX, the AHT20, DRV8871
+inputs and the two dividers). The 12 V side is robot-power.svg.
 
     python3 draw_robot_breadboard.py > robot-breadboard.svg
 
@@ -176,7 +176,22 @@ x += PITCH * 3 + 26
 rear = module(x, "VL53L4CX rear", ["VIN", "GND", "SCL", "SDA", "GPIO", "XSHUT"], "#1a1a2e")
 x += PITCH * 6 + 26
 front = module(x, "VL53L4CX front", ["VIN", "GND", "SCL", "SDA", "GPIO", "XSHUT"], "#1a1a2e")
+front_x = x
 x += PITCH * 6 + 26
+# AHT20: no wires to the board, it hangs off the front VL53L4CX's second
+# STEMMA QT port, which carries the same 3V3, GND, SDA and SCL
+AHT_W = PITCH * 4
+add(f'<rect x="{x}" y="{MOD_Y}" width="{AHT_W}" height="78" rx="6" fill="#0f5e5a"/>')
+text(x + AHT_W / 2, MOD_Y + 34, "AHT20", 11, weight="bold", fill="#fff")
+text(x + AHT_W / 2, MOD_Y + 50, "air temp,", 9, fill="#dff3e6")
+text(x + AHT_W / 2, MOD_Y + 62, "humidity", 9, fill="#dff3e6")
+qt_a, qt_b = front_x + PITCH * 6 - 16, x + 16
+for qx in (qt_a, qt_b):
+    add(f'<rect x="{qx - 8}" y="{MOD_Y + 72}" width="16" height="8" rx="1" fill="#eee" stroke="#555"/>')
+add(f'<path d="M {qt_a},{MOD_Y + 80} C {qt_a},{MOD_Y + 112} {qt_b},{MOD_Y + 112} {qt_b},{MOD_Y + 80}" fill="none" '
+    f'stroke="{C["i2c_f"]}" stroke-width="5" stroke-linecap="round"/>')
+text((qt_a + qt_b) / 2, MOD_Y + 120, "STEMMA QT cable", 10, weight="bold", fill=C["i2c_f"])
+x += AHT_W + 26
 pn = module(x, "PN532", ["SCK", "MISO", "MOSI", "SS", "VCC", "GND", "IRQ", "RSTO"], "#b3262c")
 text(x + PITCH * 4, MOD_Y + 96, "SPI mode: switch SEL0 off, SEL1 on", 10, fill="#555")
 text(drv["IN1"][0], MOD_Y + 96, "VM, OUT1/2: power side", 10, fill="#555")
@@ -209,7 +224,7 @@ for depth, (src, dst, col) in enumerate(sorted(links, key=lambda link: -link[0][
 LY = 820
 legend = [
     (C["3v3"], "3V3 (rail +)"), (C["gnd"], "GND (rail −)"), (C["motor"], "GPIO 5, 6 → DRV8871 IN1, IN2"),
-    (C["i2c_f"], "GPIO 8, 9 → front SDA, SCL"), (C["i2c_r"], "GPIO 17, 18 → rear SDA, SCL"),
+    (C["i2c_f"], "GPIO 8, 9 → front SDA, SCL, then AHT20"), (C["i2c_r"], "GPIO 17, 18 → rear SDA, SCL"),
     (C["spi"], "GPIO 10–13 → PN532 SS, MOSI, SCK, MISO"), (C["sense"], "divider taps → GPIO 4 (battery), GPIO 1 (charge)"),
     (C["batt"], "BATT+ (switched) in, 12 V"), (C["pad"], "pad + in, 12.6 V when docked"),
 ]

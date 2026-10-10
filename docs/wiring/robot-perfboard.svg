@@ -722,6 +722,7 @@
 <circle cx="369" cy="510" r="3.2" fill="#222222" stroke="#fff" stroke-width="1"/>
 <circle cx="369" cy="638" r="3.2" fill="#222222" stroke="#fff" stroke-width="1"/>
 <text x="375" y="652" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="start" font-weight="bold" fill="#222">shared ground in (power side)</text>
+<text x="160" y="732" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" font-weight="normal" fill="#444">The AHT20 needs nothing here: a STEMMA QT cable joins it to the front VL53L4CX, as on the breadboard.</text>
 <text x="160" y="750" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" font-weight="normal" fill="#444">Gold squares are male header pins: each takes a female jumper to its module. Arcs are insulated wires on top of the board; they touch only their two holes.</text>
 <rect x="269" y="250" width="104" height="58" rx="4" fill="#174a2d"/>
 <text x="274" y="262" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="bold" fill="#fff">charge contact:</text>
