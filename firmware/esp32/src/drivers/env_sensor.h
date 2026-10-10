@@ -28,7 +28,9 @@ class EnvSensor {
 
   // Non-blocking. Call every sensor cycle. Starts a measurement every
   // ENV_PERIOD_MS and reads it back ENV_MEASURE_MS later. Returns true with
-  // a new reading; a bus error clears ok() so the caller can re-init.
+  // a new reading. A bus error or a measurement stuck past
+  // ENV_MEASURE_TIMEOUT_MS (the chip is reset) clears ok() so the caller
+  // can re-init.
   bool poll(uint32_t now, float* temp_c, float* humidity_pct);
 
  private:

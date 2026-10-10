@@ -102,7 +102,7 @@ constexpr uint32_t BATTERY_PERIOD_MS = 500;
 // Measuring more often warms the chip and skews the temperature (datasheet).
 constexpr uint32_t ENV_PERIOD_MS = 2000;
 constexpr uint32_t ENV_MEASURE_MS = 80;         // a measurement takes this long
-constexpr uint32_t ENV_MEASURE_TIMEOUT_MS = 500; // still busy after this: re-init
+constexpr uint32_t ENV_MEASURE_TIMEOUT_MS = 500; // still busy after this: reset, re-init
 // No good reading this long: report none rather than a frozen value.
 constexpr uint32_t ENV_STALE_MS = 10000;
 constexpr uint32_t ENV_REINIT_MS = 5000;

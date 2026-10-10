@@ -163,6 +163,8 @@ void update_env(uint32_t now) {
     }
   } else if (s_env.poll(now, &s_air.temperature_c, &s_air.humidity_pct)) {
     s_air.last_data_ms = now;
+  } else if (!s_env.ok()) {
+    s_air.last_reinit_ms = now;  // just failed: wait before re-init (a reset needs 20 ms)
   }
   if (now - s_air.last_data_ms >= ENV_STALE_MS) {
     s_air.temperature_c = NAN;

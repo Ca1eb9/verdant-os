@@ -254,6 +254,7 @@ static void test_env() {
   CHECK(!aht20_parse(busy, &t, &rh));
   uint8_t corrupt[7] = {0x1C, 0x80, 0x00, 0x07, 0x00, 0x00, 0x4E};  // one bit flipped
   CHECK(!aht20_parse(corrupt, &t, &rh));
+  CHECK(t == 25.0f && rh == 50.0f);  // a rejected frame leaves the last reading alone
   printf("  aht20: %.1f C, %.1f %%RH\n", t, rh);
 }
 

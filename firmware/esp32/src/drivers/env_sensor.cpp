@@ -33,6 +33,7 @@ namespace {
 constexpr uint8_t AHT20_ADDR = 0x38;
 constexpr uint8_t AHT20_STATUS_CALIBRATED = 0x08;
 constexpr uint8_t AHT20_STATUS_BUSY = 0x80;
+constexpr uint8_t AHT20_SOFT_RESET = 0xBA;
 }  // namespace
 
 bool EnvSensor::write3(uint8_t a, uint8_t b, uint8_t c) {
@@ -93,7 +94,14 @@ bool EnvSensor::poll(uint32_t now, float* temp_c, float* humidity_pct) {
   }
   for (uint8_t& b : frame) b = bus_.read();
   if (frame[0] & AHT20_STATUS_BUSY) {
-    if (now - started_ms_ >= ENV_MEASURE_TIMEOUT_MS) fail("stuck measuring");
+    if (now - started_ms_ >= ENV_MEASURE_TIMEOUT_MS) {
+      // Re-init alone doesn't clear a wedged chip. The reset takes 20 ms;
+      // the caller waits ENV_REINIT_MS before begin().
+      bus_.beginTransmission(AHT20_ADDR);
+      bus_.write(AHT20_SOFT_RESET);
+      bus_.endTransmission();
+      fail("stuck measuring - reset it");
+    }
     return false;  // otherwise read again next cycle
   }
 
