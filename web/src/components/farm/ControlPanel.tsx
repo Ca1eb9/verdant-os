@@ -5,7 +5,6 @@ import { CommandError, type CommandRecord, type CommandRequest, type FarmDataSou
 import type { Scene } from "@/lib/farm/map/layout";
 import { resolveNode, type NavGraph } from "@/lib/farm/navigation";
 import { describeTask, isStale, statusLabel, type RobotView } from "@/lib/farm/robots";
-import { formatMetric } from "@/lib/format";
 import type {
   ActionAtTarget,
   FarmTopology,
@@ -408,12 +407,12 @@ export function ControlPanel({
             <dd>{robot ? fmt.time(robot.lastSeen) : "—"}</dd>
           </div>
           <div>
-            <dt>Temperature</dt>
+            <dt>Air temperature</dt>
             <dd>{robot?.temperatureC !== undefined ? fmt.temp(robot.temperatureC) : "—"}</dd>
           </div>
           <div>
-            <dt>Humidity</dt>
-            <dd>{robot?.humidityPct !== undefined ? formatMetric(robot.humidityPct, "%", 0) : "—"}</dd>
+            <dt>Air humidity</dt>
+            <dd>{robot?.humidityPct !== undefined ? `${Math.round(robot.humidityPct)}%` : "—"}</dd>
           </div>
         </dl>
       </section>
