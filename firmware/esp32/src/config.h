@@ -58,7 +58,7 @@ constexpr int PIN_TOF_FRONT_XSHUT = -1;
 constexpr int PIN_I2C_REAR_SDA = 17;   // rear sensor (Wire1)
 constexpr int PIN_I2C_REAR_SCL = 18;
 constexpr int PIN_TOF_REAR_XSHUT = -1;
-// The AHT20 (address 0x38) shares the front sensor's bus.
+// The AHT20 (address 0x38) shares the rear sensor's bus.
 
 // Battery voltage divider tap
 constexpr int PIN_BATTERY_ADC = 4;

@@ -137,7 +137,7 @@ xg = rx(8)
 wire([(xg, RAIL["-"]), (xg, LABEL_Y + 52)], C["gnd"], 3)
 text(xg + 6, LABEL_Y + 66, "shared ground in (power side)", 10, "start", "bold")
 
-text(BX, H - 48, "The AHT20 needs nothing here: a STEMMA QT cable joins it to the front VL53L4CX, "
+text(BX, H - 48, "The AHT20 needs nothing here: a STEMMA QT cable joins it to the rear VL53L4CX, "
      "as on the breadboard.", 12, "start", fill="#444")
 text(BX, H - 30, "Gold squares are male header pins: each takes a female jumper to its module. "
      "Arcs are insulated wires on top of the board; they touch only their two holes.", 12, "start", fill="#444")

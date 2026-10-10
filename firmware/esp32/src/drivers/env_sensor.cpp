@@ -49,7 +49,7 @@ void EnvSensor::fail(const char* why) {
   measuring_ = false;
   if (!fail_logged_) {
     LOG("env", "AHT20 %s - check I2C wiring (GPIO %d/%d); retrying quietly", why,
-        PIN_I2C_FRONT_SDA, PIN_I2C_FRONT_SCL);
+        PIN_I2C_REAR_SDA, PIN_I2C_REAR_SCL);
     fail_logged_ = true;
   }
 }

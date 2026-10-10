@@ -14,7 +14,7 @@ The pins come from `firmware/esp32/src/config.h`; the firmware is in
 | ESP32-S3-DevKitC-1 v1.1 (Espressif) | Runs the firmware | Use the port marked **USB** |
 | Elechouse PN532 NFC Module V3 | Reads the RFID tags at each node | SPI mode: switch **SEL0 off, SEL1 on** |
 | 2× Adafruit VL53L4CX ToF ([5425](https://www.adafruit.com/product/5425)) | Front and rear obstacle distance | Each on its own I2C bus (they share one address) |
-| AHT20 breakout, e.g. Adafruit [4566](https://www.adafruit.com/product/4566) | Air temperature and humidity, for the dashboard | Joins the front VL53L4CX's bus |
+| AHT20 breakout with STEMMA QT, e.g. Adafruit [4566](https://www.adafruit.com/product/4566) | Air temperature and humidity, for the dashboard | Joins the rear VL53L4CX's bus |
 | Adafruit DRV8871 ([3190](https://www.adafruit.com/product/3190)) | Drives the motor | Limits motor current to about 2 A |
 | Pololu 47:1 gearmotor, 12 V ([4845](https://www.pololu.com/product/4845)) | Moves the robot | 0.3 A free-running, about 5 A if stalled |
 | UBEC buck converter, 5 V 3 A ([1385](https://www.adafruit.com/product/1385)) | Powers the ESP32 from the battery | Fixed 5 V, nothing to adjust |
@@ -25,7 +25,7 @@ The pins come from `firmware/esp32/src/config.h`; the firmware is in
 | Power switch, rated 3 A DC or more | Turns the robot off | |
 | 2× 100 kΩ, 2× 22 kΩ resistors | The two voltage dividers | |
 | 2× 0.1 µF ceramic capacitors | Steady the divider readings | |
-| STEMMA QT cable | Front VL53L4CX → AHT20 | For an AHT20 without the connector: STEMMA QT to female sockets |
+| STEMMA QT cable | Rear VL53L4CX → AHT20 | |
 | Jumper wires; 20–22 AWG wire for the 12 V side | | |
 
 ## ESP32 pins
@@ -36,8 +36,8 @@ The pins come from `firmware/esp32/src/config.h`; the firmware is in
 | **GND** | Ground, shared with everything |
 | **5V** | The buck converter's 5 V output (on the robot; on the bench, USB powers it) |
 | **GPIO 12 / 13 / 11 / 10** | PN532 SCK / MISO / MOSI / SS |
-| **GPIO 8 / 9** | Front VL53L4CX SDA / SCL (`Wire`), and the AHT20 through it |
-| **GPIO 17 / 18** | Rear VL53L4CX SDA / SCL (`Wire1`) |
+| **GPIO 8 / 9** | Front VL53L4CX SDA / SCL (`Wire`) |
+| **GPIO 17 / 18** | Rear VL53L4CX SDA / SCL (`Wire1`), and the AHT20 through it |
 | **GPIO 5 / 6** | DRV8871 IN1 / IN2 |
 | **GPIO 4** | Battery divider tap (battery voltage) |
 | **GPIO 1** | Charge contact divider tap |
@@ -138,7 +138,7 @@ j above. 12 V reaches the breadboard on two wires only, each landing on a
 | DRV8871 | IN1 ← row 24 hole a (GPIO 5), IN2 ← row 25 (GPIO 6), GND ← − rail |
 | VL53L4CX rear | SDA ← row 29 (GPIO 17), SCL ← row 30 (GPIO 18), VIN ← + rail, GND ← − rail |
 | VL53L4CX front | SDA ← row 31 (GPIO 8), SCL ← row 34 (GPIO 9), VIN ← + rail, GND ← − rail |
-| AHT20 | STEMMA QT cable from the front VL53L4CX's second port: it carries 3V3, GND, SDA and SCL |
+| AHT20 | STEMMA QT cable from the rear VL53L4CX's second port: it carries 3V3, GND, SDA and SCL |
 | PN532 | SS ← row 35 (GPIO 10), MOSI ← row 36 (GPIO 11), SCK ← row 37 (GPIO 12), MISO ← row 38 (GPIO 13), VCC ← + rail, GND ← − rail |
 
 The modules connect with jumper wires; leave each VL53L4CX's GPIO and XSHUT
@@ -150,9 +150,9 @@ be in the order drawn: go by the names printed next to its pins.
 - **VL53L4CX:** I2C lines need pull-up resistors, and Adafruit's board has
   them, along with its own regulator ("VLogic/Vcc 3–5VDC"). The two sensors
   share one fixed address, which is why each has its own bus.
-- **AHT20:** it shares the front VL53L4CX's bus, which works because the two
-  answer to different addresses (0x38 and 0x29). Its board usually has
-  pull-ups too; two boards' pull-ups side by side are still well within what
+- **AHT20:** it shares the rear VL53L4CX's bus, which works because the two
+  answer to different addresses (0x38 and 0x29). Its board has pull-ups
+  too; two boards' pull-ups side by side are still well within what
   I2C allows. The cable powers it from 3V3, so its pull-ups pull to 3.3 V, as
   the ESP32's pins need.
 - **PN532:** SPI lines are driven both ways by the chips, so they need none.
@@ -216,7 +216,7 @@ board's edge so the cable still plugs in. The dividers stand on end in rows
 Extra parts: the board, two 1×22 female header sockets, a strip of male
 header pins, insulated wire for the links, and female jumper wires to the
 modules (or, for the VL53L4CX, STEMMA QT to female socket cables). The AHT20
-needs nothing on the board: it stays on its cable from the front VL53L4CX.
+needs nothing on the board: it stays on its cable from the rear VL53L4CX.
 
 Solder in this order: the links and the standing resistors and capacitors,
 then the sockets and pins. Before plugging the DevKit in, check with a
