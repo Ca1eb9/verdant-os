@@ -43,6 +43,8 @@ const BATTERY_CHARGE_RATE = 5;
 const BATTERY_LOW_THRESHOLD = 20;
 const BATTERY_CRITICAL_THRESHOLD = 15;
 const BATTERY_CUTOFF_THRESHOLD = 5;
+/** Firmware CHARGE_COMPLETE_PCT / orchestrator charge_complete_pct */
+const CHARGE_COMPLETE_THRESHOLD = 85;
 /** Each jog drives for this long from receipt; a newer jog restarts it */
 const JOG_PULSE_MS = 500;
 const MANUAL_TICK_MS = 100;
@@ -575,7 +577,7 @@ function handleDocking() {
 
 function handleCharging() {
   robot.battery = Math.min(100, robot.battery + BATTERY_CHARGE_RATE);
-  if (robot.battery >= 95) {
+  if (robot.battery >= CHARGE_COMPLETE_THRESHOLD) {
     publishEvent(RobotEventType.CHARGE_COMPLETE, `${robot.battery.toFixed(1)}%`);
     resetBatteryFlags();
     console.log(`[CHARGE] complete (${robot.battery.toFixed(1)}%)`);
