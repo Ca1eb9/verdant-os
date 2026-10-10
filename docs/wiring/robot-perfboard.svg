@@ -724,14 +724,16 @@
 <text x="375" y="652" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="start" font-weight="bold" fill="#222">shared ground in (power side)</text>
 <text x="160" y="732" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" font-weight="normal" fill="#444">The AHT20 needs nothing here: a STEMMA QT cable joins it to the rear VL53L4CX, as on the breadboard.</text>
 <text x="160" y="750" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" font-weight="normal" fill="#444">Gold squares are male header pins: each takes a female jumper to its module. Arcs are insulated wires on top of the board; they touch only their two holes.</text>
-<rect x="269" y="250" width="104" height="58" rx="4" fill="#174a2d"/>
-<text x="274" y="262" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="bold" fill="#fff">charge contact:</text>
+<rect x="269" y="250" width="104" height="71" rx="4" fill="#174a2d"/>
+<text x="274" y="262" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="bold" fill="#fff">charge contact (dock):</text>
 <text x="274" y="275" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#fff">100 kΩ rows 1–2, h</text>
 <text x="274" y="288" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#fff">22 kΩ rows 2–3, g</text>
 <text x="274" y="301" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#fff">0.1 µF rows 2–3, f</text>
-<rect x="269" y="342" width="104" height="58" rx="4" fill="#174a2d"/>
+<text x="274" y="314" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#fff">(0.1 µF: optional)</text>
+<rect x="269" y="342" width="104" height="71" rx="4" fill="#174a2d"/>
 <text x="274" y="354" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="bold" fill="#fff">battery voltage:</text>
 <text x="274" y="367" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#fff">100 kΩ rows 1–2, c</text>
 <text x="274" y="380" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#fff">22 kΩ rows 2–3, d</text>
 <text x="274" y="393" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#fff">0.1 µF rows 2–3, e</text>
+<text x="274" y="406" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#fff">(0.1 µF: optional)</text>
 </svg>

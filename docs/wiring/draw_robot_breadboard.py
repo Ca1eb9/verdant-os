@@ -108,10 +108,10 @@ def capacitor(r1, r2, y, label):  # label: unused, parts are listed beside the b
 
 capacitor(B_TAP, B_GND, HOLE["c"], "")
 capacitor(B_TAP, B_GND, HOLE["h"], "")
-for y0, title, parts in ((HOLE["j"] - 4, "Charge contact divider", ["100 kΩ: rows 4–8, hole i", "22 kΩ: rows 8–12, hole g",
-                                                                     "0.1 µF: rows 8–12, hole h", "pad + in: row 4, hole f"]),
+for y0, title, parts in ((HOLE["j"] - 4, "Charge contact divider", ["(docking only)", "100 kΩ: rows 4–8, hole i", "22 kΩ: rows 8–12, hole g",
+                                                                     "0.1 µF (optional): rows 8–12, hole h", "pad + in: row 4, hole f"]),
                          (HOLE["e"] - 4, "Battery divider", ["100 kΩ: rows 4–8, hole b", "22 kΩ: rows 8–12, hole d",
-                                                             "0.1 µF: rows 8–12, hole c", "BATT+ in: row 4, hole e"])):
+                                                             "0.1 µF (optional): rows 8–12, hole c", "BATT+ in: row 4, hole e"])):
     text(BX - 12, y0, title, 11, "end", "bold")
     for i, line in enumerate(parts):
         text(BX - 12, y0 + 15 + i * 14, line, 10, "end", fill="#444")
@@ -143,6 +143,9 @@ jumper(hole(j3("GND"), "j"), rail(j3("GND"), "-", top=True), C["gnd"], 0)
 jumper(hole(B_GND, "a"), rail(B_GND, "-"), C["gnd"], 0)
 jumper(hole(B_GND, "j"), rail(B_GND, "-", top=True), C["gnd"], 0)
 jumper(hole(B_TAP, "a"), hole(j1("4"), "a"), C["sense"], 18)
+# bridges across the middle of the bottom rails, for boards whose rails are split there
+for sign in ("+", "-"):
+    jumper(rail(28, sign), rail(39, sign), C["3v3"] if sign == "+" else C["gnd"], 10 if sign == "+" else -10)
 jumper(hole(B_TAP, "j"), hole(j3("1"), "j"), C["sense"], 18)
 
 # 12 V in: one wire each from the power side, arriving from the left
@@ -180,7 +183,8 @@ x += PITCH * 6 + 26
 # STEMMA QT port, which carries the same 3V3, GND, SDA and SCL
 AHT_W = PITCH * 4
 add(f'<rect x="{x}" y="{MOD_Y}" width="{AHT_W}" height="78" rx="6" fill="#0f5e5a"/>')
-text(x + AHT_W / 2, MOD_Y + 34, "AHT20", 11, weight="bold", fill="#fff")
+text(x + AHT_W / 2, MOD_Y + 26, "AHT20", 11, weight="bold", fill="#fff")
+text(x + AHT_W / 2, MOD_Y + 40, "(optional)", 9, fill="#dff3e6")
 text(x + AHT_W / 2, MOD_Y + 50, "air temp,", 9, fill="#dff3e6")
 text(x + AHT_W / 2, MOD_Y + 62, "humidity", 9, fill="#dff3e6")
 qt_a, qt_b = rear_x + PITCH * 6 - 16, x + 16

@@ -2,7 +2,7 @@
 
 ## Why you need it
 
-The ESP32 ADC pins can only read 0–3.3V. Our battery is a 3S lithium pack: 12.6V at full charge, ~9.6V at empty. We need to know where in that range the battery currently sits so the robot knows when to go charge.
+The ESP32 ADC pins can only read about 0–3.1V (at the setting the firmware uses). Our battery is a 3S lithium pack: 12.6V at full charge, ~9.6V at empty. We need to know where in that range the battery currently sits so the robot knows when to go charge.
 
 A buck converter steps the battery down to a constant voltage (3.3V or 5V) to power the ESP32. But "constant" is the problem — the converter outputs the same voltage whether the battery is full or nearly dead. Reading the converter's output tells you nothing about remaining charge. It reads 3.3V at 100% and still reads 3.3V one second before the battery dies.
 
@@ -20,7 +20,7 @@ Battery+ (12.6V) ───┬─────────────[ Buck conve
 Battery- (GND) ──────┴──────────────────────────────────── ESP32 GND
 ```
 
-On the robot both sit after the fuse and the power switch, and a 0.1 µF capacitor goes across the 22kΩ. The full wiring is in [wiring/robot.md](wiring/robot.md).
+On the robot both sit after the fuse and the power switch, and an optional 0.1 µF capacitor goes across the 22kΩ. The full wiring is in [wiring/robot.md](wiring/robot.md).
 
 The buck converter and the voltage divider both connect to the battery, but they do completely different jobs. The converter powers the ESP32. The divider lets the ESP32 *read* the battery level. Two parallel paths from the same source.
 
@@ -66,12 +66,12 @@ For the capstone this gets you within ±2–3%, which is plenty for knowing when
 
 ## Parts
 
-Two resistors and a capacitor. Use 1% tolerance if you want accuracy, 5% if you're grabbing from a kit.
+Two resistors, and optionally a capacitor. Use 1% tolerance if you want accuracy, 5% if you're grabbing from a kit.
 
 | Part | Value | Purpose |
 |------|-------|---------|
 | R1 | 100kΩ | High-side resistor |
 | R2 | 22kΩ | Low-side resistor (ADC tap) |
-| C | 0.1µF | Across R2, steadies the reading |
+| C | 0.1µF | Optional. Across R2, steadies the reading |
 
 Total cost: ~$0.10.

@@ -14,19 +14,25 @@ The pins come from `firmware/esp32/src/config.h`; the firmware is in
 | ESP32-S3-DevKitC-1 v1.1 (Espressif) | Runs the firmware | Use the port marked **USB** |
 | Elechouse PN532 NFC Module V3 | Reads the RFID tags at each node | SPI mode: switch **SEL0 off, SEL1 on** |
 | 2× Adafruit VL53L4CX ToF ([5425](https://www.adafruit.com/product/5425)) | Front and rear obstacle distance | Each on its own I2C bus (they share one address) |
-| AHT20 breakout with STEMMA QT, e.g. Adafruit [4566](https://www.adafruit.com/product/4566) | Air temperature and humidity, for the dashboard | Joins the rear VL53L4CX's bus |
+| AHT20 breakout with STEMMA QT, e.g. Adafruit [4566](https://www.adafruit.com/product/4566) | Air temperature and humidity, for the dashboard | **Optional.** Joins the rear VL53L4CX's bus |
 | Adafruit DRV8871 ([3190](https://www.adafruit.com/product/3190)) | Drives the motor | Limits motor current to about 2 A |
 | Pololu 47:1 gearmotor, 12 V ([4845](https://www.pololu.com/product/4845)) | Moves the robot | 0.3 A free-running, about 5 A if stalled |
-| UBEC buck converter, 5 V 3 A ([1385](https://www.adafruit.com/product/1385)) | Powers the ESP32 from the battery | Fixed 5 V, nothing to adjust |
+| UBEC buck converter, 5 V 3 A ([1385](https://www.adafruit.com/product/1385)) | Powers the ESP32 from the battery | Fixed 5 V. Bare input wires, 3-pin servo plug out |
 | 3S Li-ion pack, 10.8 V 6 Ah, BMS inside | Power | 12.6 V full, 9.6 V empty |
-| Two copper tape pads + wires | Touch the dock's two pogo pins | The dock charger gives 12.6 V, 2 A |
-| 1N5822 Schottky diode (3 A, 40 V) | Charging path | Keeps the pads dead off the dock |
 | 3 A fuse in an inline holder | Battery protection | |
-| Power switch, rated 3 A DC or more | Turns the robot off | |
-| 2× 100 kΩ, 2× 22 kΩ resistors | The two voltage dividers | |
-| 2× 0.1 µF ceramic capacitors | Steady the divider readings | |
-| STEMMA QT cable | Rear VL53L4CX → AHT20 | |
+| Power switch, rated 3 A DC or more | Turns the robot off | Also keeps the converter off while USB is plugged in |
+| 100 kΩ + 22 kΩ resistors | Battery divider | |
+| Two copper tape pads + wires | Touch the dock's two pogo pins | **Docking only.** The dock charger gives 12.6 V, 2 A |
+| 1N5822 Schottky diode (3 A, 40 V) | Charging path | **Docking only.** Keeps the pads dead off the dock |
+| 100 kΩ + 22 kΩ resistors | Charge contact divider | **Docking only** |
+| 2× 0.1 µF ceramic capacitors | Steady the divider readings | **Optional** |
+| STEMMA QT cable | Rear VL53L4CX → AHT20 | **Optional**, with the AHT20 |
 | Jumper wires; 20–22 AWG wire for the 12 V side | | |
+
+A proof-of-concept demo can leave out the **Optional** parts: the firmware runs
+without them. **Docking only** parts let the robot charge itself on the dock;
+without them, charge the pack off the robot with its charger. The fuse is not
+optional: it's what stops a short from overheating the pack and wiring.
 
 ## ESP32 pins
 
@@ -58,10 +64,11 @@ continues on the ESP32, and every ground symbol is the same shared ground.
   short anywhere after it blows the fuse instead of damaging the pack or the
   wiring. The switch turns everything after it off.
 - **Buck converter → ESP32 5V pin.** It turns 9.6–12.6 V into a steady 5 V; the
-  DevKit makes its own 3.3 V from that. Both of the converter's black wires go
-  to ground. Its label says "7–12 V input" and a full pack is 12.6 V; the chip
-  inside is rated well above that, so it's fine, but don't feed it more than
-  the pack.
+  DevKit makes its own 3.3 V from that. Its bare wires are the input (red +,
+  black −); the 5 V comes out of its 3-pin servo plug. Before the plug goes
+  near the ESP32, switch on and find the 5 V and GND pins with a multimeter;
+  usually red is 5 V and black or brown is GND. Its label says "7–12 V input"
+  and a full pack is 12.6 V; Adafruit recommends 6–16 V, so it's fine.
 - **DRV8871 → motor.** VM takes the battery after the switch. GPIO 5 and 6
   drive IN1 and IN2: one held low while the other is switched on and off
   rapidly (PWM) sets direction and speed. Both inputs have pull-downs inside
@@ -73,7 +80,9 @@ continues on the ESP32, and every ground symbol is the same shared ground.
   and both dividers all join. Signals only mean something relative to a
   shared ground.
 
-### Charging: pads, diode, charge contact
+### Charging: pads, diode, charge contact (docking only)
+
+Leave this whole section out if the demo charges the pack off the robot.
 
 The dock has two pogo pins wired to its charger (12.6 V, 2 A): one +, one −.
 The robot has two copper tape pads that land on them.
@@ -92,7 +101,7 @@ the BMS to notice, while the copper corrodes and the pack drains. The diode
 only lets current flow *into* the battery, so off the dock the pads are dead.
 It also blocks a charger wired backwards.
 
-The diode costs about 0.4 V, so the 12.6 V charger fills the pack to about
+The diode costs 0.3–0.5 V, so the 12.6 V charger fills the pack to about
 4.1 V a cell instead of 4.2 V. The firmware and the orchestrator call charging
 complete at **85%** (`CHARGE_COMPLETE_PCT`, `charge_complete_pct`) for that
 reason.
@@ -106,7 +115,10 @@ two resistors that scale it down: `V_pin = V_in × 22k / (100k + 22k)`, about
 | Divider | In | Out | Pin |
 |---|---|---|---|
 | **Battery** | BATT+ after the switch: 9.6–12.6 V | 1.73–2.27 V | GPIO 4 |
-| **Charge contact** | Pad +: 12.6 V docked, nothing off the dock | About 2.3 V docked, 0 V off | GPIO 1 |
+| **Charge contact** | Pad +: 10–12.6 V docked, nothing off the dock | 1.8–2.3 V docked, 0 V off | GPIO 1 |
+
+Docked, the pad reads below 12.6 V while the pack charges: the charger's
+output sits just above the pack's voltage until the pack is nearly full.
 
 - **Why 22 kΩ, not 33 kΩ:** 33 kΩ put a full pack at 3.13 V, the edge of what
   the ADC can read. 22 kΩ leaves headroom (`BATTERY_R2_OHMS` in `config.h`).
@@ -115,7 +127,10 @@ two resistors that scale it down: `V_pin = V_in × 22k / (100k + 22k)`, about
   switched-off robot doesn't drain at all.
 - **The 0.1 µF capacitor** across each 22 kΩ steadies the reading: the ADC
   takes a quick gulp of charge each time it samples, and through 100 kΩ the
-  pin can't refill fast enough without it.
+  pin can't refill fast enough without it. **It's optional:** without it the
+  readings are noisier and may sit a little low, but the firmware averages 16
+  reads and `BATTERY_CAL_FACTOR` corrects a steady offset, and docked versus
+  off the dock is still obvious.
 - **Off the dock**, the charge contact divider's 22 kΩ is also its pull-down:
   it holds GPIO 1 at 0 V instead of letting it float.
 
@@ -129,16 +144,22 @@ b, the top row (J3) in hole i. That leaves **one free hole per pin**: a below,
 j above. 12 V reaches the breadboard on two wires only, each landing on a
 100 kΩ resistor in row 4.
 
+**Split rails:** on some full-size boards each rail is split halfway along
+(the red and blue lines have a gap in the middle). This layout uses both
+halves of the bottom rails, so on such a board add the two bridge jumpers
+drawn from row 28 to row 39. On a board with unbroken lines they're harmless.
+
 | Where | What |
 |---|---|
 | Row 20, hole a → bottom + rail | 3V3: the bottom + rail is 3.3 V |
 | Row 41, hole a → bottom − rail; row 20, hole j → top − rail | GND on both − rails |
-| Rows 4–12, bottom half | Battery divider: BATT+ in at row 4 hole e; 100 kΩ rows 4–8 (hole b); 22 kΩ rows 8–12 (hole d); 0.1 µF rows 8–12 (hole c); row 8 hole a → row 23 hole a (GPIO 4); row 12 hole a → − rail |
-| Rows 4–12, top half | Charge contact divider: pad + in at row 4 hole f; 100 kΩ rows 4–8 (hole i); 22 kΩ rows 8–12 (hole g); 0.1 µF rows 8–12 (hole h); row 8 hole j → row 23 hole j (GPIO 1); row 12 hole j → top − rail |
+| Row 28 → row 39 on the bottom + rail, and again on the − rail | Bridges a split rail (see above) |
+| Rows 4–12, bottom half | Battery divider: BATT+ in at row 4 hole e; 100 kΩ rows 4–8 (hole b); 22 kΩ rows 8–12 (hole d); 0.1 µF rows 8–12 (hole c, optional); row 8 hole a → row 23 hole a (GPIO 4); row 12 hole a → − rail |
+| Rows 4–12, top half | Charge contact divider (docking only): pad + in at row 4 hole f; 100 kΩ rows 4–8 (hole i); 22 kΩ rows 8–12 (hole g); 0.1 µF rows 8–12 (hole h, optional); row 8 hole j → row 23 hole j (GPIO 1); row 12 hole j → top − rail |
 | DRV8871 | IN1 ← row 24 hole a (GPIO 5), IN2 ← row 25 (GPIO 6), GND ← − rail |
 | VL53L4CX rear | SDA ← row 29 (GPIO 17), SCL ← row 30 (GPIO 18), VIN ← + rail, GND ← − rail |
 | VL53L4CX front | SDA ← row 31 (GPIO 8), SCL ← row 34 (GPIO 9), VIN ← + rail, GND ← − rail |
-| AHT20 | STEMMA QT cable from the rear VL53L4CX's second port: it carries 3V3, GND, SDA and SCL |
+| AHT20 (optional) | STEMMA QT cable from the rear VL53L4CX's second port: it carries 3V3, GND, SDA and SCL |
 | PN532 | SS ← row 35 (GPIO 10), MOSI ← row 36 (GPIO 11), SCK ← row 37 (GPIO 12), MISO ← row 38 (GPIO 13), VCC ← + rail, GND ← − rail |
 
 The modules connect with jumper wires; leave each VL53L4CX's GPIO and XSHUT
@@ -165,8 +186,9 @@ be in the order drawn: go by the names printed next to its pins.
   and the power side.
 - **The rails.** With a multimeter on Ω, + and − must not read near 0 Ω.
 - **The PN532's switches:** SEL0 off, SEL1 on (SPI).
-- **USB and the converter together are fine** on this genuine Espressif board:
-  a diode on its 5V pin keeps them apart. Clone boards may lack it.
+- **Never USB and the converter at once.** Espressif's guide lists USB and the
+  5V pin as power sources to use one at a time. Switch the robot off (the
+  switch cuts the converter) before plugging in USB.
 
 ## Bring it up one part at a time
 
@@ -179,7 +201,8 @@ cd firmware/esp32
 pio run -e bench -t upload && pio device monitor -e bench
 ```
 
-On the bench, USB powers the ESP32. Unplug it before adding each part:
+On the bench, USB powers the ESP32 and the robot's switch stays off. Unplug
+USB before adding each part:
 
 | Add | Then check |
 |---|---|
@@ -188,8 +211,8 @@ On the bench, USB powers the ESP32. Unplug it before adding each part:
 | Front VL53L4CX | "front VL53L4CX ready"; a hand within 15 cm prints "obstacle flag SET", away past 20 cm "cleared" |
 | Rear VL53L4CX | The same, for "rear" |
 | AHT20 | "AHT20 ready"; telemetry carries `temperature_c` and `humidity_pct`, and breathing on it raises the humidity |
-| Battery divider (+ the power side) | With a multimeter, GPIO 4 reads 0.18 × the pack voltage; `battery_pct` in telemetry matches the pack. Tune `BATTERY_CAL_FACTOR` if it's off |
-| Charge contact divider | Pads on the dock: GPIO 1 reads about 2.3 V; off the dock, 0 V |
+| Battery divider (+ the power side) | Unplug USB and switch on: the converter powers the ESP32 now. With a multimeter, GPIO 4 reads 0.18 × the pack voltage, and `battery_pct` in telemetry (watch it on the broker) matches the pack. Tune `BATTERY_CAL_FACTOR` if it's off |
+| Charge contact divider | Pads on the dock: GPIO 1 reads 1.8–2.3 V; off the dock, 0 V |
 | DRV8871 + motor | The motor task is still a placeholder: test the driver with a standalone sketch (IN1 switched on and off, IN2 low, then swapped) before the motor task is written |
 
 ## Moving to the perfboard
@@ -207,8 +230,8 @@ board's edge so the cable still plugs in. The dividers stand on end in rows
 |---|---|
 | Rows 9–30, holes b and i | The DevKit's two sockets (J1 in b, J3 in i) |
 | Row 9 hole a → + rail; row 30 hole a → − rail; row 9 hole j → top − rail | 3V3 and GND, as on the breadboard |
-| Rows 1–3, bottom half | Battery divider: BATT+ wire into row 1 hole e; 100 kΩ rows 1–2 (hole c); 22 kΩ and 0.1 µF rows 2–3 (holes d, e); row 2 hole a → row 12 hole a (GPIO 4); row 3 hole a → − rail |
-| Rows 1–3, top half | Charge contact divider: pad + wire into row 1 hole f; 100 kΩ rows 1–2 (hole h); 22 kΩ and 0.1 µF rows 2–3 (holes g, f); row 2 hole j → row 12 hole j (GPIO 1); row 3 hole j → top − rail |
+| Rows 1–3, bottom half | Battery divider: BATT+ wire into row 1 hole e; 100 kΩ rows 1–2 (hole c); 22 kΩ and 0.1 µF (optional) rows 2–3 (holes d, e); row 2 hole a → row 12 hole a (GPIO 4); row 3 hole a → − rail |
+| Rows 1–3, top half | Charge contact divider (docking only): pad + wire into row 1 hole f; 100 kΩ rows 1–2 (hole h); 22 kΩ and 0.1 µF (optional) rows 2–3 (holes g, f); row 2 hole j → row 12 hole j (GPIO 1); row 3 hole j → top − rail |
 | Male header pins, hole a | Row 13 (GPIO 5), 14 (GPIO 6), 18 (GPIO 17), 19 (GPIO 18), 20 (GPIO 8), 23 (GPIO 9), 24 (GPIO 10), 25 (GPIO 11), 26 (GPIO 12), 27 (GPIO 13) |
 | Male header pins on the rails | + rail rows 4–6 (3V3 for the three modules), − rail rows 4–7 (their GND and the DRV8871's) |
 | Wires in | The converter's 5 V into row 29 hole a (the DevKit's 5V); the shared ground onto the − rail |
@@ -221,6 +244,6 @@ needs nothing on the board: it stays on its cable from the rear VL53L4CX.
 Solder in this order: the links and the standing resistors and capacitors,
 then the sockets and pins. Before plugging the DevKit in, check with a
 multimeter: the rails don't read near 0 Ω between + and −, rows 1 and 2 read
-about 100 kΩ, rows 2 and 3 about 22 kΩ (in parallel with the capacitor, it
-settles there), and no neighbouring rows are joined by solder. Then repeat
-[Before you power it](#before-you-power-it) and the bring-up checks.
+about 100 kΩ, rows 2 and 3 about 22 kΩ (with a capacitor there, give the
+reading a second to settle), and no neighbouring rows are joined by solder.
+Then repeat [Before you power it](#before-you-power-it) and the bring-up checks.

@@ -80,6 +80,7 @@ def divider(x, top, gpio):
     v_resistor(x, tap, bottom, "22 kΩ")
     wire([(x, tap), (x + 60, tap)], "#888", 2)
     v_capacitor(x + 60, tap, bottom, "0.1 µF")
+    text(x + 75, (tap + bottom) / 2 + 18, "(optional)", 10, "start", fill="#777")
     wire([(x, bottom), (x + 60, bottom)], "#888", 2)
     ground(x + 30, bottom)
     dot(x, tap, C["sig"])
@@ -166,7 +167,8 @@ box(EX, EY, 210, 150, "ESP32-S3 DevKitC-1", ["5V: from the converter", "GND: sha
     fill="#e3f1f3", stroke="#0f7c8c")
 
 # ---- charging: pads, diode, charge contact sense
-box(40, 420, 170, 130, "Copper tape pads", ["touch the dock's pogo pins", "charger: 12.6 V, 2 A"],
+box(40, 420, 170, 130, "Copper tape pads", ["touch the dock's pogo pins", "charger: 12.6 V, 2 A",
+                                                "(docking only)"],
     fill="#fdf0e2", stroke=C["pad"])
 PAD_P, PAD_N = (210, 500), (210, 528)
 pin(PAD_P[0], PAD_P[1], "pad +", "end")

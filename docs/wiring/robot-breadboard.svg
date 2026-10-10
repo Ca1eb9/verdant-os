@@ -974,14 +974,15 @@
 <circle cx="359" cy="236" r="3" fill="#888"/>
 <circle cx="427" cy="236" r="3" fill="#888"/>
 <text x="198" y="196" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="end" font-weight="bold" fill="#222">Charge contact divider</text>
-<text x="198" y="211" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#444">100 kΩ: rows 4–8, hole i</text>
-<text x="198" y="225" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#444">22 kΩ: rows 8–12, hole g</text>
-<text x="198" y="239" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#444">0.1 µF: rows 8–12, hole h</text>
-<text x="198" y="253" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#444">pad + in: row 4, hole f</text>
+<text x="198" y="211" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#444">(docking only)</text>
+<text x="198" y="225" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#444">100 kΩ: rows 4–8, hole i</text>
+<text x="198" y="239" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#444">22 kΩ: rows 8–12, hole g</text>
+<text x="198" y="253" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#444">0.1 µF (optional): rows 8–12, hole h</text>
+<text x="198" y="267" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#444">pad + in: row 4, hole f</text>
 <text x="198" y="304" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="end" font-weight="bold" fill="#222">Battery divider</text>
 <text x="198" y="319" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#444">100 kΩ: rows 4–8, hole b</text>
 <text x="198" y="333" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#444">22 kΩ: rows 8–12, hole d</text>
-<text x="198" y="347" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#444">0.1 µF: rows 8–12, hole c</text>
+<text x="198" y="347" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#444">0.1 µF (optional): rows 8–12, hole c</text>
 <text x="198" y="361" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#444">BATT+ in: row 4, hole e</text>
 <rect x="497" y="212" width="457" height="156" rx="6" fill="#1c1c1c" stroke="#000"/>
 <rect x="501" y="232" width="64" height="116" rx="3" fill="#a9b0b6" stroke="#6d757c"/>
@@ -1103,6 +1104,14 @@
 <path d="M 359,380 Q 486.5,362 614,380" fill="none" stroke="#e6b800" stroke-width="3" stroke-linecap="round"/>
 <circle cx="359" cy="380" r="3" fill="#e6b800" stroke="#fff" stroke-width="1"/>
 <circle cx="614" cy="380" r="3" fill="#e6b800" stroke="#fff" stroke-width="1"/>
+<path d="M 699,410 Q 792.5,400 886,410" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+<path d="M 699,410 Q 792.5,400 886,410" fill="none" stroke="#d62728" stroke-width="3" stroke-linecap="round"/>
+<circle cx="699" cy="410" r="3" fill="#d62728" stroke="#fff" stroke-width="1"/>
+<circle cx="886" cy="410" r="3" fill="#d62728" stroke="#fff" stroke-width="1"/>
+<path d="M 699,430 Q 792.5,440 886,430" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+<path d="M 699,430 Q 792.5,440 886,430" fill="none" stroke="#222222" stroke-width="3" stroke-linecap="round"/>
+<circle cx="699" cy="430" r="3" fill="#222222" stroke="#fff" stroke-width="1"/>
+<circle cx="886" cy="430" r="3" fill="#222222" stroke="#fff" stroke-width="1"/>
 <path d="M 359,200 Q 486.5,182 614,200" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
 <path d="M 359,200 Q 486.5,182 614,200" fill="none" stroke="#e6b800" stroke-width="3" stroke-linecap="round"/>
 <circle cx="359" cy="200" r="3" fill="#e6b800" stroke="#fff" stroke-width="1"/>
@@ -1138,7 +1147,8 @@
 <circle cx="810.0" cy="658" r="4" fill="#d9b44a"/>
 <text x="813.0" y="666" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="bold" fill="#fff" transform="rotate(90 813.0 666)">XSHUT</text>
 <rect x="847" y="650" width="88" height="78" rx="6" fill="#0f5e5a"/>
-<text x="891.0" y="684" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="bold" fill="#fff">AHT20</text>
+<text x="891.0" y="676" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="bold" fill="#fff">AHT20</text>
+<text x="891.0" y="690" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="middle" font-weight="normal" fill="#dff3e6">(optional)</text>
 <text x="891.0" y="700" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="middle" font-weight="normal" fill="#dff3e6">air temp,</text>
 <text x="891.0" y="712" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="middle" font-weight="normal" fill="#dff3e6">humidity</text>
 <rect x="797" y="722" width="16" height="8" rx="1" fill="#eee" stroke="#555"/>

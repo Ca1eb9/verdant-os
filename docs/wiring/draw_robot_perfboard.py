@@ -69,8 +69,8 @@ standing_cap(2, HOLE["e"])
 draw_standing_resistor(rx(1), rx(2), HOLE["h"], BROWN_BLACK_YELLOW, "")
 draw_standing_resistor(rx(2), rx(3), HOLE["g"], RED_RED_ORANGE, "")
 standing_cap(2, HOLE["f"])
-for y0, lines in ((HOLE["h"] - 4, ["charge contact:", "100 kΩ rows 1–2, h", "22 kΩ rows 2–3, g", "0.1 µF rows 2–3, f"]),
-                  (HOLE["e"] - 4, ["battery voltage:", "100 kΩ rows 1–2, c", "22 kΩ rows 2–3, d", "0.1 µF rows 2–3, e"])):
+for y0, lines in ((HOLE["h"] - 4, ["charge contact (dock):", "100 kΩ rows 1–2, h", "22 kΩ rows 2–3, g", "0.1 µF rows 2–3, f", "(0.1 µF: optional)"]),
+                  (HOLE["e"] - 4, ["battery voltage:", "100 kΩ rows 1–2, c", "22 kΩ rows 2–3, d", "0.1 µF rows 2–3, e", "(0.1 µF: optional)"])):
     add(f'<rect x="{rx(4) - 12}" y="{y0 - 12}" width="104" height="{len(lines) * 13 + 6}" rx="4" fill="#174a2d"/>', "late")
     for i, line in enumerate(lines):
         text(rx(4) - 7, y0 + i * 13, line, 9, "start", "bold" if i == 0 else "normal", "#fff", layer="late")
