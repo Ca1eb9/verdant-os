@@ -6,6 +6,7 @@ board's page has its diagram and a check for each sensor.
 | Board | Page |
 |---|---|
 | Shelf sensor node (Arduino Uno R3) | [shelf-sensor.md](shelf-sensor.md) |
+| Robot (ESP32-S3) | [robot.md](robot.md) |
 
 Breadboards come first, so wiring can change while we test. Once a layout
 works, it moves onto a half-size Perma-Proto perfboard, wired the same way;
@@ -93,6 +94,9 @@ it from this folder. For example:
 ```bash
 python3 draw_shelf_sensor.py > shelf-sensor-breadboard.svg
 python3 draw_shelf_sensor_perfboard.py > shelf-sensor-perfboard.svg
+python3 draw_robot_power.py > robot-power.svg
+python3 draw_robot_breadboard.py > robot-breadboard.svg
+python3 draw_robot_perfboard.py > robot-perfboard.svg
 ```
 
 Then update that board's page to match. The pin numbers come from the

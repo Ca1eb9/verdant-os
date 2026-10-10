@@ -41,23 +41,11 @@ Decisions worth knowing:
 
 ## Wiring
 
-The team's boards are **ESP32-S3-WROOM-1** DevKitC; pins are in `config.h`.
+The team's boards are **ESP32-S3-WROOM-1** DevKitC; pins are in `config.h`. Diagrams, parts and the reasons for each resistor are in [docs/wiring/robot.md](../../docs/wiring/robot.md). The VL53L4CX XSHUT pins are optional: wire them to a free GPIO and set `PIN_TOF_FRONT_XSHUT` / `PIN_TOF_REAR_XSHUT`. The AHT20 (address 0x38) shares `Wire` (GPIO 8/9) with the front ToF (0x29).
 
-| Part | Part pin | ESP32-S3 GPIO |
-|---|---|---|
-| PN532 (SPI mode: SEL0 **OFF**, SEL1 **ON**) | SCK / MISO / MOSI / SS | 12 / 13 / 11 / 10 |
-| VL53L4CX front (`Wire`) | SDA / SCL | 8 / 9 |
-| VL53L4CX rear (`Wire1`) | SDA / SCL | 17 / 18 |
-| AHT20 (shares `Wire` with the front ToF) | SDA / SCL | 8 / 9 |
-| VL53L4CX (optional) | XSHUT | any free GPIO → set `PIN_TOF_FRONT_XSHUT` / `PIN_TOF_REAR_XSHUT` |
-| Battery divider tap | 100k / 33k midpoint | 4 |
-| All modules | VIN / GND | 3V3 / GND |
-
-**S3 pins to leave alone:** 0, 3, 45 and 46 (boot strapping); 19/20 (USB); 26–32 (flash); 33–37 (PSRAM on R8 modules); 43/44 (UART0). Only ADC1 pins (GPIO1–10) can read voltages while WiFi is on. `docs/battery-monitoring.md` says GPIO34, which is a classic-ESP32 pin; on the S3 it's GPIO4.
+**S3 pins to leave alone:** 0, 3, 45 and 46 (boot strapping); 19/20 (USB); 26–32 (flash); 33–37 (PSRAM on R8 modules); 43/44 (UART0). Only ADC1 pins (GPIO1–10) can read voltages while WiFi is on.
 
 **USB:** plug into the S3 DevKit's port marked **USB** (native USB). Serial output goes there. If an upload says "Failed to connect", hold **BOOT**, tap **EN/RST**, release **BOOT**, then upload.
-
-> **Battery divider:** with 100k/33k, a full pack puts 3.13 V on the ADC pin. That's at the edge of what the ESP32 ADC can read, and it's inaccurate above ~2.5 V. Swapping R2 for **22k** gives 2.27 V at full and 1.73 V empty, inside the accurate range. Update `BATTERY_R2_OHMS` if you change it.
 
 ## Running the bench test
 

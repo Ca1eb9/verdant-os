@@ -11,14 +11,16 @@ The voltage divider taps the battery *before* the converter, where the voltage a
 ## Where it goes
 
 ```
-Battery+ (12.6V) ───┬─────────────[ Buck converter ]───── ESP32 VIN (power)
+Battery+ (12.6V) ───┬─────────────[ Buck converter ]───── ESP32 5V (power)
                      │
-                     ├──[ 100kΩ ]──┬──[ 33kΩ ]──----------|
+                     ├──[ 100kΩ ]──┬──[ 22kΩ ]──----------|
                                    │                      |
-                                ESP32 GPIO34 (ADC read)   |
+                                ESP32 GPIO4 (ADC read)    |
                                                           |
 Battery- (GND) ──────┴──────────────────────────────────── ESP32 GND
 ```
+
+On the robot both sit after the fuse and the power switch, and a 0.1 µF capacitor goes across the 22kΩ. The full wiring is in [wiring/robot.md](wiring/robot.md).
 
 The buck converter and the voltage divider both connect to the battery, but they do completely different jobs. The converter powers the ESP32. The divider lets the ESP32 *read* the battery level. Two parallel paths from the same source.
 
@@ -30,14 +32,14 @@ Two resistors in series form a voltage divider. The voltage at the midpoint betw
 V_out = V_battery × R2 / (R1 + R2)
 ```
 
-With R1 = 100kΩ and R2 = 33kΩ:
+With R1 = 100kΩ and R2 = 22kΩ:
 
 ```
-Full charge:  12.6V × 33/133 = 3.13V  (under the 3.3V ADC limit)
-Empty:         9.6V × 33/133 = 2.38V
+Full charge:  12.6V × 22/122 = 2.27V
+Empty:         9.6V × 22/122 = 1.73V
 ```
 
-So the ESP32's ADC reads a value between 2.38V and 3.13V, which maps linearly to 0–100% charge. The high resistance values (100kΩ + 33kΩ) mean almost no current flows through the divider — about 0.1mA — so it doesn't meaningfully drain the battery.
+So the ESP32's ADC reads a value between 1.73V and 2.27V, well inside the range it reads accurately (33kΩ would put a full pack at 3.13V, the edge of it). The high resistance values (100kΩ + 22kΩ) mean almost no current flows through the divider — about 0.1mA — so it doesn't meaningfully drain the battery.
 
 ## Why not just use a lower converter output?
 
@@ -45,66 +47,31 @@ Even if you used a 3.0V buck converter so the output fits the ADC range, it stil
 
 ## Firmware
 
-```c
-#define BATTERY_ADC_PIN 34
-
-// Resistor values (measure yours with a multimeter for accuracy)
-#define R1 100000.0
-#define R2  33000.0
-
-// 3S Li-ion limits
-#define VOLTAGE_FULL  12.6
-#define VOLTAGE_EMPTY  9.6
-
-float read_battery_voltage() {
-    // Average multiple reads to reduce ADC noise
-    int total = 0;
-    for (int i = 0; i < 16; i++) {
-        total += analogRead(BATTERY_ADC_PIN);
-    }
-    float raw = total / 16.0;
-
-    // ESP32 ADC: 12-bit (0-4095) maps to 0-3.3V
-    float adc_voltage = (raw / 4095.0) * 3.3;
-
-    // Reverse the divider math to get actual battery voltage
-    float battery_voltage = adc_voltage * (R1 + R2) / R2;
-
-    return battery_voltage;
-}
-
-float battery_percentage() {
-    float voltage = read_battery_voltage();
-
-    // Linear mapping between empty and full
-    float pct = (voltage - VOLTAGE_EMPTY) / (VOLTAGE_FULL - VOLTAGE_EMPTY) * 100.0;
-
-    // Clamp to 0-100
-    if (pct > 100.0) pct = 100.0;
-    if (pct < 0.0) pct = 0.0;
-
-    return pct;
-}
-```
+`firmware/esp32/src/drivers/battery.cpp` reads GPIO4 (`PIN_BATTERY_ADC`), averages
+`BATTERY_SAMPLES` readings, undoes the divider with `BATTERY_R1_OHMS` and
+`BATTERY_R2_OHMS`, and turns each cell's voltage into a percentage with a Li-ion
+discharge curve rather than a straight line (a straight line reads up to 20 points
+high mid-pack). All the values are in `config.h`.
 
 ## Calibration
 
 The ESP32's ADC isn't perfectly linear, and resistors have tolerance (±5% for standard ones). To calibrate:
 
-1. Measure your actual resistor values with a multimeter — update R1 and R2 in the code to match.
+1. Measure your actual resistor values with a multimeter — update `BATTERY_R1_OHMS` and `BATTERY_R2_OHMS` in `config.h` to match.
 2. Measure the real battery voltage with a multimeter.
-3. Compare to what `read_battery_voltage()` returns over serial.
-4. If they differ, adjust the 3.3 multiplier slightly (the ESP32's internal reference voltage varies per chip, typically 3.0–3.3V).
+3. Compare it to the battery reading the robot reports.
+4. If they differ, adjust `BATTERY_CAL_FACTOR` (the ESP32's ADC reference varies from chip to chip).
 
 For the capstone this gets you within ±2–3%, which is plenty for knowing when to go charge.
 
 ## Parts
 
-Two resistors. Use 1% tolerance if you want accuracy, 5% if you're grabbing from a kit.
+Two resistors and a capacitor. Use 1% tolerance if you want accuracy, 5% if you're grabbing from a kit.
 
 | Part | Value | Purpose |
 |------|-------|---------|
 | R1 | 100kΩ | High-side resistor |
-| R2 | 33kΩ | Low-side resistor (ADC tap) |
+| R2 | 22kΩ | Low-side resistor (ADC tap) |
+| C | 0.1µF | Across R2, steadies the reading |
 
 Total cost: ~$0.10.
