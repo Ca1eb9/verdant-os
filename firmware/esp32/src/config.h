@@ -58,10 +58,20 @@ constexpr int PIN_TOF_FRONT_XSHUT = -1;
 constexpr int PIN_I2C_REAR_SDA = 17;   // rear sensor (Wire1)
 constexpr int PIN_I2C_REAR_SCL = 18;
 constexpr int PIN_TOF_REAR_XSHUT = -1;
-// The AHT20 (address 0x38) shares the front sensor's bus.
+// The AHT20 (address 0x38) shares the rear sensor's bus.
 
 // Battery voltage divider tap
 constexpr int PIN_BATTERY_ADC = 4;
+
+// DRV8871 motor driver (docs/wiring/robot.md). Its inputs have internal
+// pull-downs, so the motor stays off while the ESP32 boots.
+constexpr int PIN_MOTOR_IN1 = 5;
+constexpr int PIN_MOTOR_IN2 = 6;
+
+// Charge contact sense: the dock pad's voltage through a 100k/22k divider,
+// 1.8-2.3 V while docked (the charger's output follows the pack while it
+// charges), 0 V off the dock. ADC1, so it reads with WiFi on.
+constexpr int PIN_CHARGE_SENSE = 1;
 
 // Onboard NeoPixel (GPIO38 on DevKitC-1 v1.1 boards)
 constexpr int PIN_STATUS_LED = 38;
@@ -90,7 +100,7 @@ constexpr bool OBSTACLE_FAILSAFE = true;
 // Measure the real resistors with a multimeter and put the values here.
 
 constexpr float BATTERY_R1_OHMS = 100000.0f;
-constexpr float BATTERY_R2_OHMS = 33000.0f;
+constexpr float BATTERY_R2_OHMS = 22000.0f;     // full pack: 2.27 V at the pin, inside the ADC's accurate range
 constexpr int BATTERY_CELLS = 3;
 constexpr float BATTERY_CAL_FACTOR = 1.0f;      // tweak after multimeter check
 constexpr uint8_t BATTERY_SAMPLES = 16;         // ADC reads averaged per sample
@@ -157,7 +167,9 @@ constexpr uint32_t DEFAULT_IDLE_MS = 0;
 constexpr float BATTERY_WARN_PCT = 20.0f;       // battery_low
 constexpr float BATTERY_RETURN_PCT = 15.0f;     // battery_critical, go to dock
 constexpr float BATTERY_CUTOFF_PCT = 5.0f;      // kill motors
-constexpr float CHARGE_COMPLETE_PCT = 95.0f;    // matches orchestrator charge_complete_pct
+// The charging diode (docs/wiring/robot.md) drops ~0.4 V, so the pack tops
+// out around 4.1 V a cell, not 4.2. Matches orchestrator charge_complete_pct.
+constexpr float CHARGE_COMPLETE_PCT = 85.0f;
 
 // ---- Manual control -----------------------------------------------------------------
 

@@ -462,6 +462,7 @@ gantt
       <li>Read battery voltage through an ADC pin and a voltage divider. Convert the raw reading to a usable percentage.</li>
       <li>Read distance from the obstacle sensor (ultrasonic or IR). When the distance drops below a safety threshold, set the shared obstacle flag so the motor task stops immediately.</li>
       <li>Now done: two VL53L4CX sensors set a front and a rear flag. The nav task lowers a side's stop distance (<code>g_obstacle_*_stop_cm</code>) while it creeps into the elevator or onto the dock; the sensor task flags against it (see <code>COMMS-SENSOR.md</code>).</li>
+      <li>Now done: an AHT20 on the rear sensor's I2C bus reports air temperature and humidity in telemetry, for the dashboard only (wiring in <code>docs/wiring/robot.md</code>).</li>
       <li>Write all sensor readings into a struct and push it to the sensor queue for the nav task</li>
     </ul>
   </details>
@@ -486,7 +487,7 @@ gantt
       <li>A <code>Drive</code> with <code>duration_ms</code> stops by itself when the time runs out (a jog pulse), then sets <code>g_drive_done_seq</code> to its <code>seq</code>; <code>duration_ms</code> 0 drives until replaced</li>
       <li><strong>Changing direction</strong>: a <code>Drive</code> the opposite way to the motor's current direction (e.g. a backward jog straight after a forward one) first slows to 0 over <code>REVERSE_RAMP_MS</code> (<code>config.h</code>), then drives the new way. A timed <code>Drive</code>'s <code>duration_ms</code> still counts from receipt, ramp included. Never ramp a kill or obstacle stop: those stop at once.</li>
       <li><strong>Before every cycle</strong>: stop the motor while <code>g_motor_kill_flag</code> is set (the battery cutoff), or while the obstacle flag for the side it's driving toward is set (front for a positive speed, rear for a negative one). It must still be able to back away from an obstacle in front.</li>
-      <li>Control the motor driver (TB6612 or L298N) via PWM and direction pins</li>
+      <li>Control the motor driver, an Adafruit DRV8871 (<code>docs/wiring/robot.md</code>): <code>PIN_MOTOR_IN1</code> / <code>PIN_MOTOR_IN2</code> in <code>config.h</code>. One input held low while the other is PWMed sets direction and speed; both low lets the motor coast</li>
     </ul>
   </details>
   <details>
@@ -549,7 +550,7 @@ gantt
     <summary>Requirements</summary>
     <ul>
       <li><strong>Battery:</strong> Calibrate the ADC-to-percentage conversion against the actual battery's discharge behavior. The percentage in published telemetry should reflect reality.</li>
-      <li><strong>Dock:</strong> the robot already backs onto the dock on the rear ToF sensor until <code>DOCK_STOP_CM</code>. Detect the charging contact through a voltage change and call <code>NavCore::on_charge_contact()</code>, which stops the motor and publishes <code>dock_connected</code>. Charge complete is published by nav at <code>CHARGE_COMPLETE_PCT</code>.</li>
+      <li><strong>Dock:</strong> the robot already backs onto the dock on the rear ToF sensor until <code>DOCK_STOP_CM</code>. Detect the charging contact through a voltage change on <code>PIN_CHARGE_SENSE</code> (GPIO 1: 1.8–2.3 V docked, 0 V off the dock, through a divider; <code>docs/wiring/robot.md</code>) and call <code>NavCore::on_charge_contact()</code>, which stops the motor and publishes <code>dock_connected</code>. Charge complete is published by nav at <code>CHARGE_COMPLETE_PCT</code>.</li>
       <li><strong>Overrides:</strong> already in <code>nav/survival</code>, at the top of the nav loop: <code>battery_low</code> at 20%, a forced return at 15% that a stop still beats, the motor cutoff at 5% (<code>g_motor_kill_flag</code>), and the obstacle events. Verify them on hardware together, with the real battery readings.</li>
     </ul>
   </details>

@@ -21,7 +21,7 @@ RfidReader s_rfid;
 TofSensor s_tof_front("front", Wire, PIN_I2C_FRONT_SDA, PIN_I2C_FRONT_SCL, PIN_TOF_FRONT_XSHUT);
 TofSensor s_tof_rear("rear", Wire1, PIN_I2C_REAR_SDA, PIN_I2C_REAR_SCL, PIN_TOF_REAR_XSHUT);
 Battery s_battery;
-EnvSensor s_env(Wire);  // after s_tof_front, which starts Wire
+EnvSensor s_env(Wire1);  // after s_tof_rear, which starts Wire1
 
 // ---- RFID state --------------------------------------------------------------
 

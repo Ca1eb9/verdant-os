@@ -9,19 +9,11 @@ shelf-sensor.md's perfboard table in step.
 """
 import sys
 
-from wiring_svg import add, finish, resistor, text, wire
+from wiring_svg import PermaProtoHalf, add, draw_standing_resistor, finish, text, wire
 
-P = 22                      # hole pitch (0.1")
-ROWS = 30                   # the Perma-Proto half has 30 rows
 BX, BY = 70, 150            # board's top-left corner
-BW = 30 * P + 110
-def rx(r): return BX + 55 + (r - 1) * P
-
-RAIL_T = {"+": BY + 28, "-": BY + 50}       # top rails (unused)
-HOLE = {"j": BY + 92, "i": BY + 114, "h": BY + 136, "g": BY + 158, "f": BY + 180,
-        "e": BY + 228, "d": BY + 250, "c": BY + 272, "b": BY + 294, "a": BY + 316}
-RAIL = {"+": BY + 358, "-": BY + 380}       # bottom rails: + is 5V, - is GND
-BH = RAIL["-"] + 30 - BY
+PP = PermaProtoHalf(BX, BY)
+rx, HOLE, RAIL, BW, BH = PP.rx, PP.hole, PP.rail, PP.width, PP.height   # bottom rails: + is 5V, - is GND
 
 C = {"5v": "#d62728", "gnd": "#222222", "d2": "#ff7f0e", "d3": "#e6b800", "d4": "#2ca02c",
      "a0": "#1f77b4", "sda": "#9467bd", "scl": "#8c564b"}
@@ -34,23 +26,7 @@ text(40, 62, "Top view, parts side. The board is wired like a breadboard: holes 
      "f–j another, and each rail runs the whole length.", 13, "start", fill="#444")
 
 # ---- board
-add(f'<rect x="{BX}" y="{BY}" width="{BW}" height="{BH}" rx="10" fill="#1f5e3a" stroke="#174a2d" stroke-width="2"/>')
-for mx in (BX + 22, BX + BW - 22):
-    add(f'<circle cx="{mx}" cy="{(HOLE["f"] + HOLE["e"]) / 2}" r="9" fill="#fff" stroke="#c9c2b2" stroke-width="2"/>')
-for sign, rails in (("t", RAIL_T), ("b", RAIL)):
-    for s, y in rails.items():
-        col = "#ff6b6b" if s == "+" else "#7fa8ff"
-        ly = y - 11 if s == "+" else y + 11
-        add(f'<line x1="{rx(1) - 10}" y1="{ly}" x2="{rx(ROWS) + 10}" y2="{ly}" stroke="{col}" stroke-width="1.5"/>')
-        text(rx(1) - 22, y + 5, s if s == "+" else "−", 15, weight="bold", fill=col)
-        for r in range(1, ROWS + 1):
-            add(f'<circle cx="{rx(r)}" cy="{y}" r="4" fill="#d8c27a"/>')
-for letter, y in HOLE.items():
-    text(rx(1) - 22, y + 4, letter, 10, fill="#bfe3cc")
-    for r in range(1, ROWS + 1):
-        add(f'<circle cx="{rx(r)}" cy="{y}" r="4" fill="#d8c27a"/>')
-for r in range(1, ROWS + 1):
-    text(rx(r), HOLE["j"] - 14, str(r), 9, fill="#bfe3cc", weight="bold" if r % 5 == 0 else "normal")
+PP.draw()
 
 # ---- links: a short bare wire from hole a down to a rail, soldered on both ends
 for r in (3, 7, 14, 19, 24):
@@ -61,14 +37,7 @@ for r in (4, 8, 16, 21, 26):
 # ---- resistors stand on end between two neighbouring rows, in hole c: one
 # lead straight down, the other bent back along the body
 def standing_resistor(r, bands, label):
-    x0, x1, y = rx(r), rx(r + 1), HOLE["c"]
-    add(f'<path d="M {x0},{y} C {x0},{y - 16} {x1},{y - 16} {x1},{y}" fill="none" stroke="#888" stroke-width="2"/>')
-    add(f'<circle cx="{x0}" cy="{y}" r="9" fill="#e8d3a6" stroke="#8a6d3b"/>')
-    for i, c in enumerate(bands):
-        add(f'<circle cx="{x0}" cy="{y}" r="{8 - i * 2}" fill="none" stroke="{c}" stroke-width="1.6"/>')
-    add(f'<circle cx="{x1}" cy="{y}" r="3" fill="#888"/>')
-    add(f'<rect x="{(x0 + x1) / 2 - 22}" y="{y + 12}" width="44" height="15" rx="4" fill="#174a2d"/>')
-    text((x0 + x1) / 2, y + 23, label, 10, weight="bold", fill="#fff")
+    draw_standing_resistor(rx(r), rx(r + 1), HOLE["c"], bands, label)
 
 standing_resistor(14, ["#e6b800", "#7f3fbf", "#d62728", "#c9a227"], "4.7 kΩ")
 standing_resistor(20, ["#7a4a1e", "#111", "#ff7f0e", "#c9a227"], "10 kΩ")

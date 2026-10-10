@@ -34,3 +34,58 @@ def resistor(x1, x2, y, bands, label):
 
 def finish():
     return "\n".join(out + late + ["</svg>"])
+
+
+def draw_standing_resistor(x0, x1, y, bands, label):
+    """A resistor standing on end between two neighbouring holes (seen from above):
+    the body over the first hole, the bent-back lead into the second."""
+    add(f'<path d="M {x0},{y} C {x0},{y - 16} {x1},{y - 16} {x1},{y}" fill="none" stroke="#888" stroke-width="2"/>')
+    add(f'<circle cx="{x0}" cy="{y}" r="9" fill="#e8d3a6" stroke="#8a6d3b"/>')
+    for i, c in enumerate(bands):
+        add(f'<circle cx="{x0}" cy="{y}" r="{8 - i * 2}" fill="none" stroke="{c}" stroke-width="1.6"/>')
+    add(f'<circle cx="{x1}" cy="{y}" r="3" fill="#888"/>')
+    if label:
+        add(f'<rect x="{(x0 + x1) / 2 - 22}" y="{y + 12}" width="44" height="15" rx="4" fill="#174a2d"/>')
+        text((x0 + x1) / 2, y + 23, label, 10, weight="bold", fill="#fff")
+
+
+class PermaProtoHalf:
+    """Adafruit Perma-Proto half-sized board, top view: 30 rows of two 5-hole
+    strips (a-e, f-j) and two rails along each long edge, laid out like a
+    breadboard. `rx(row)` and `hole[letter]` give hole positions."""
+
+    PITCH = 22
+    ROWS = 30
+
+    def __init__(self, bx, by):
+        self.bx, self.by = bx, by
+        self.rail_top = {"+": by + 28, "-": by + 50}
+        self.hole = {"j": by + 92, "i": by + 114, "h": by + 136, "g": by + 158, "f": by + 180,
+                     "e": by + 228, "d": by + 250, "c": by + 272, "b": by + 294, "a": by + 316}
+        self.rail = {"+": by + 358, "-": by + 380}
+        self.width = self.ROWS * self.PITCH + 110
+        self.height = self.rail["-"] + 30 - by
+
+    def rx(self, r):
+        return self.bx + 55 + (r - 1) * self.PITCH
+
+    def draw(self):
+        bx, by, rx, hole = self.bx, self.by, self.rx, self.hole
+        add(f'<rect x="{bx}" y="{by}" width="{self.width}" height="{self.height}" rx="10" fill="#1f5e3a" '
+            f'stroke="#174a2d" stroke-width="2"/>')
+        for mx in (bx + 22, bx + self.width - 22):
+            add(f'<circle cx="{mx}" cy="{(hole["f"] + hole["e"]) / 2}" r="9" fill="#fff" stroke="#c9c2b2" stroke-width="2"/>')
+        for rails in (self.rail_top, self.rail):
+            for s, y in rails.items():
+                col = "#ff6b6b" if s == "+" else "#7fa8ff"
+                ly = y - 11 if s == "+" else y + 11
+                add(f'<line x1="{rx(1) - 10}" y1="{ly}" x2="{rx(self.ROWS) + 10}" y2="{ly}" stroke="{col}" stroke-width="1.5"/>')
+                text(rx(1) - 22, y + 5, s if s == "+" else "−", 15, weight="bold", fill=col)
+                for r in range(1, self.ROWS + 1):
+                    add(f'<circle cx="{rx(r)}" cy="{y}" r="4" fill="#d8c27a"/>')
+        for letter, y in hole.items():
+            text(rx(1) - 22, y + 4, letter, 10, fill="#bfe3cc")
+            for r in range(1, self.ROWS + 1):
+                add(f'<circle cx="{rx(r)}" cy="{y}" r="4" fill="#d8c27a"/>')
+        for r in range(1, self.ROWS + 1):
+            text(rx(r), hole["j"] - 14, str(r), 9, fill="#bfe3cc", weight="bold" if r % 5 == 0 else "normal")

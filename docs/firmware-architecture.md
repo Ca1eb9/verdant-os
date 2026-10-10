@@ -119,7 +119,7 @@ pushed first, then the status changes.
 | any | `return_to_dock`, survival return (not while `stopped` or `manual`) | `battery_critical` if survival | `returning_to_dock` |
 | `returning_to_dock` | Dock node reached | `arrived` | `docking` |
 | `docking` | Charge contact detected | `dock_connected`, then `task_complete` if on a dock task | `charging` |
-| `charging` | Battery ≥ `charge_complete_pct` (95) | `charge_complete` | `stopped` if latched; else `en_route` for a kept task; else `idle` |
+| `charging` | Battery ≥ `charge_complete_pct` (85) | `charge_complete` | `stopped` if latched; else `en_route` for a kept task; else `idle` |
 | any | `stop` | — | `stopped` |
 | `stopped` | `resume` | — | paused status, or `en_route` for a kept task after charging |
 | any | Unrecoverable fault | `error` | `error` |

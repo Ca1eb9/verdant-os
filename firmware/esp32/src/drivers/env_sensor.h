@@ -1,6 +1,6 @@
 // env_sensor.h
-// AHT20 air temperature + humidity sensor (I2C, address 0x38), on the front
-// ToF sensor's bus (Wire). Talks to the chip directly instead of through a
+// AHT20 air temperature + humidity sensor (I2C, address 0x38), on the rear
+// ToF sensor's bus (Wire1). Talks to the chip directly instead of through a
 // library: the libraries wait ~80 ms for each measurement, which would stall
 // the obstacle checks in the sensor loop. Here a measurement is started on
 // one call and read back on a later one.
@@ -21,7 +21,7 @@ class EnvSensor {
  public:
   explicit EnvSensor(TwoWire& bus) : bus_(bus) {}
 
-  // The bus must already be started (the front ToF sensor starts Wire).
+  // The bus must already be started (the rear ToF sensor starts Wire1).
   // Returns false if the chip doesn't answer.
   bool begin();
   bool ok() const { return ok_; }

@@ -6,6 +6,7 @@ board's page has its diagram and a check for each sensor.
 | Board | Page |
 |---|---|
 | Shelf sensor node (Arduino Uno R3) | [shelf-sensor.md](shelf-sensor.md) |
+| Robot (ESP32-S3) | [robot.md](robot.md) |
 
 Breadboards come first, so wiring can change while we test. Once a layout
 works, it moves onto a half-size Perma-Proto perfboard, wired the same way;
@@ -24,8 +25,9 @@ each board's page covers both.
   along the board's whole length. The rail by the red line (+) carries 5V; the
   one by the blue line (−) is GND (ground, 0V).
 - **On some full-size boards, each rail is split halfway along**, so the two
-  halves aren't connected. Our layouts stay in rows 1–30, so this doesn't
-  matter to them. If you use the far half, bridge the gap with a jumper.
+  halves aren't connected. The shelf layout stays in rows 1–30, so it doesn't
+  matter there; the robot layout shows two bridge jumpers for it. If you use
+  the far half, bridge the gap with a jumper.
 - **Keep the USB cable unplugged while you change wiring.** One wrong jumper
   between 5V and GND shorts the Uno's power supply.
 
@@ -93,6 +95,9 @@ it from this folder. For example:
 ```bash
 python3 draw_shelf_sensor.py > shelf-sensor-breadboard.svg
 python3 draw_shelf_sensor_perfboard.py > shelf-sensor-perfboard.svg
+python3 draw_robot_power.py > robot-power.svg
+python3 draw_robot_breadboard.py > robot-breadboard.svg
+python3 draw_robot_perfboard.py > robot-perfboard.svg
 ```
 
 Then update that board's page to match. The pin numbers come from the

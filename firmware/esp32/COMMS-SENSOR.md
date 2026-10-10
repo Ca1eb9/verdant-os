@@ -31,7 +31,7 @@ Decisions worth knowing:
 - **New tags are signalled by `tag_seq`**, a counter in `SensorData`, not a one-shot bool. If nav falls behind and a queue entry is dropped, it still sees that the counter moved.
 - **Two ToF sensors, front and rear, on separate I2C buses** (`Wire` and `Wire1`), because every VL53L4CX starts at the same address. Each has its own obstacle flag; the motor task checks the one for the direction it's driving, so the robot can back away from an obstacle in front.
 - **Each obstacle flag sets on the first close reading** (< 15 cm) and clears only after 3 readings > 20 cm. The nav task lowers a side's stop distance while creeping into the elevator or dock (`g_obstacle_*_stop_cm`); the clear distance moves with it, and a change is applied to the next reading straight away. If a ToF sensor stops responding, its flag stays set (`OBSTACLE_FAILSAFE`).
-- **Air temperature and humidity (AHT20) are for the dashboard only.** Neither the robot nor the orchestrator acts on them. The AHT20 (0x38) shares the front ToF's bus. Its driver starts a measurement and reads it back ~80 ms later on a later loop, so it never stalls the obstacle checks; it measures every 2 s, since measuring more often warms the chip. With no good reading for 10 s (unplugged, CRC errors), telemetry leaves `temperature_c` and `humidity_pct` out rather than repeating an old value. A missing AHT20 is retried every 5 s, like the other sensors, and one stuck mid-measurement is reset first. The robot has no light sensor, so `light_lux` is never sent.
+- **Air temperature and humidity (AHT20) are for the dashboard only.** Neither the robot nor the orchestrator acts on them. The AHT20 (0x38) shares the rear ToF's bus. Its driver starts a measurement and reads it back ~80 ms later on a later loop, so it never stalls the obstacle checks; it measures every 2 s, since measuring more often warms the chip. With no good reading for 10 s (unplugged, CRC errors), telemetry leaves `temperature_c` and `humidity_pct` out rather than repeating an old value. A missing AHT20 is retried every 5 s, like the other sensors, and one stuck mid-measurement is reset first. The robot has no light sensor, so `light_lux` is never sent.
 - **Events go out before telemetry.** Each comms tick publishes every queued event, then queued telemetry, so a status change never reaches the Pi ahead of the event that caused it.
 - **While offline, events wait in the queue** (up to 16) and go out in order on reconnect. Telemetry is discarded, since a stale position is useless.
 - **No clock sync.** `timestamp` is the robot's uptime (`millis()`); Pi services use their own receive time.
@@ -41,23 +41,11 @@ Decisions worth knowing:
 
 ## Wiring
 
-The team's boards are **ESP32-S3-WROOM-1** DevKitC; pins are in `config.h`.
+The team's boards are **ESP32-S3-WROOM-1** DevKitC; pins are in `config.h`. Diagrams, parts and the reasons for each resistor are in [docs/wiring/robot.md](../../docs/wiring/robot.md). The VL53L4CX XSHUT pins are optional: wire them to a free GPIO and set `PIN_TOF_FRONT_XSHUT` / `PIN_TOF_REAR_XSHUT`. The AHT20 (address 0x38) shares `Wire1` (GPIO 17/18) with the rear ToF (0x29).
 
-| Part | Part pin | ESP32-S3 GPIO |
-|---|---|---|
-| PN532 (SPI mode: SEL0 **OFF**, SEL1 **ON**) | SCK / MISO / MOSI / SS | 12 / 13 / 11 / 10 |
-| VL53L4CX front (`Wire`) | SDA / SCL | 8 / 9 |
-| VL53L4CX rear (`Wire1`) | SDA / SCL | 17 / 18 |
-| AHT20 (shares `Wire` with the front ToF) | SDA / SCL | 8 / 9 |
-| VL53L4CX (optional) | XSHUT | any free GPIO → set `PIN_TOF_FRONT_XSHUT` / `PIN_TOF_REAR_XSHUT` |
-| Battery divider tap | 100k / 33k midpoint | 4 |
-| All modules | VIN / GND | 3V3 / GND |
-
-**S3 pins to leave alone:** 0, 3, 45 and 46 (boot strapping); 19/20 (USB); 26–32 (flash); 33–37 (PSRAM on R8 modules); 43/44 (UART0). Only ADC1 pins (GPIO1–10) can read voltages while WiFi is on. `docs/battery-monitoring.md` says GPIO34, which is a classic-ESP32 pin; on the S3 it's GPIO4.
+**S3 pins to leave alone:** 0, 3, 45 and 46 (boot strapping); 19/20 (USB); 26–32 (flash); 33–37 (PSRAM on R8 modules); 43/44 (UART0). Only ADC1 pins (GPIO1–10) can read voltages while WiFi is on.
 
 **USB:** plug into the S3 DevKit's port marked **USB** (native USB). Serial output goes there. If an upload says "Failed to connect", hold **BOOT**, tap **EN/RST**, release **BOOT**, then upload.
-
-> **Battery divider:** with 100k/33k, a full pack puts 3.13 V on the ADC pin. That's at the edge of what the ESP32 ADC can read, and it's inaccurate above ~2.5 V. Swapping R2 for **22k** gives 2.27 V at full and 1.73 V empty, inside the accurate range. Update `BATTERY_R2_OHMS` if you change it.
 
 ## Running the bench test
 
