@@ -176,6 +176,8 @@ void nav_task(void* /*param*/) {
   sensors.obstacle_front_cm = NAN;
   sensors.obstacle_rear_cm = NAN;
   sensors.battery_pct = NAN;
+  sensors.temperature_c = NAN;
+  sensors.humidity_pct = NAN;
   uint32_t seen_tag_seq = 0;
   uint32_t known_tag_ms = 0;
   uint32_t unknown_tag_ms = 0;
@@ -235,9 +237,9 @@ void nav_task(void* /*param*/) {
       t.uptime_ms = now;
       t.battery_pct = sensors.battery_pct;  // NAN until the first sample: comms skips it
       t.obstacle_cm = core.reversing() ? sensors.obstacle_rear_cm : sensors.obstacle_front_cm;
-      t.temperature_c = NAN;  // no environment sensors on the robot
-      t.humidity_pct = NAN;
-      t.light_lux = NAN;
+      t.temperature_c = sensors.temperature_c;  // NAN: comms leaves it out
+      t.humidity_pct = sensors.humidity_pct;
+      t.light_lux = NAN;  // no light sensor on the robot
       // Full only while comms is offline, when telemetry is discarded anyway.
       xQueueSend(g_telemetry_queue, &t, 0);
       if (changed) LOG("nav", "%s at %s, task '%s'", to_wire(t.status), t.current_node, t.task_id);

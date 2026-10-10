@@ -6,8 +6,8 @@ Jameson's Sprint 1 deliverable: the ESP32 **communications task** and **sensor t
 |---|---|
 | `src/tasks/comms_task.*` | WiFi + MQTT. Publishes telemetry and events, receives commands |
 | `src/comms/comms_json.*` | JSON ↔ struct conversion matching `@farm/shared` `types.ts` (pure C++, host-testable) |
-| `src/tasks/sensor_task.*` | RFID position, front and rear VL53L4CX obstacle flags, battery voltage → `g_sensor_queue` |
-| `src/drivers/` | `rfid_reader` (PN532), `tof_sensor` (VL53L4CX), `battery` |
+| `src/tasks/sensor_task.*` | RFID position, front and rear VL53L4CX obstacle flags, battery voltage, air temperature + humidity → `g_sensor_queue` |
+| `src/drivers/` | `rfid_reader` (PN532), `tof_sensor` (VL53L4CX), `battery`, `env_sensor` (AHT20) |
 | `src/types.h` | Queue structs + shared flags |
 | `src/config.h` | Every pin, threshold and timing constant |
 | `src/globals.cpp` | Queue handles, flags, `create_queues()` |
@@ -31,6 +31,7 @@ Decisions worth knowing:
 - **New tags are signalled by `tag_seq`**, a counter in `SensorData`, not a one-shot bool. If nav falls behind and a queue entry is dropped, it still sees that the counter moved.
 - **Two ToF sensors, front and rear, on separate I2C buses** (`Wire` and `Wire1`), because every VL53L4CX starts at the same address. Each has its own obstacle flag; the motor task checks the one for the direction it's driving, so the robot can back away from an obstacle in front.
 - **Each obstacle flag sets on the first close reading** (< 15 cm) and clears only after 3 readings > 20 cm. The nav task lowers a side's stop distance while creeping into the elevator or dock (`g_obstacle_*_stop_cm`); the clear distance moves with it, and a change is applied to the next reading straight away. If a ToF sensor stops responding, its flag stays set (`OBSTACLE_FAILSAFE`).
+- **Air temperature and humidity (AHT20) are for the dashboard only.** Neither the robot nor the orchestrator acts on them. The AHT20 (0x38) shares the front ToF's bus. Its driver starts a measurement and reads it back ~80 ms later on a later loop, so it never stalls the obstacle checks; it measures every 2 s, since measuring more often warms the chip. With no good reading for 10 s (unplugged, CRC errors), telemetry leaves `temperature_c` and `humidity_pct` out rather than repeating an old value. A missing AHT20 is retried every 5 s, like the other sensors. The robot has no light sensor, so `light_lux` is never sent.
 - **Events go out before telemetry.** Each comms tick publishes every queued event, then queued telemetry, so a status change never reaches the Pi ahead of the event that caused it.
 - **While offline, events wait in the queue** (up to 16) and go out in order on reconnect. Telemetry is discarded, since a stale position is useless.
 - **No clock sync.** `timestamp` is the robot's uptime (`millis()`); Pi services use their own receive time.
@@ -47,6 +48,7 @@ The team's boards are **ESP32-S3-WROOM-1** DevKitC; pins are in `config.h`.
 | PN532 (SPI mode: SEL0 **OFF**, SEL1 **ON**) | SCK / MISO / MOSI / SS | 12 / 13 / 11 / 10 |
 | VL53L4CX front (`Wire`) | SDA / SCL | 8 / 9 |
 | VL53L4CX rear (`Wire1`) | SDA / SCL | 17 / 18 |
+| AHT20 (shares `Wire` with the front ToF) | SDA / SCL | 8 / 9 |
 | VL53L4CX (optional) | XSHUT | any free GPIO → set `PIN_TOF_FRONT_XSHUT` / `PIN_TOF_REAR_XSHUT` |
 | Battery divider tap | 100k / 33k midpoint | 4 |
 | All modules | VIN / GND | 3V3 / GND |

@@ -83,6 +83,8 @@ static void bench_nav_task(void*) {
   latest.obstacle_front_cm = NAN;
   latest.obstacle_rear_cm = NAN;
   latest.battery_pct = NAN;
+  latest.temperature_c = NAN;
+  latest.humidity_pct = NAN;
   char current_node[NODE_ID_LEN] = "";
   uint32_t seen_seq = 0;
   bool front_was = false;
@@ -145,9 +147,9 @@ static void bench_nav_task(void*) {
       t.battery_pct = latest.battery_pct;  // NAN until the first sample: comms skips it
       t.heading_known = false;
       t.obstacle_cm = latest.obstacle_front_cm;  // the bench never drives, so always front
-      t.temperature_c = NAN;  // no environment sensors on the robot
-      t.humidity_pct = NAN;
-      t.light_lux = NAN;
+      t.temperature_c = latest.temperature_c;  // NAN: comms leaves it out
+      t.humidity_pct = latest.humidity_pct;
+      t.light_lux = NAN;  // no light sensor on the robot
       if (xQueueSend(g_telemetry_queue, &t, 0) != pdTRUE) {
         // comms is offline and hasn't drained yet; fine to skip
       }
