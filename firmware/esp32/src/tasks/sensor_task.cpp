@@ -9,6 +9,7 @@
 
 #include "../config.h"
 #include "../drivers/battery.h"
+#include "../drivers/env_sensor.h"
 #include "../drivers/rfid_reader.h"
 #include "../drivers/tof_sensor.h"
 #include "../log.h"
@@ -20,6 +21,7 @@ RfidReader s_rfid;
 TofSensor s_tof_front("front", Wire, PIN_I2C_FRONT_SDA, PIN_I2C_FRONT_SCL, PIN_TOF_FRONT_XSHUT);
 TofSensor s_tof_rear("rear", Wire1, PIN_I2C_REAR_SDA, PIN_I2C_REAR_SCL, PIN_TOF_REAR_XSHUT);
 Battery s_battery;
+EnvSensor s_env(Wire);  // after s_tof_front, which starts Wire
 
 // ---- RFID state --------------------------------------------------------------
 
@@ -142,6 +144,34 @@ void update_obstacle(ObstacleState& obs, uint32_t now) {
   }
 }
 
+// ---- Air temperature + humidity ------------------------------------------------
+// Not used for any decision on the robot: it only goes out in telemetry.
+
+struct EnvState {
+  float temperature_c = NAN;
+  float humidity_pct = NAN;
+  uint32_t last_data_ms = 0;
+  uint32_t last_reinit_ms = 0;
+};
+EnvState s_air;
+
+void update_env(uint32_t now) {
+  if (!s_env.ok()) {
+    if (now - s_air.last_reinit_ms >= ENV_REINIT_MS) {
+      s_air.last_reinit_ms = now;
+      s_env.begin();
+    }
+  } else if (s_env.poll(now, &s_air.temperature_c, &s_air.humidity_pct)) {
+    s_air.last_data_ms = now;
+  } else if (!s_env.ok()) {
+    s_air.last_reinit_ms = now;  // just failed: wait before re-init (a reset needs 20 ms)
+  }
+  if (now - s_air.last_data_ms >= ENV_STALE_MS) {
+    s_air.temperature_c = NAN;
+    s_air.humidity_pct = NAN;
+  }
+}
+
 // ---- Output --------------------------------------------------------------------
 
 // Newest data matters most: if nav falls behind and the queue is full, drop
@@ -159,6 +189,7 @@ void sensor_task(void* /*param*/) {
   s_rfid.begin();
   s_tof_front.begin();
   s_tof_rear.begin();
+  s_env.begin();
   s_battery.begin();
   s_battery.sample();  // have a value before the first report
 
@@ -168,6 +199,8 @@ void sensor_task(void* /*param*/) {
     s->last_reinit_ms = start;
   }
   s_tag.last_reinit_ms = start;
+  s_air.last_data_ms = start - ENV_STALE_MS;  // no reading yet
+  s_air.last_reinit_ms = start;
 
   uint32_t last_report_ms = 0;
   uint32_t last_battery_ms = start;
@@ -181,6 +214,7 @@ void sensor_task(void* /*param*/) {
     update_obstacle(s_front, now);
     update_obstacle(s_rear, now);
     update_rfid(now);
+    update_env(now);
     if (now - last_battery_ms >= BATTERY_PERIOD_MS) {
       last_battery_ms = now;
       s_battery.sample();
@@ -202,6 +236,8 @@ void sensor_task(void* /*param*/) {
       d.obstacle_rear_stop = g_obstacle_rear_flag;
       d.battery_v = s_battery.volts();
       d.battery_pct = s_battery.pct();
+      d.temperature_c = s_air.temperature_c;
+      d.humidity_pct = s_air.humidity_pct;
       push_sensor_data(d);
       last_report_ms = now;
       last_reported_seq = s_tag.seq;

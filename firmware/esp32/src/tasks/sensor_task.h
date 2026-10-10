@@ -1,5 +1,6 @@
 // sensor_task.h
-// Sensor task: RFID position, obstacle distance, battery voltage.
+// Sensor task: RFID position, obstacle distance, battery voltage, air
+// temperature + humidity.
 //
 //   -> g_sensor_queue (SensorData) for the nav task, on every new tag and
 //      at least every SENSOR_REPORT_MS

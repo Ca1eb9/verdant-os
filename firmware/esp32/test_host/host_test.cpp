@@ -1,7 +1,7 @@
 // host_test.cpp
-// Runs the firmware's JSON + battery code on a laptop (no ESP32 needed).
+// Runs the firmware's JSON, battery and AHT20 code on a laptop (no ESP32 needed).
 //
-//   1. Asserts command parsing and battery math behave.
+//   1. Asserts command parsing, battery math and AHT20 frames behave.
 //   2. Writes sample telemetry/event JSON to out/ so check_contract.mjs can
 //      validate it against the real TypeScript types in @farm/shared.
 //
@@ -15,6 +15,7 @@
 
 #include "comms/comms_json.h"
 #include "drivers/battery.h"
+#include "drivers/env_sensor.h"
 
 static int failures = 0;
 #define CHECK(cond)                                                   \
@@ -242,6 +243,21 @@ static void test_tags_and_battery() {
          battery_pct_from_voltage(9.6f, 3));
 }
 
+static void test_env() {
+  float t = NAN, rh = NAN;
+  // Humidity raw 0x80000 (50 %), temperature raw 0x60000 (25 C), valid CRC.
+  uint8_t frame[7] = {0x1C, 0x80, 0x00, 0x06, 0x00, 0x00, 0x4E};
+  CHECK(aht20_parse(frame, &t, &rh));
+  CHECK(fabsf(t - 25.0f) < 0.01f && fabsf(rh - 50.0f) < 0.01f);
+
+  uint8_t busy[7] = {0x9C, 0x80, 0x00, 0x06, 0x00, 0x00, 0x4E};
+  CHECK(!aht20_parse(busy, &t, &rh));
+  uint8_t corrupt[7] = {0x1C, 0x80, 0x00, 0x07, 0x00, 0x00, 0x4E};  // one bit flipped
+  CHECK(!aht20_parse(corrupt, &t, &rh));
+  CHECK(t == 25.0f && rh == 50.0f);  // a rejected frame leaves the last reading alone
+  printf("  aht20: %.1f C, %.1f %%RH\n", t, rh);
+}
+
 int main(int argc, char** argv) {
   std::string out_dir = argc > 1 ? argv[1] : "out";
   std::string in_dir = argc > 2 ? argv[2] : "in";
@@ -252,6 +268,8 @@ int main(int argc, char** argv) {
   test_inbound(in_dir);
   printf("tags + battery\n");
   test_tags_and_battery();
+  printf("aht20\n");
+  test_env();
 
   printf(failures ? "\n%d FAILURE(S)\n" : "\nall C++ checks passed\n", failures);
   return failures ? 1 : 0;

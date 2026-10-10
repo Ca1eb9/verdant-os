@@ -406,6 +406,14 @@ export function ControlPanel({
             <dt>Last seen</dt>
             <dd>{robot ? fmt.time(robot.lastSeen) : "—"}</dd>
           </div>
+          <div>
+            <dt>Air temperature</dt>
+            <dd>{robot?.temperatureC !== undefined ? fmt.temp(robot.temperatureC) : "—"}</dd>
+          </div>
+          <div>
+            <dt>Air humidity</dt>
+            <dd>{robot?.humidityPct !== undefined ? `${Math.round(robot.humidityPct)}%` : "—"}</dd>
+          </div>
         </dl>
       </section>
 

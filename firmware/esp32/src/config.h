@@ -58,6 +58,7 @@ constexpr int PIN_TOF_FRONT_XSHUT = -1;
 constexpr int PIN_I2C_REAR_SDA = 17;   // rear sensor (Wire1)
 constexpr int PIN_I2C_REAR_SCL = 18;
 constexpr int PIN_TOF_REAR_XSHUT = -1;
+// The AHT20 (address 0x38) shares the front sensor's bus.
 
 // Battery voltage divider tap
 constexpr int PIN_BATTERY_ADC = 4;
@@ -95,6 +96,16 @@ constexpr float BATTERY_CAL_FACTOR = 1.0f;      // tweak after multimeter check
 constexpr uint8_t BATTERY_SAMPLES = 16;         // ADC reads averaged per sample
 constexpr float BATTERY_EMA_ALPHA = 0.2f;       // smoothing, 0..1 (1 = none)
 constexpr uint32_t BATTERY_PERIOD_MS = 500;
+
+// ---- Air temperature + humidity (AHT20, drivers/env_sensor.h) ----------------------
+
+// Measuring more often warms the chip and skews the temperature (datasheet).
+constexpr uint32_t ENV_PERIOD_MS = 2000;
+constexpr uint32_t ENV_MEASURE_MS = 80;         // a measurement takes this long
+constexpr uint32_t ENV_MEASURE_TIMEOUT_MS = 500; // still busy after this: reset, re-init
+// No good reading this long: report none rather than a frozen value.
+constexpr uint32_t ENV_STALE_MS = 10000;
+constexpr uint32_t ENV_REINIT_MS = 5000;
 
 // ---- Sensor task timing -----------------------------------------------------------
 

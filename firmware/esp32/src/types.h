@@ -100,6 +100,10 @@ struct SensorData {
   // Battery
   float battery_v;             // pack voltage (smoothed), NAN until first read
   float battery_pct;           // 0-100, NAN until first read
+
+  // Air (AHT20). NAN until the first reading, and when none in ENV_STALE_MS.
+  float temperature_c;
+  float humidity_pct;
 };
 
 // ---- nav task -> motor task (g_drive_queue) ---------------------------------

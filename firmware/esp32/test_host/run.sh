@@ -31,6 +31,7 @@ mkdir -p out
 "$CXX" -std=c++17 -Wall -Wextra -DARDUINOJSON_USE_LONG_LONG=1 \
   -I../src -I"$AJ" \
   host_test.cpp ../src/comms/comms_json.cpp ../src/drivers/battery.cpp \
+  ../src/drivers/env_sensor.cpp \
   -o out/host_test
 
 ./out/host_test out commands

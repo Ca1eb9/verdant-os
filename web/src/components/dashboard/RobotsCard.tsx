@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { useFarmLive } from "@/hooks/useFarmLive";
 import { resolveNode } from "@/lib/farm/navigation";
 import { isStale, statusLabel } from "@/lib/farm/robots";
@@ -8,6 +9,7 @@ import styles from "@/components/dashboard/DashboardView.module.css";
 
 export function RobotsCard() {
   const { robots, graph, now } = useFarmLive();
+  const { fmt } = usePreferences();
 
   return (
     <article className={`glassPanel ${styles.sensorCard} ${styles.robotsCard}`}>
@@ -23,6 +25,11 @@ export function RobotsCard() {
           {robots.map((robot) => {
             const stale = isStale(robot, now);
             const node = resolveNode(graph, robot.currentNode);
+            // The air around the robot, not the robot itself
+            const air = [
+              robot.temperatureC !== undefined && fmt.temp(robot.temperatureC),
+              robot.humidityPct !== undefined && `${Math.round(robot.humidityPct)}% humidity`,
+            ].filter(Boolean).join(" · ");
             return (
               <li key={robot.id} className={styles.metricTile}>
                 <div className={styles.metricLabelRow}>
@@ -34,6 +41,7 @@ export function RobotsCard() {
                 <span className={styles.metricLabel}>
                   {node ? node.id : "Position unknown"} · Battery {Math.round(robot.batteryPct)}%
                 </span>
+                {air && <span className={styles.metricLabel}>Air {air}</span>}
               </li>
             );
           })}

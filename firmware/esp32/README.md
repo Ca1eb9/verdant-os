@@ -44,7 +44,7 @@ firmware/
 │   │   └── task_context.h      # Current/kept task, stop latch, paused status
 │   ├── utils/nav_helpers.*     # Dijkstra, heading, turns (match navigation.ts)
 │   ├── comms/comms_json.*      # JSON <-> struct, matches @farm/shared types
-│   ├── drivers/                # RFID reader, VL53L4CX ToF, battery ADC
+│   ├── drivers/                # RFID reader, VL53L4CX ToF, battery ADC, AHT20
 │   ├── bench/bench_main.cpp    # `bench` env: test comms + sensor tasks alone
 │   └── wifitest/               # `wifitest` env: WiFi diagnostics
 ├── tools/gen_graph.mjs     # topology.json -> src/graph.cpp
