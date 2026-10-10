@@ -183,7 +183,7 @@ constexpr uint32_t REVERSE_RAMP_MS = 150;       // TBD: slow to 0 over this befo
 
 // ---- Status LED (README "Status LED") ----------------------------------------------
 
-constexpr uint8_t STATUS_LED_BRIGHTNESS = 40;   // 0-255 cap, so it isn't blinding on the bench
+constexpr uint8_t STATUS_LED_BRIGHTNESS = 20;   // 0-255 cap, so it isn't blinding on the bench
 constexpr uint32_t LED_BREATHE_MS = 2000;       // one breath (initializing, charging)
 constexpr uint32_t LED_BLINK_MS = 125;          // half a blink: 4 Hz (docking, error, obstacle)
 constexpr uint32_t LED_FLASH_MS = 100;          // one blip (tag read, jog, ignored command)
