@@ -51,7 +51,8 @@ optional: it's what stops a short from overheating the pack and wiring.
 
 GPIO 4 and 1 are ADC1 pins, the only ones that can still read a voltage while
 WiFi is on. Leave alone: GPIO 0, 3, 45, 46 (they decide how the chip boots),
-19/20 (USB) and 43/44 (UART0).
+19/20 (USB), 43/44 (UART0) and 35–37 (the extra memory uses them on boards
+with 8 MB PSRAM, such as N8R8).
 
 ## Power and charging (12 V side)
 
@@ -90,7 +91,9 @@ The robot has two copper tape pads that land on them.
 - **Pad −** goes straight to ground.
 - **Pad +** goes through the **Schottky diode** to the battery side of the
   switch (between the fuse and the switch), so the robot charges even while
-  switched off. The diode's band (cathode) faces the fuse.
+  switched off. The diode's band (cathode) faces the fuse. At 2 A it turns
+  about 1 W into heat and gets hot: leave its leads some length and keep it
+  off tape and plastic.
 
 **Why the diode, when the pack already has a BMS?** The BMS protects the cells
 (overcharge, over-discharge, a hard short) but its output is live whenever the
@@ -163,8 +166,8 @@ drawn from row 28 to row 39. On a board with unbroken lines they're harmless.
 | PN532 | SS ← row 35 (GPIO 10), MOSI ← row 36 (GPIO 11), SCK ← row 37 (GPIO 12), MISO ← row 38 (GPIO 13), VCC ← + rail, GND ← − rail |
 
 The modules connect with jumper wires; leave each VL53L4CX's GPIO and XSHUT
-pins and the PN532's IRQ and RSTO unconnected. The DRV8871's labels may not
-be in the order drawn: go by the names printed next to its pins.
+pins and the PN532's IRQ and RSTO unconnected. A module's pins may not be in
+the order drawn: go by the names printed on its board.
 
 ### Why the modules need no resistors
 
@@ -185,6 +188,8 @@ be in the order drawn: go by the names printed next to its pins.
 - **No 12 V near 3.3 V.** BATT+ and pad + touch only their 100 kΩ resistors
   and the power side.
 - **The rails.** With a multimeter on Ω, + and − must not read near 0 Ω.
+- **The converter's plug.** The pin going to the ESP32's 5V reads +5 V
+  against the one going to GND. Reversed, it destroys the board.
 - **The PN532's switches:** SEL0 off, SEL1 on (SPI).
 - **Never USB and the converter at once.** Espressif's guide lists USB and the
   5V pin as power sources to use one at a time. Switch the robot off (the
@@ -213,7 +218,7 @@ USB before adding each part:
 | AHT20 | "AHT20 ready"; telemetry carries `temperature_c` and `humidity_pct`, and breathing on it raises the humidity |
 | Battery divider (+ the power side) | Unplug USB and switch on: the converter powers the ESP32 now. With a multimeter, GPIO 4 reads 0.18 × the pack voltage, and `battery_pct` in telemetry (watch it on the broker) matches the pack. Tune `BATTERY_CAL_FACTOR` if it's off |
 | Charge contact divider | Pads on the dock: GPIO 1 reads 1.8–2.3 V; off the dock, 0 V |
-| DRV8871 + motor | The motor task is still a placeholder: test the driver with a standalone sketch (IN1 switched on and off, IN2 low, then swapped) before the motor task is written |
+| DRV8871 + motor | The motor task is still a placeholder: test the driver with a standalone sketch (IN1 switched on and off, IN2 low, then swapped) before the motor task is written. Upload it over USB, then unplug USB and switch on: the motor needs the battery |
 
 ## Moving to the perfboard
 
