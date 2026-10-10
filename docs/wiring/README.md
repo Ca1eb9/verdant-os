@@ -7,8 +7,9 @@ board's page has its diagram and a check for each sensor.
 |---|---|
 | Shelf sensor node (Arduino Uno R3) | [shelf-sensor.md](shelf-sensor.md) |
 
-Breadboards come first, so wiring can change while we test. Half-size
-proto-perfboards come once a layout is proven.
+Breadboards come first, so wiring can change while we test. Once a layout
+works, it moves onto a half-size Perma-Proto perfboard, wired the same way;
+each board's page covers both.
 
 ## Breadboards
 
@@ -84,12 +85,14 @@ measure the resistor on its Ω setting before you plug it in.
 
 ## Changing a diagram
 
-Each board's diagram is an SVG drawn by a small Python script next to it, with
-no packages to install. Change the rows or pins in the script, not in the SVG,
-then redraw it. For example:
+Each board's diagrams are SVGs drawn by small Python scripts next to them,
+with no packages to install (`wiring_svg.py` holds their shared drawing
+helpers). Change the rows or pins in the script, not in the SVG, then redraw
+it from this folder. For example:
 
 ```bash
 python3 draw_shelf_sensor.py > shelf-sensor-breadboard.svg
+python3 draw_shelf_sensor_perfboard.py > shelf-sensor-perfboard.svg
 ```
 
 Then update that board's page to match. The pin numbers come from the
