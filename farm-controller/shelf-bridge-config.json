@@ -9,8 +9,8 @@
       "shelf_id": "shelf-1",
       "level": 0,
       "port": "/dev/ttyACM0",
-      "ph_neutral_mv": 2500,
-      "ph_mv_per_unit": -175
+      "ph_neutral_mv": 2000,
+      "ph_mv_per_unit": 286
     }
   ]
 }

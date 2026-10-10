@@ -15,26 +15,17 @@ pio device monitor
 
 ## Wiring
 
-All sensors run on the Uno's 5V and GND.
-
-| Sensor | Signal | Uno pin | Notes |
-|---|---|---|---|
-| DHT11 module (air temp/humidity) | S | D2 | Module has its own pull-up |
-| DS18B20 probe (water temp) | yellow (data) | D3 | 4.7 kΩ from D3 to 5V |
-| XKC-Y25 level sensor | yellow (out) | D4 | 10 kΩ from D4 to GND, so an unplugged sensor reads "low" |
-| pH board (PH-4502C) | Po | A0 | Probe on the board's BNC socket |
-| BH1750 (light) | SDA / SCL | A4 / A5 | I2C address 0x23 (ADDR low or open) |
-
-The level sensor sticks to the outside of the reservoir at the minimum water
-line; power it from 5V, not 12–24V, so its output stays safe for D4.
+[docs/wiring/shelf-sensor.md](../../docs/wiring/shelf-sensor.md): the
+breadboard diagram, the resistors and a check for each sensor. The pins are
+set in `src/config.h`; change both together.
 
 ## Output
 
 ```
 # shelf-sensor boot
-{"seq":0,"temperature_c":22.0,"humidity_pct":48,"light_lux":412,"water_temp_c":20.81,"water_level_ok":true,"ph_mv":2508}
+{"seq":0,"temperature_c":22.0,"humidity_pct":48,"light_lux":412,"water_temp_c":20.81,"water_level_ok":true,"ph_mv":2012}
 # ds18b20 failed
-{"seq":1,"temperature_c":22.0,"humidity_pct":48,"light_lux":410,"water_temp_c":null,"water_level_ok":true,"ph_mv":2511}
+{"seq":1,"temperature_c":22.0,"humidity_pct":48,"light_lux":410,"water_temp_c":null,"water_level_ok":true,"ph_mv":2015}
 ```
 
 - Lines starting with `#` are logs. A sensor's failure and recovery are each

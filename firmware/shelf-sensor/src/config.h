@@ -17,8 +17,8 @@ constexpr uint32_t SERIAL_BAUD = 115200;
 
 constexpr uint8_t PIN_DHT = 2;          // DHT11 module "S" pin
 constexpr uint8_t PIN_WATER_TEMP = 3;   // DS18B20 data, 4.7k pull-up to 5V
-constexpr uint8_t PIN_WATER_LEVEL = 4;  // XKC-Y25 output; 10k pull-down so unplugged reads LOW
-constexpr uint8_t PIN_PH = A0;          // pH board "Po" output
+constexpr uint8_t PIN_WATER_LEVEL = 4;  // level adapter output (green wire); 10k pull-down so unplugged reads LOW
+constexpr uint8_t PIN_PH = A0;          // pH board output (blue wire)
 
 // XKC-Y25-V drives its output HIGH when it senses water through the wall
 constexpr uint8_t WATER_LEVEL_OK_STATE = HIGH;

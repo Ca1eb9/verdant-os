@@ -7,7 +7,7 @@ export interface ShelfPort {
   port: string;
   /** Board output (mV) with the probe in pH 7, or with the BNC shorted */
   ph_neutral_mv: number;
-  /** mV change per pH unit; negative for the PH-4502C (voltage falls as pH rises) */
+  /** mV change per pH unit; about +286 for the DFRobot pH meter V1.1 (voltage rises with pH) */
   ph_mv_per_unit: number;
 }
 
