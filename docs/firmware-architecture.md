@@ -25,7 +25,7 @@ where it picks its own targets, is for testing only.)
 
 ## Tasks
 
-Four FreeRTOS tasks. `loop()` is empty.
+Five FreeRTOS tasks. `loop()` is empty.
 
 | Task | Priority | Core | Responsibility |
 |---|---|---|---|
@@ -33,6 +33,7 @@ Four FreeRTOS tasks. `loop()` is empty.
 | Sensor | High | 1 | RFID reads, battery voltage, front and rear obstacle distance. Writes the sensor queue and sets safety flags. |
 | Navigation | Medium | 1 | Robot state machine, survival overrides, path following, turn decisions. Produces telemetry and events. |
 | Comms | Lowest | 0 | WiFi and MQTT. Publishes outbound messages and pushes received commands onto the command queue. |
+| Controller | Lowest | 0 | The Bluetooth controller. Pushes its jogs, stop and resume onto the command queue. |
 
 Networking runs on its own core so WiFi never blocks motor control.
 
@@ -434,6 +435,8 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
 - Battery ADC calibration curve
 - Turns (single drive motor: an edge to the side faults for now)
 - `harvest` action
-- Bluetooth controller pairing and input mapping
+- Bluetooth controller on a dock trip: its input reaches nav as `jog`
+  (`firmware/esp32/README.md`, "Bluetooth controller"), which is ignored on a
+  dock trip, so it can't take over there yet
 - Graph updates from the orchestrator (the only case where the robot would
   write to flash)

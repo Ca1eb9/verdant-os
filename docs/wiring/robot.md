@@ -218,7 +218,7 @@ USB before adding each part:
 | AHT20 | "AHT20 ready"; telemetry carries `temperature_c` and `humidity_pct`, and breathing on it raises the humidity |
 | Battery divider (+ the power side) | Unplug USB and switch on: the converter powers the ESP32 now. With a multimeter, GPIO 4 reads 0.18 × the pack voltage, and `battery_pct` in telemetry (watch it on the broker) matches the pack. Tune `BATTERY_CAL_FACTOR` if it's off |
 | Charge contact divider | Pads on the dock: GPIO 1 reads 1.8–2.3 V; off the dock, 0 V |
-| DRV8871 + motor | The motor task is still a placeholder: test the driver with a standalone sketch (IN1 switched on and off, IN2 low, then swapped) before the motor task is written. Upload it over USB, then unplug USB and switch on: the motor needs the battery |
+| DRV8871 + motor | Flash the full firmware (`pio run -e esp32 -t upload`) and follow "Motor driver" in [firmware/esp32/README.md](../../firmware/esp32/README.md#motor-driver). Upload over USB, then unplug USB and switch on: the motor needs the battery |
 
 ## Moving to the perfboard
 
