@@ -171,7 +171,9 @@ void comms_task(void* /*param*/) {
 
   WiFi.persistent(false);      // don't write credentials to flash every boot
   WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);        // lower latency for commands
+  // Modem sleep has to stay on: WiFi and Bluetooth (the controller) share one
+  // radio, and the ESP32 refuses to run both with it off.
+  WiFi.setSleep(true);
   WiFi.setAutoReconnect(false);  // service_link() handles reconnects
   WiFi.onEvent([](WiFiEvent_t, WiFiEventInfo_t info) {
     s_wifi_fail_reason = info.wifi_sta_disconnected.reason;

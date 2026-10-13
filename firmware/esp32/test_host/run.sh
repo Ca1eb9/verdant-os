@@ -64,3 +64,12 @@ CORE_FLAGS=(-std=c++17 -Wall -Wextra -DARDUINOJSON_USE_LONG_LONG=1 -I../src -I"$
   ../src/graph.cpp -o out/survival_test
 ./out/motion_test
 ./out/survival_test
+
+# Motor task rules (timed drives, the reversal ramp, the safety flags).
+"$CXX" -std=c++17 -Wall -Wextra -I../src motor_test.cpp ../src/motor/motor_core.cpp \
+  -o out/motor_test
+./out/motor_test
+
+# Bluetooth controller rules (stick, centre-first, buttons).
+"$CXX" -std=c++17 -Wall -Wextra -I../src pad_test.cpp ../src/pad/pad_core.cpp -o out/pad_test
+./out/pad_test

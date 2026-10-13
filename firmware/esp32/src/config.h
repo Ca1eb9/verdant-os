@@ -177,9 +177,24 @@ constexpr uint32_t JOG_PULSE_MS = 500;          // each jog drives this long fro
 constexpr int16_t JOG_SPEED = 120;              // TBD: tune on the robot (0..255)
 constexpr uint32_t MANUAL_TIMEOUT_MS = 5000;    // leave manual after this long without input
 
+// ---- Bluetooth controller (tasks/pad_task.h) ----------------------------------------
+
+constexpr float PAD_DEADZONE = 0.5f;            // fraction of full stick travel needed to drive
+constexpr uint32_t PAD_LOOP_MS = 40;            // controller task tick: one link check each
+constexpr uint32_t PAD_JOG_INTERVAL_MS = 200;   // held stick: jog this often (under JOG_PULSE_MS)
+// A link check slower than this (they take about 20 ms): the stick has to be
+// centred again before it drives.
+constexpr uint32_t PAD_LINK_LOST_MS = 400;
+
 // ---- Motor task (tasks/motor_task.h) ------------------------------------------------
 
 constexpr uint32_t REVERSE_RAMP_MS = 150;       // TBD: slow to 0 over this before reversing
+constexpr uint32_t MOTOR_LOOP_MS = 5;           // safety flags are checked this often
+constexpr uint32_t MOTOR_PWM_HZ = 20000;        // above hearing; the DRV8871 takes up to 200 kHz
+constexpr uint8_t MOTOR_PWM_BITS = 8;           // speeds are 0..255
+// LEDC channels for IN1 and IN2 (arduino-esp32 2.x only; 3.x picks its own).
+constexpr uint8_t MOTOR_PWM_CHANNEL_IN1 = 0;
+constexpr uint8_t MOTOR_PWM_CHANNEL_IN2 = 1;
 
 // ---- Status LED (README "Status LED") ----------------------------------------------
 
@@ -201,12 +216,14 @@ constexpr uint8_t TELEMETRY_QUEUE_LEN = 5;
 constexpr uint8_t EVENT_QUEUE_LEN = 16;         // events wait here while offline
 
 // ---- Tasks: priority / core / stack ----------------------------------------------
-// Motor + sensor + nav on core 1 (APP_CPU); comms on core 0 with the WiFi stack.
+// Motor + sensor + nav on core 1 (APP_CPU); comms and the controller on core 0
+// with the WiFi and Bluetooth stacks.
 
 constexpr uint8_t PRIO_MOTOR = 4;
 constexpr uint8_t PRIO_SENSOR = 3;
 constexpr uint8_t PRIO_NAV = 2;
 constexpr uint8_t PRIO_COMMS = 1;
+constexpr uint8_t PRIO_PAD = 1;
 
 constexpr int CORE_REALTIME = 1;
 constexpr int CORE_NETWORK = 0;
@@ -215,3 +232,4 @@ constexpr uint32_t STACK_MOTOR = 4096;
 constexpr uint32_t STACK_SENSOR = 6144;
 constexpr uint32_t STACK_NAV = 8192;            // TaskContext + path planning scratch
 constexpr uint32_t STACK_COMMS = 8192;
+constexpr uint32_t STACK_PAD = 8192;

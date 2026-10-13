@@ -10,7 +10,7 @@
 
 ## Building & flashing
 
-Two environments: `esp32` (full firmware, `main.cpp`) and `bench` (comms + sensor tasks with a stand-in nav task — see [COMMS-SENSOR.md](COMMS-SENSOR.md)). Pick one with `pio run -e bench` or the env switcher in the bottom toolbar.
+Two environments: `esp32` (full firmware, `main.cpp`) and `bench` (comms + sensor tasks with a stand-in nav task — see [COMMS-SENSOR.md](COMMS-SENSOR.md)). Two diagnostics run alone: `wifitest` (WiFi) and `padtest` (pairs an Xbox controller over Bluetooth LE and prints its stick and buttons). Pick one with `pio run -e bench` or the env switcher in the bottom toolbar.
 
 - **Build:** Click the checkmark (✓) in the bottom toolbar, or `Cmd+Shift+B`
 - **Upload:** Click the arrow (→) in the bottom toolbar, or run `pio run -t upload`
@@ -33,20 +33,24 @@ firmware/
 │   ├── log.h               # LOG(tag, fmt, ...) serial logger
 │   ├── secrets.example.h   # Copy to secrets.h (gitignored) for WiFi creds
 │   ├── tasks/
-│   │   ├── motor_task.*        # Motors (highest priority); placeholder for now
+│   │   ├── motor_task.*        # Drive motor (highest priority)
 │   │   ├── sensor_task.*       # RFID, battery ADC, obstacle
 │   │   ├── nav_task.*          # Runs the state machine on the queues
-│   │   └── comms_task.*        # WiFi, MQTT pub/sub
+│   │   ├── comms_task.*        # WiFi, MQTT pub/sub
+│   │   └── pad_task.*          # Xbox controller over Bluetooth LE
 │   ├── nav/
 │   │   ├── nav_core.*          # Robot state machine (pure C++, host-tested)
 │   │   ├── motion.*            # Motion hooks -> DriveCommands, missed-tag faults
 │   │   ├── survival.*          # Battery thresholds, motor cutoff, obstacle events
 │   │   └── task_context.h      # Current/kept task, stop latch, paused status
+│   ├── motor/motor_core.*      # Motor rules: timed drives, reversal ramp, safety flags
+│   ├── pad/pad_core.*          # Controller rules: stick, centre-first, buttons
 │   ├── utils/nav_helpers.*     # Dijkstra, heading, turns (match navigation.ts)
 │   ├── comms/comms_json.*      # JSON <-> struct, matches @farm/shared types
-│   ├── drivers/                # RFID reader, VL53L4CX ToF, battery ADC, AHT20
+│   ├── drivers/                # RFID reader, VL53L4CX ToF, battery ADC, AHT20, motor driver
 │   ├── bench/bench_main.cpp    # `bench` env: test comms + sensor tasks alone
-│   └── wifitest/               # `wifitest` env: WiFi diagnostics
+│   ├── wifitest/               # `wifitest` env: WiFi diagnostics
+│   └── padtest/                # `padtest` env: Xbox controller pairing test
 ├── tools/gen_graph.mjs     # topology.json -> src/graph.cpp
 ├── test_host/              # Laptop tests (see below)
 ├── docs/state-machine.md   # Robot state machine diagrams
@@ -60,7 +64,7 @@ firmware/
 - **`types.h`** — the structs that pass through FreeRTOS queues between tasks. Every task includes this file. JSON field names in the comms task must match the TypeScript types in `@farm/shared`.
 - **`tasks/`** — one file per FreeRTOS task. Each task is a standalone function that runs in an infinite loop. Tasks communicate only through queues and shared volatile flags, never by calling each other's functions.
 - **`main.cpp`** — creates queues, creates tasks with `xTaskCreatePinnedToCore()`, and nothing else. `loop()` deletes itself; all logic runs in tasks.
-- **`nav/`, `utils/`, `comms/`** — logic with no Arduino or FreeRTOS calls, so `test_host/` can run it on a laptop.
+- **`nav/`, `motor/`, `pad/`, `utils/`, `comms/`** — logic with no Arduino or FreeRTOS calls, so `test_host/` can run it on a laptop.
 
 ## Robot state machine
 
@@ -91,7 +95,49 @@ Hooks and inputs still owned by later work (placeholders for now):
 | Hook / input | Owner |
 |---|---|
 | `on_charge_contact()` | Dock sequence |
-| `motor_task` | Motor control |
+
+## Motor driver
+
+An Adafruit DRV8871 drives the one motor from `PIN_MOTOR_IN1` and `PIN_MOTOR_IN2` (GPIO 5 and 6). Wiring, power and the reasons for each part are in [docs/wiring/robot.md](../../docs/wiring/robot.md).
+
+| Speed | IN1 | IN2 |
+|---|---|---|
+| Forward | PWM | low |
+| Backward | low | PWM |
+| Stop | high | high (brake: both motor terminals shorted) |
+
+The chip's inputs have pull-downs, so the motor coasts while the ESP32 boots. Positive speeds must drive the robot the way it faces (`ROBOT_HEADING`); if it goes the other way, swap the motor's red and black wires.
+
+The motor task (`tasks/motor_task`) applies `motor/motor_core` every `MOTOR_LOOP_MS`: the newest `DriveCommand` wins, a timed Drive (a jog pulse) ends by itself, reversing slows to 0 over `REVERSE_RAMP_MS` first, and the kill flag or the obstacle flag on the side it's driving toward holds the motor off until it clears. A stop brakes the motor rather than letting it coast.
+
+Bench check, wheels off the ground, with the serial monitor open (`motor` lines):
+
+1. Jog forward and backward from the dashboard or the controller: the wheel turns each way and stops 500 ms after the last jog.
+2. Forward then backward straight away: it slows before reversing.
+3. Hand in front of the front sensor: a forward jog does nothing (`held off: obstacle`), a backward one still drives. Same at the rear, the other way round.
+4. An obstacle during a reversal stops it at once.
+
+## Bluetooth controller
+
+An Xbox Wireless Controller (model 1914, firmware 5.x) pairs with the robot itself over Bluetooth LE; the ESP32-S3 has no classic Bluetooth, so older controllers and firmware won't connect. `tasks/pad_task` turns it into the commands the dashboard sends, on the same queue, so the rules are the dashboard's ([firmware-architecture.md](../../docs/firmware-architecture.md#manual-control)).
+
+| Input | Does |
+|---|---|
+| Left stick up / down, past half way | `jog` forward / backward every `PAD_JOG_INTERVAL_MS` while held |
+| **B** | `stop` |
+| **A** | `resume`: hand the robot back |
+
+**Pairing:** turn the controller on and hold its pair button (top edge) until the Xbox light flashes fast. The robot connects to any Xbox controller in pairing mode, and the light goes solid. After that the Xbox button alone reconnects it. A controller that was paired with a console or PC goes back to that first: turn that device's Bluetooth off.
+
+**The stick only starts driving from the centre.** If it is already pushed when the controller connects, after **B**, or after the link stalled, let go first.
+
+**Losing the controller.** A held stick sends nothing, and a dead controller takes about 3 s to show as disconnected (measured). So the task reads the controller's battery level every `PAD_LOOP_MS` and only acts on the stick after an answer. No answer, no jog: the robot stops when its last 500 ms jog pulse runs out.
+
+**One radio.** WiFi and Bluetooth share it, so WiFi modem sleep stays on (`comms_task`); commands from the Pi can arrive a little later than before. While no controller is connected the robot keeps scanning for one.
+
+`pio run -e padtest -t upload` runs the controller alone and prints its stick, buttons and link checks.
+
+Not done yet: the controller can't take over on a dock trip (`jog` is ignored there), and any Xbox controller in pairing mode can connect.
 
 Task state is RAM only: the robot never writes to flash. A rebooted robot starts with no task and the orchestrator requeues it.
 
@@ -145,7 +191,9 @@ Needs g++ or clang++ (on Windows, MSYS2's `mingw-w64-ucrt-x86_64-gcc`). `run.sh`
 - every route, heading and turn against `navigation.ts`, on the farm and on a fixture full of equal-cost ties (`test_host/fixtures/`);
 - the state machine (`nav_core_test.cpp`): command and sensor sequences, with every event checked to go out before its status change;
 - the motion hooks (`motion_test.cpp`): the drive commands they send, the ToF slow zone and approaches, and each fault;
-- the survival overrides (`survival_test.cpp`): each battery threshold in each status, and the obstacle events.
+- the survival overrides (`survival_test.cpp`): each battery threshold in each status, and the obstacle events;
+- the motor rules (`motor_test.cpp`): each command, the timed Drive, the reversal ramp and the safety flags;
+- the controller rules (`pad_test.cpp`): the stick's deadzone and jog repeat, the centre-first rule and the buttons.
 
 ## Libraries
 
@@ -155,5 +203,6 @@ Managed by PlatformIO in `platformio.ini`. Core libraries:
 - **ArduinoJson** (v7) — JSON serialization for telemetry/commands
 - **Adafruit PN532** — RFID reader
 - **STM32duino VL53L4CX** — time-of-flight obstacle sensor
+- **XboxSeriesXControllerESP32_asukiaaa** — Xbox controller over Bluetooth LE (brings NimBLE-Arduino)
 
 PlatformIO downloads these automatically on first build.

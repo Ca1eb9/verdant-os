@@ -8,6 +8,7 @@
 #include "tasks/comms_task.h"
 #include "tasks/motor_task.h"
 #include "tasks/nav_task.h"
+#include "tasks/pad_task.h"
 #include "tasks/sensor_task.h"
 #include "types.h"
 
@@ -43,6 +44,7 @@ void setup() {
   start_task(sensor_task, "sensor", STACK_SENSOR, PRIO_SENSOR, CORE_REALTIME);
   start_task(nav_task, "nav", STACK_NAV, PRIO_NAV, CORE_REALTIME);
   start_task(comms_task, "comms", STACK_COMMS, PRIO_COMMS, CORE_NETWORK);
+  start_task(pad_task, "pad", STACK_PAD, PRIO_PAD, CORE_NETWORK);
 }
 
 void loop() { vTaskDelete(nullptr); }  // all work happens in tasks
