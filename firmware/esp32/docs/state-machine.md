@@ -15,6 +15,10 @@ stateDiagram-v2
     [*] --> initializing : boot
 
     initializing --> idle : first known tag read
+    initializing --> stopped : stop - halts the tag search
+    initializing --> manual : Bluetooth controller input<br/>(creeping, or after the search gave up)
+    stopped --> initializing : resume - no tag read yet,<br/>search again
+    manual --> initializing : resume (search again) or timeout<br/>(halted) - no tag read yet
 
     idle --> en_route : navigate
     en_route --> en_route : tag read - update node
@@ -72,6 +76,13 @@ stateDiagram-v2
 
 ## Rules the diagram can't show
 
+- **Before the first tag** (`initializing`, or `stopped` / `manual` reached
+  from it) the robot only accepts `stop`, `resume` and the Bluetooth
+  controller's jogs; everything else, dashboard jogs included, is ignored.
+  Leaving that `stopped` or `manual`, a robot that read a tag meanwhile goes
+  `idle`; otherwise it goes back to `initializing`, searching again on
+  `resume` and halted after a manual timeout (so it never drives off a bench
+  on its own). `resume` in a halted `initializing` restarts the search.
 - **`navigate`** is accepted in any state after `initializing`. It replaces the
   task, clears the stop latch, paused status and kept task, and goes to
   `en_route`. It is ignored if its `task_id` equals the current task or
@@ -82,8 +93,8 @@ stateDiagram-v2
   task kept during a dock trip leaves the trip running, so the robot still
   charges.
 - **`return_to_dock`** is ignored while already returning, docking or charging.
-- **`stop`** is accepted in any state after `initializing` (the diagram shows
-  the common ones) and ignored when already `stopped`. `resume` returns to the
+- **`stop`** is accepted in any state, `initializing` included (the diagram
+  shows the common ones), and ignored when already `stopped`. `resume` returns to the
   paused state, re-planning first if the robot was moved.
 - **`resume`** outside `manual` only acts if the stop latch is set. In `manual`
   it also clears the latch.

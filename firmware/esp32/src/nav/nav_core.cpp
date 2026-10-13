@@ -69,17 +69,25 @@ void NavCore::snapshot(TelemetryMsg& t) const {
 
 void NavCore::begin() {
   status_ = RobotStatus::Initializing;
-  out_.creep();
+  if (BOOT_CREEP) out_.creep();
 }
 
 void NavCore::on_battery(float battery_pct) { battery_pct_ = battery_pct; }
 
 void NavCore::on_command(const Command& cmd, uint32_t now) {
-  // No position yet: no path can be planned, and the orchestrator never
-  // gives work to a robot without a node.
-  if (status_ == RobotStatus::Initializing) {
-    out_.note("ignored: still initializing");
-    return;
+  // No position yet (initializing, or stopped or driven by hand before the
+  // first tag): no path can be planned, and the orchestrator never gives
+  // work to a robot without a node. Stop and resume still work, and so does
+  // the Bluetooth controller: its operator is at the robot, e.g. moving it
+  // off the farm, where there's no tag to find.
+  if (node_ == NO_NODE) {
+    bool controller = cmd.source == CommandSource::Controller;
+    bool allowed = cmd.type == CommandType::Stop || cmd.type == CommandType::Resume ||
+                   (cmd.type == CommandType::Jog && controller);
+    if (!allowed) {
+      out_.note("ignored: no position yet (no tag read)");
+      return;
+    }
   }
   switch (cmd.type) {
     case CommandType::Navigate: navigate(cmd, now); break;
@@ -87,7 +95,8 @@ void NavCore::on_command(const Command& cmd, uint32_t now) {
     case CommandType::Resume: resume(now); break;
     case CommandType::ReturnToDock: return_to_dock(cmd.task_id, now); break;
     case CommandType::Cancel: cancel(cmd.task_id); break;
-    case CommandType::Jog: jog(cmd.direction, now); break;
+    case CommandType::Jog: jog(cmd.direction, cmd.source == CommandSource::Controller, now); break;
+    case CommandType::ConnectController: break;  // comms hands it to the pad task
   }
 }
 
@@ -288,6 +297,13 @@ void NavCore::resume(uint32_t now) {
     exit_manual(false, now);
     return;
   }
+  // Halted while initializing (after manual control, or after the search
+  // timed out): look for a tag again.
+  if (status_ == RobotStatus::Initializing) {
+    if (BOOT_CREEP) out_.creep();
+    else out_.note("ignored: BOOT_CREEP is off, waiting for a tag");
+    return;
+  }
   if (!ctx_.stop_latched) {
     out_.note("ignored: resume without a stop");
     return;
@@ -356,7 +372,7 @@ void NavCore::cancel(const char* task_id) {
   }
 }
 
-void NavCore::jog(JogDirection direction, uint32_t now) {
+void NavCore::jog(JogDirection direction, bool controller, uint32_t now) {
   switch (status_) {
     case RobotStatus::Idle:
     case RobotStatus::EnRoute:
@@ -365,11 +381,25 @@ void NavCore::jog(JogDirection direction, uint32_t now) {
     case RobotStatus::Error:
     case RobotStatus::Manual:
       break;
+    case RobotStatus::ReturningToDock:
+    case RobotStatus::Docking:
+    case RobotStatus::Charging:
+      // The controller's operator is at the robot: it overrides a dock
+      // trip too. Leaving manual picks the trip back up.
+      if (controller) break;
+      out_.note("ignored: jog not allowed on a dock trip");
+      return;
+    case RobotStatus::Initializing:
+      // Looking for its first tag, or given up: the controller can still
+      // drive it, e.g. on a bench away from the farm's tags.
+      if (controller) break;
+      out_.note("ignored: still initializing");
+      return;
     default:
       out_.note("ignored: jog not allowed now");
       return;
   }
-  if (!isnan(battery_pct_) && battery_pct_ <= BATTERY_CUTOFF_PCT) {
+  if (BATTERY_FAILSAFE && !isnan(battery_pct_) && battery_pct_ <= BATTERY_CUTOFF_PCT) {
     out_.note("ignored: battery below the motor cutoff");
     return;
   }
@@ -555,6 +585,16 @@ void NavCore::resume_paused(uint32_t now) {
 // since the robot may have moved.
 void NavCore::continue_from(RobotStatus from, uint32_t now) {
   switch (from) {
+    case RobotStatus::Initializing:
+      // A tag read meanwhile (stopped, or driven by hand) placed it.
+      if (node_ != NO_NODE) {
+        go_idle("");
+        return;
+      }
+      status_ = RobotStatus::Initializing;
+      if (BOOT_CREEP) out_.creep();
+      else out_.halt();
+      return;
     case RobotStatus::ReturningToDock:
     case RobotStatus::Docking:
     case RobotStatus::Charging:
@@ -596,6 +636,13 @@ void NavCore::go_idle(const char* details) {
 // left a little past it; that doesn't change the route.
 void NavCore::exit_manual(bool timed_out, uint32_t now) {
   RobotStatus from = manual_from_;
+  // Driven by hand before any tag (a bench, or carried off the farm): don't
+  // drive off looking for one by itself. Resume starts the search again.
+  if (timed_out && from == RobotStatus::Initializing && node_ == NO_NODE) {
+    out_.halt();
+    status_ = RobotStatus::Initializing;
+    return;
+  }
   // A timeout gives a stopped robot back stopped (latch kept); resume
   // releases the stop and continues instead.
   if (timed_out && from == RobotStatus::Stopped) {

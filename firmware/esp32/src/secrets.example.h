@@ -10,3 +10,9 @@
 // Optional overrides, e.g. to test against Mosquitto on your laptop:
 // #define MQTT_BROKER_IP "192.168.1.50"
 // #define MQTT_PORT 1883
+
+// Accept only this robot's Xbox controller (README "Bluetooth controller"):
+// pair it once, copy the address from the "controller connected (...)" log
+// line, and set it here. Unset: any controller in pairing mode can connect.
+// #define PAD_ADDRESS "44:16:22:5e:b2:d4"
+

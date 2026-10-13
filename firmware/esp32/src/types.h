@@ -65,7 +65,8 @@ enum class RobotEventType : uint8_t {
 enum class Heading : uint8_t { North = 0, East = 1, South = 2, West = 3 };
 enum class Turn : uint8_t { Straight = 0, Right = 1, UTurn = 2, Left = 3 };
 
-enum class CommandType : uint8_t { Navigate, ReturnToDock, Stop, Resume, Cancel, Jog };
+// ConnectController goes to the pad task, not nav (g_pad_connect_requests).
+enum class CommandType : uint8_t { Navigate, ReturnToDock, Stop, Resume, Cancel, Jog, ConnectController };
 
 // jog only; None means the field was absent.
 enum class JogDirection : uint8_t { None, Forward, Backward };
@@ -74,7 +75,9 @@ enum class JogDirection : uint8_t { None, Forward, Backward };
 enum class TargetAction : uint8_t { None, Water, Grow, Harvest, Charge, Idle };
 
 enum class TaskPriority : uint8_t { Low, Normal, High, Critical };
-enum class CommandSource : uint8_t { Scheduler, Alert, Remote, Local };
+// Controller: the Bluetooth controller (pad task), robot-only and never on
+// the wire. Keep it last: from_wire() only accepts Scheduler..Local.
+enum class CommandSource : uint8_t { Scheduler, Alert, Remote, Local, Controller };
 
 // ---- sensor task -> nav task (g_sensor_queue) --------------------------------
 
@@ -221,6 +224,13 @@ extern volatile uint32_t g_drive_done_seq;
 extern volatile bool g_mqtt_connected;
 // millis() of the last command received. 0 means none since boot.
 extern volatile uint32_t g_last_command_ms;
+// connect_controller commands received (comms counts, the pad task watches):
+// each one opens a PAD_CONNECT_WINDOW_MS window to look for the controller.
+extern volatile uint32_t g_pad_connect_requests;
+// The Bluetooth controller's link (pad task writes, the status LED reads):
+// connected or not, and millis() of the last change. 0 = never.
+extern volatile bool g_pad_connected;
+extern volatile uint32_t g_pad_link_changed_ms;
 
 // Creates every queue. Call once from setup() before creating tasks.
 // Returns false if any allocation failed.

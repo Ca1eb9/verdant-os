@@ -185,9 +185,10 @@ static Command with_path(Command c, std::initializer_list<const char*> path) {
   return c;
 }
 
-static Command jog(JogDirection d) {
+static Command jog(JogDirection d, CommandSource source = CommandSource::Local) {
   Command c = make(CommandType::Jog);
   c.direction = d;
+  c.source = source;
   return c;
 }
 
@@ -197,12 +198,12 @@ static void test_boot() {
   r.core.begin();
   CHECK(r.status() == RobotStatus::Initializing);
   CHECK(r.last_motion() == "creep");
-  // Nothing is acted on before the robot knows where it is.
+  // No work before the robot knows where it is, and no dashboard jog.
   r.command(navigate("t1", "water-01", TargetAction::Water, 1000));
   r.command(jog(JogDirection::Forward));
   r.command(make(CommandType::ReturnToDock, "d1"));
-  r.command(make(CommandType::Stop));
   CHECK(r.status() == RobotStatus::Initializing && r.events.empty());
+  CHECK(r.last_motion() == "creep");
   r.tag(nullptr);  // a tag that isn't in the graph
   CHECK(r.status() == RobotStatus::Initializing);
   r.tag("cp-01");
@@ -212,6 +213,71 @@ static void test_boot() {
   r.core.snapshot(t);
   // It never turns, and is set down facing away from the dock.
   CHECK(t.heading_known && t.heading == Heading::East);
+}
+
+static void test_before_first_tag() {
+  SCENARIO("stop and the controller before the first tag");
+  // Stop halts the search; resume picks it back up.
+  Rig r;
+  r.core.begin();
+  r.command(make(CommandType::Stop));
+  CHECK(r.status() == RobotStatus::Stopped && r.latched() && r.last_motion() == "halt");
+  r.command(navigate("t1", "water-01", TargetAction::Water, 1000));
+  r.command(jog(JogDirection::Forward));
+  CHECK(r.status() == RobotStatus::Stopped);
+  r.command(make(CommandType::Resume));
+  CHECK(r.status() == RobotStatus::Initializing && !r.latched() && r.last_motion() == "creep");
+  // A tag read while stopped places it: resume goes idle.
+  r.command(make(CommandType::Stop));
+  r.tag("cp-01");
+  CHECK(r.status() == RobotStatus::Stopped && r.node() == "cp-01");
+  r.command(make(CommandType::Resume));
+  CHECK(r.status() == RobotStatus::Idle);
+
+  // The controller takes over while creeping, or after the search gave up.
+  Rig c;
+  c.core.begin();
+  c.command(jog(JogDirection::Forward, CommandSource::Controller));
+  CHECK(c.status() == RobotStatus::Manual && c.last_motion() == "jog f" && c.node() == "");
+  CHECK(c.events.empty());
+  // Still no work from the dashboard, nor its jogs, while it has no node.
+  c.command(navigate("t1", "water-01", TargetAction::Water, 1000));
+  c.command(jog(JogDirection::Backward));
+  CHECK(c.status() == RobotStatus::Manual && c.last_motion() == "jog f");
+  // Timeout with no tag: halted, still initializing; it doesn't drive off.
+  c.advance(MANUAL_TIMEOUT_MS);
+  CHECK(c.status() == RobotStatus::Initializing && c.last_motion() == "halt");
+  c.core.fault("no tag found");
+  c.command(jog(JogDirection::Backward, CommandSource::Controller));
+  CHECK(c.status() == RobotStatus::Manual && c.last_motion() == "jog b");
+  // Resume hands it back: the search starts again.
+  c.command(make(CommandType::Resume));
+  CHECK(c.status() == RobotStatus::Initializing && c.last_motion() == "creep");
+  // Resume while halted after a timeout also restarts the search.
+  c.command(jog(JogDirection::Forward, CommandSource::Controller));
+  c.advance(MANUAL_TIMEOUT_MS);
+  c.command(make(CommandType::Resume));
+  CHECK(c.status() == RobotStatus::Initializing && c.last_motion() == "creep");
+  // Driven onto a tag: leaving manual, it knows where it is.
+  c.command(jog(JogDirection::Forward, CommandSource::Controller));
+  c.tag("dock-1");
+  CHECK(c.status() == RobotStatus::Manual && c.node() == "dock-1");
+  c.advance(MANUAL_TIMEOUT_MS);
+  CHECK(c.status() == RobotStatus::Idle && c.node() == "dock-1");
+  // B (stop) during manual before a tag: stopped; resume searches again.
+  Rig b;
+  b.core.begin();
+  b.command(jog(JogDirection::Forward, CommandSource::Controller));
+  b.command(make(CommandType::Stop));
+  CHECK(b.status() == RobotStatus::Stopped);
+  b.command(make(CommandType::Resume));
+  CHECK(b.status() == RobotStatus::Initializing && b.last_motion() == "creep");
+  // Not at the motor cutoff.
+  Rig k;
+  k.core.begin();
+  k.battery(BATTERY_CUTOFF_PCT);
+  k.command(jog(JogDirection::Forward, CommandSource::Controller));
+  CHECK(k.status() == RobotStatus::Initializing);
 }
 
 static void test_task_cycle() {
@@ -707,6 +773,35 @@ static void test_manual() {
   r2.command(jog(JogDirection::Forward));
   r2.core.survival_return("14.0%", r2.now);
   CHECK(r2.status() == RobotStatus::Manual && r2.events.empty());
+
+  // The Bluetooth controller overrides a dock trip; leaving manual resumes it.
+  Rig r3;
+  r3.boot_at("cp-01");
+  r3.command(navigate("t3", "cp-02", TargetAction::Water, 1000));
+  r3.command(make(CommandType::ReturnToDock));
+  CHECK(r3.status() == RobotStatus::ReturningToDock && r3.task() == "t3");
+  r3.command(jog(JogDirection::Forward, CommandSource::Controller));
+  CHECK(r3.status() == RobotStatus::Manual && r3.task() == "t3" && r3.last_motion() == "jog f");
+  r3.advance(MANUAL_TIMEOUT_MS);
+  CHECK(r3.status() == RobotStatus::ReturningToDock && r3.task() == "t3");
+  // Charging too, and resume heads back onto the charger.
+  r3.drive({"dock-1"});
+  r3.contact();
+  CHECK(r3.status() == RobotStatus::Charging);
+  r3.command(jog(JogDirection::Forward));
+  CHECK(r3.status() == RobotStatus::Charging);
+  r3.command(jog(JogDirection::Forward, CommandSource::Controller));
+  CHECK(r3.status() == RobotStatus::Manual);
+  r3.command(make(CommandType::Resume));
+  CHECK(r3.status() == RobotStatus::Docking && r3.last_motion() == "dock");
+  CHECK(r3.task() == "t3");
+  // Still not at the motor cutoff.
+  Rig r4;
+  r4.boot_at("cp-01");
+  r4.command(make(CommandType::ReturnToDock));
+  r4.battery(BATTERY_CUTOFF_PCT);
+  r4.command(jog(JogDirection::Forward, CommandSource::Controller));
+  CHECK(r4.status() == RobotStatus::ReturningToDock);
 }
 
 static void test_fault_recovery() {
@@ -767,6 +862,7 @@ static void test_fault_recovery() {
 
 int main() {
   test_boot();
+  test_before_first_tag();
   test_task_cycle();
   test_navigate_edge_cases();
   test_command_path();

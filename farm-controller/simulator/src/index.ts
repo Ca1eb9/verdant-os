@@ -319,6 +319,12 @@ async function main() {
     (cmd) => {
       console.log(`[CMD] received: ${cmd.command} -> ${cmd.target_node ?? "n/a"}`);
 
+      // The simulated robot has no Bluetooth controller to look for
+      if (cmd.command === "connect_controller") {
+        console.log(`[RC] connect_controller: no controller in the simulator`);
+        return;
+      }
+
       if (cmd.command === "navigate" && cmd.target_node) {
         const duplicate = cmd.task_id !== undefined &&
           (cmd.task_id === robot.taskId || cmd.task_id === robot.lastCompletedTaskId);

@@ -80,6 +80,8 @@ class NavCore {
   void begin();
 
   // ---- Inputs ----
+  // Before the first tag only stop, resume and the Bluetooth controller's
+  // jogs are accepted (the controller can drive it off the farm).
   void on_command(const Command& cmd, uint32_t now);
   // A new tag arrival (SensorData.tag_seq changed). NO_NODE for a tag that
   // isn't in the graph: ignored.
@@ -127,7 +129,8 @@ class NavCore {
   void resume(uint32_t now);
   void return_to_dock(const char* dock_task_id, uint32_t now);
   void cancel(const char* task_id);
-  void jog(JogDirection direction, uint32_t now);
+  // `controller`: from the Bluetooth controller, which also overrides a dock trip.
+  void jog(JogDirection direction, bool controller, uint32_t now);
 
   // Transitions
   void emit(RobotEventType type, const char* details = "");

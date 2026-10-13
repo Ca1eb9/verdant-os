@@ -28,6 +28,11 @@
 #ifndef MQTT_PORT
 #define MQTT_PORT 1883
 #endif
+// The one Bluetooth controller this robot accepts, set in secrets.h. Empty:
+// any Xbox controller in pairing mode can connect (README "Bluetooth controller").
+#ifndef PAD_ADDRESS
+#define PAD_ADDRESS ""
+#endif
 
 // ---- Comms timing -------------------------------------------------------------
 
@@ -132,6 +137,10 @@ constexpr uint32_t TELEMETRY_PERIOD_MS = 1000;
 // TBD: tune on the real farm.
 constexpr uint32_t MISSED_TAG_TIMEOUT_MS = 5000;   // no next tag this long while driving: error
 constexpr uint32_t PATH_BLOCKED_TIMEOUT_MS = 10000; // obstacle this long: path_blocked
+// After boot (and on resume while initializing) the robot creeps forward to
+// find its first tag. Set false to have it wait in place for a tag instead
+// (bench tests): the Bluetooth controller can still drive it. Logged at boot.
+constexpr bool BOOT_CREEP = true;
 constexpr uint32_t CREEP_TIMEOUT_MS = 15000;        // no tag this long while creeping after boot
 constexpr int16_t CRUISE_SPEED = 150;               // between tags (0..255)
 constexpr int16_t CREEP_SPEED = 90;                 // looking for a tag after boot (0..255)
@@ -167,6 +176,10 @@ constexpr uint32_t DEFAULT_IDLE_MS = 0;
 constexpr float BATTERY_WARN_PCT = 20.0f;       // battery_low
 constexpr float BATTERY_RETURN_PCT = 15.0f;     // battery_critical, go to dock
 constexpr float BATTERY_CUTOFF_PCT = 5.0f;      // kill motors
+// The motor cutoff protects the pack from over-discharge. Set false to
+// bench-test without the battery divider wired (it then reads 0%): the
+// warning and the forced return still apply. Logged at boot when off.
+constexpr bool BATTERY_FAILSAFE = true;
 // The charging diode (docs/wiring/robot.md) drops ~0.4 V, so the pack tops
 // out around 4.1 V a cell, not 4.2. Matches orchestrator charge_complete_pct.
 constexpr float CHARGE_COMPLETE_PCT = 85.0f;
@@ -176,6 +189,7 @@ constexpr float CHARGE_COMPLETE_PCT = 85.0f;
 constexpr uint32_t JOG_PULSE_MS = 500;          // each jog drives this long from receipt
 constexpr int16_t JOG_SPEED = 120;              // TBD: tune on the robot (0..255)
 constexpr uint32_t MANUAL_TIMEOUT_MS = 5000;    // leave manual after this long without input
+constexpr uint32_t NOTE_REPEAT_MS = 2000;       // the same nav note again within this isn't logged
 
 // ---- Bluetooth controller (tasks/pad_task.h) ----------------------------------------
 
@@ -185,6 +199,12 @@ constexpr uint32_t PAD_JOG_INTERVAL_MS = 200;   // held stick: jog this often (u
 // A link check slower than this (they take about 20 ms): the stick has to be
 // centred again before it drives.
 constexpr uint32_t PAD_LINK_LOST_MS = 400;
+// Looking for a controller takes radio time from WiFi, so the robot only looks
+// while it can't reach the Pi's broker (with no heartbeat, the only sign it's
+// on its own), or for PAD_CONNECT_WINDOW_MS after a connect_controller command.
+constexpr uint32_t PAD_CONNECT_WINDOW_MS = 10000;
+constexpr uint16_t PAD_SCAN_MS = 97;            // scan interval = window: always listening
+constexpr uint32_t PAD_SCAN_CHUNK_MS = 10000;   // each scan this long, then a fresh one
 
 // ---- Motor task (tasks/motor_task.h) ------------------------------------------------
 
@@ -214,6 +234,7 @@ constexpr uint8_t DRIVE_QUEUE_LEN = 1;
 constexpr uint8_t COMMAND_QUEUE_LEN = 4;
 constexpr uint8_t TELEMETRY_QUEUE_LEN = 5;
 constexpr uint8_t EVENT_QUEUE_LEN = 16;         // events wait here while offline
+constexpr uint32_t SERIAL_TX_BUFFER_BYTES = 4096;  // log lines waiting for the serial monitor
 
 // ---- Tasks: priority / core / stack ----------------------------------------------
 // Motor + sensor + nav on core 1 (APP_CPU); comms and the controller on core 0

@@ -188,6 +188,8 @@ static void test_inbound(const std::string& in_dir) {
   CHECK(c.type == CommandType::Cancel && strcmp(c.task_id, "t-2") == 0);
   CHECK(parse(R"({"command":"jog","direction":"forward"})", c) == CommandParseResult::Ok);
   CHECK(c.type == CommandType::Jog && c.direction == JogDirection::Forward);
+  CHECK(parse(R"({"command":"connect_controller"})", c) == CommandParseResult::Ok);
+  CHECK(c.type == CommandType::ConnectController);
 
   // null optional fields are treated as absent.
   CHECK(parse(R"({"command":"return_to_dock","task_id":null,"priority":"critical","source":"alert"})", c) ==

@@ -58,13 +58,21 @@ class QueueOutput : public NavOutput {
   void start_docking() override { motion.start_docking(millis()); }
 
   void note(const char* message) override {
-    last_note_ms = millis();
+    uint32_t now = millis();
+    last_note_ms = now;
+    // A held stick or button in a state that ignores it repeats the same
+    // note every few hundred ms. Notes are string literals.
+    if (message == last_logged_note && now - last_logged_note_ms < NOTE_REPEAT_MS) return;
+    last_logged_note = message;
+    last_logged_note_ms = now;
     LOG("nav", "%s", message);
   }
 
   // For the status LED's flashes. 0 = never.
   uint32_t last_jog_ms = 0;
   uint32_t last_note_ms = 0;
+  const char* last_logged_note = nullptr;
+  uint32_t last_logged_note_ms = 0;
 
  private:
   class MailboxSink : public DriveSink {
@@ -149,6 +157,12 @@ void show_status_led(Adafruit_NeoPixel& led, const NavCore& core, const QueueOut
     hue = ORANGE; sat = 255; val = FULL;
   }
   if (!g_mqtt_connected && now % LED_OFFLINE_EVERY_MS < 2 * LED_FLASH_MS) val = 0;
+  // Bluetooth controller: three blue flashes on connect, one long one when lost.
+  uint32_t pad = since(g_pad_link_changed_ms);
+  if (pad < 6 * LED_FLASH_MS) {
+    hue = BLUE; sat = 255;
+    val = !g_pad_connected || (pad / LED_FLASH_MS) % 2 == 0 ? FULL : 0;
+  }
   // Two quick dim blips: a command arrived but was ignored (the log says why).
   uint32_t t = since(out.last_note_ms);
   if (t < 4 * LED_FLASH_MS) {

@@ -9,6 +9,8 @@
 
 namespace {
 
+// ledcWrite() turns the maximum into 100% duty (it writes 2^bits), so this
+// holds a pin fully high: speed 255 and the brake are steady, not PWMed.
 constexpr uint32_t FULL_DUTY = (1u << MOTOR_PWM_BITS) - 1;
 
 // The LEDC calls changed in arduino-esp32 3.x: PWM is addressed by pin there,

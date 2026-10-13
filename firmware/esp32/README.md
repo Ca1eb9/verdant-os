@@ -110,6 +110,14 @@ The chip's inputs have pull-downs, so the motor coasts while the ESP32 boots. Po
 
 The motor task (`tasks/motor_task`) applies `motor/motor_core` every `MOTOR_LOOP_MS`: the newest `DriveCommand` wins, a timed Drive (a jog pulse) ends by itself, reversing slows to 0 over `REVERSE_RAMP_MS` first, and the kill flag or the obstacle flag on the side it's driving toward holds the motor off until it clears. A stop brakes the motor rather than letting it coast.
 
+**Bench settings** in `config.h`, each logged at boot while off. Turn them back on before running on the farm:
+
+| Setting | Off (`false`) |
+|---|---|
+| `OBSTACLE_FAILSAFE` | A missing or dead ToF sensor no longer holds the motor (no sensors plugged in) |
+| `BATTERY_FAILSAFE` | No motor cutoff at low battery (battery divider not wired: it reads 0%). The low-battery warning and forced return still apply |
+| `BOOT_CREEP` | After boot the robot waits in place for a tag instead of creeping forward for up to `CREEP_TIMEOUT_MS`; the controller can still drive it |
+
 Bench check, wheels off the ground, with the serial monitor open (`motor` lines):
 
 1. Jog forward and backward from the dashboard or the controller: the wheel turns each way and stops 500 ms after the last jog.
@@ -119,7 +127,7 @@ Bench check, wheels off the ground, with the serial monitor open (`motor` lines)
 
 ## Bluetooth controller
 
-An Xbox Wireless Controller (model 1914, firmware 5.x) pairs with the robot itself over Bluetooth LE; the ESP32-S3 has no classic Bluetooth, so older controllers and firmware won't connect. `tasks/pad_task` turns it into the commands the dashboard sends, on the same queue, so the rules are the dashboard's ([firmware-architecture.md](../../docs/firmware-architecture.md#manual-control)).
+An Xbox Wireless Controller (model 1914, firmware 5.x) pairs with the robot itself over Bluetooth LE; the ESP32-S3 has no classic Bluetooth, so older controllers and firmware won't connect. `tasks/pad_task` turns it into the commands the dashboard sends, on the same queue, so the rules are the dashboard's ([firmware-architecture.md](../../docs/firmware-architecture.md#manual-control)), with one more: the controller's jogs also take over a dock trip (its operator is at the robot), and leaving manual picks the trip back up.
 
 | Input | Does |
 |---|---|
@@ -127,17 +135,28 @@ An Xbox Wireless Controller (model 1914, firmware 5.x) pairs with the robot itse
 | **B** | `stop` |
 | **A** | `resume`: hand the robot back |
 
-**Pairing:** turn the controller on and hold its pair button (top edge) until the Xbox light flashes fast. The robot connects to any Xbox controller in pairing mode, and the light goes solid. After that the Xbox button alone reconnects it. A controller that was paired with a console or PC goes back to that first: turn that device's Bluetooth off.
+**Pairing:** turn the controller on and hold its pair button (top edge) until the Xbox light flashes fast. Until `PAD_ADDRESS` is set, the robot connects to any Xbox controller in pairing mode, and the light goes solid. After that the Xbox button alone reconnects it. A controller that was paired with a console or PC goes back to that first: turn that device's Bluetooth off.
+
+**Pin the controller.** Copy the address from the `controller connected (...)` log line (printed on every connection, the first included) into `secrets.h` as `#define PAD_ADDRESS "44:16:22:5e:b2:d4"` and reflash: from then on only that controller can connect. If it no longer connects, check the address, or remove the line to accept any controller again. The library only pins public addresses: if the log line says the controller has a random address, pinning can't work.
 
 **The stick only starts driving from the centre.** If it is already pushed when the controller connects, after **B**, or after the link stalled, let go first.
 
 **Losing the controller.** A held stick sends nothing, and a dead controller takes about 3 s to show as disconnected (measured). So the task reads the controller's battery level every `PAD_LOOP_MS` and only acts on the stick after an answer. No answer, no jog: the robot stops when its last 500 ms jog pulse runs out.
 
-**One radio.** WiFi and Bluetooth share it, so WiFi modem sleep stays on (`comms_task`); commands from the Pi can arrive a little later than before. While no controller is connected the robot keeps scanning for one.
+**When it looks for a controller.** Looking takes radio time from WiFi, so the robot only does it:
+
+- while it can't reach the broker: it may be on its own (there's no Pi heartbeat, so this is the only sign), and the controller is then the only way to drive it;
+- for `PAD_CONNECT_WINDOW_MS` (10 s) after **Connect to RC** on the dashboard (the `connect_controller` command), in any status. Press it, then the controller's Xbox button.
+
+Otherwise it doesn't look, so with the Pi up a controller that turns on, or drops out, stays disconnected until **Connect to RC**. It stops looking once one connects. The boot log says `looking for a controller (...)` and `stopped looking for a controller`; a window that finds nothing logs `connect_controller: no controller found`.
+
+**One radio.** WiFi and Bluetooth share it, so WiFi modem sleep stays on (`comms_task`); commands from the Pi can arrive a little later than before.
 
 `pio run -e padtest -t upload` runs the controller alone and prints its stick, buttons and link checks.
 
-Not done yet: the controller can't take over on a dock trip (`jog` is ignored there), and any Xbox controller in pairing mode can connect.
+**Before the first tag.** The controller drives the robot while it's `initializing` too (creeping for a tag, or after giving up), so it can be moved or bench-tested off the farm. When manual times out with no tag read, the robot stays `initializing` and halted; **A** (resume) starts the tag search again.
+
+Not done yet (TBD in [firmware-architecture.md](../../docs/firmware-architecture.md#tbd)): analog driving with speed from the stick, and reporting to the dashboard whether a controller connected.
 
 Task state is RAM only: the robot never writes to flash. A rebooted robot starts with no task and the orchestrator requeues it.
 
@@ -166,6 +185,8 @@ The onboard NeoPixel (GPIO38) shows the robot's state: colour is the status, the
 | Dark gap every 2 s | MQTT offline |
 | Orange blink while moving | Obstacle flag set |
 | Amber blip every 5 s | Battery at or below 20% |
+| Three blue flashes | Bluetooth controller connected |
+| One long blue flash | Bluetooth controller lost |
 
 ## Flash graph
 
