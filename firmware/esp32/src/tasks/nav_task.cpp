@@ -58,13 +58,21 @@ class QueueOutput : public NavOutput {
   void start_docking() override { motion.start_docking(millis()); }
 
   void note(const char* message) override {
-    last_note_ms = millis();
+    uint32_t now = millis();
+    last_note_ms = now;
+    // A held stick or button in a state that ignores it repeats the same
+    // note every few hundred ms. Notes are string literals.
+    if (message == last_logged_note && now - last_logged_note_ms < NOTE_REPEAT_MS) return;
+    last_logged_note = message;
+    last_logged_note_ms = now;
     LOG("nav", "%s", message);
   }
 
   // For the status LED's flashes. 0 = never.
   uint32_t last_jog_ms = 0;
   uint32_t last_note_ms = 0;
+  const char* last_logged_note = nullptr;
+  uint32_t last_logged_note_ms = 0;
 
  private:
   class MailboxSink : public DriveSink {

@@ -181,6 +181,7 @@ constexpr float CHARGE_COMPLETE_PCT = 85.0f;
 constexpr uint32_t JOG_PULSE_MS = 500;          // each jog drives this long from receipt
 constexpr int16_t JOG_SPEED = 120;              // TBD: tune on the robot (0..255)
 constexpr uint32_t MANUAL_TIMEOUT_MS = 5000;    // leave manual after this long without input
+constexpr uint32_t NOTE_REPEAT_MS = 2000;       // the same nav note again within this isn't logged
 
 // ---- Bluetooth controller (tasks/pad_task.h) ----------------------------------------
 
@@ -226,6 +227,7 @@ constexpr uint8_t DRIVE_QUEUE_LEN = 1;
 constexpr uint8_t COMMAND_QUEUE_LEN = 4;
 constexpr uint8_t TELEMETRY_QUEUE_LEN = 5;
 constexpr uint8_t EVENT_QUEUE_LEN = 16;         // events wait here while offline
+constexpr uint32_t SERIAL_TX_BUFFER_BYTES = 4096;  // log lines waiting for the serial monitor
 
 // ---- Tasks: priority / core / stack ----------------------------------------------
 // Motor + sensor + nav on core 1 (APP_CPU); comms and the controller on core 0

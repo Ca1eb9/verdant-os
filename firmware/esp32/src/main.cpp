@@ -20,6 +20,11 @@ static void start_task(TaskFunction_t fn, const char* name, uint32_t stack, uint
 }
 
 void setup() {
+#if ARDUINO_USB_CDC_ON_BOOT
+  // With the write timeout at 0 below, a burst bigger than the default
+  // 256-byte buffer (boot, a busy moment) would be cut short on the monitor.
+  Serial.setTxBufferSize(SERIAL_TX_BUFFER_BYTES);
+#endif
   Serial.begin(115200);
 #if ARDUINO_USB_CDC_ON_BOOT
   // Native USB (ESP32-S3): never let a log call block a task when no
