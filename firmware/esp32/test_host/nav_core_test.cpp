@@ -185,9 +185,10 @@ static Command with_path(Command c, std::initializer_list<const char*> path) {
   return c;
 }
 
-static Command jog(JogDirection d) {
+static Command jog(JogDirection d, CommandSource source = CommandSource::Local) {
   Command c = make(CommandType::Jog);
   c.direction = d;
+  c.source = source;
   return c;
 }
 
@@ -707,6 +708,35 @@ static void test_manual() {
   r2.command(jog(JogDirection::Forward));
   r2.core.survival_return("14.0%", r2.now);
   CHECK(r2.status() == RobotStatus::Manual && r2.events.empty());
+
+  // The Bluetooth controller overrides a dock trip; leaving manual resumes it.
+  Rig r3;
+  r3.boot_at("cp-01");
+  r3.command(navigate("t3", "cp-02", TargetAction::Water, 1000));
+  r3.command(make(CommandType::ReturnToDock));
+  CHECK(r3.status() == RobotStatus::ReturningToDock && r3.task() == "t3");
+  r3.command(jog(JogDirection::Forward, CommandSource::Controller));
+  CHECK(r3.status() == RobotStatus::Manual && r3.task() == "t3" && r3.last_motion() == "jog f");
+  r3.advance(MANUAL_TIMEOUT_MS);
+  CHECK(r3.status() == RobotStatus::ReturningToDock && r3.task() == "t3");
+  // Charging too, and resume heads back onto the charger.
+  r3.drive({"dock-1"});
+  r3.contact();
+  CHECK(r3.status() == RobotStatus::Charging);
+  r3.command(jog(JogDirection::Forward));
+  CHECK(r3.status() == RobotStatus::Charging);
+  r3.command(jog(JogDirection::Forward, CommandSource::Controller));
+  CHECK(r3.status() == RobotStatus::Manual);
+  r3.command(make(CommandType::Resume));
+  CHECK(r3.status() == RobotStatus::Docking && r3.last_motion() == "dock");
+  CHECK(r3.task() == "t3");
+  // Still not at the motor cutoff.
+  Rig r4;
+  r4.boot_at("cp-01");
+  r4.command(make(CommandType::ReturnToDock));
+  r4.battery(BATTERY_CUTOFF_PCT);
+  r4.command(jog(JogDirection::Forward, CommandSource::Controller));
+  CHECK(r4.status() == RobotStatus::ReturningToDock);
 }
 
 static void test_fault_recovery() {

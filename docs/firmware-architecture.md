@@ -389,8 +389,11 @@ deviations.
   offered on the farm network (the orchestrator rejects jogs that come through
   Supabase).
 - **Bluetooth controller:** any drive input from the paired controller puts the
-  robot in `manual` from any state except `initializing`. Each input also only
-  drives briefly, like a jog, so losing the controller stops the robot.
+  robot in `manual` from any state except `initializing`, a dock trip included:
+  its operator is at the robot, so it's the strongest override (the dashboard's
+  `jog` can't take over a dock trip). Each input also only drives briefly, like
+  a jog, so losing the controller stops the robot. The motor cutoff still
+  applies.
 
 **Timeout:** a manual session from either source ends by itself after
 `MANUAL_TIMEOUT_MS` (5 s, in `config.h`) without a `jog` or controller input;
@@ -435,8 +438,5 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
 - Battery ADC calibration curve
 - Turns (single drive motor: an edge to the side faults for now)
 - `harvest` action
-- Bluetooth controller on a dock trip: its input reaches nav as `jog`
-  (`firmware/esp32/README.md`, "Bluetooth controller"), which is ignored on a
-  dock trip, so it can't take over there yet
 - Graph updates from the orchestrator (the only case where the robot would
   write to flash)

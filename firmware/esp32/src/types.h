@@ -74,7 +74,9 @@ enum class JogDirection : uint8_t { None, Forward, Backward };
 enum class TargetAction : uint8_t { None, Water, Grow, Harvest, Charge, Idle };
 
 enum class TaskPriority : uint8_t { Low, Normal, High, Critical };
-enum class CommandSource : uint8_t { Scheduler, Alert, Remote, Local };
+// Controller: the Bluetooth controller (pad task), robot-only and never on
+// the wire. Keep it last: from_wire() only accepts Scheduler..Local.
+enum class CommandSource : uint8_t { Scheduler, Alert, Remote, Local, Controller };
 
 // ---- sensor task -> nav task (g_sensor_queue) --------------------------------
 

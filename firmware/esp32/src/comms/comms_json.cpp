@@ -92,6 +92,7 @@ const char* to_wire(CommandSource s) {
     case CommandSource::Alert: return "alert";
     case CommandSource::Remote: return "remote";
     case CommandSource::Local: return "local";
+    case CommandSource::Controller: return "controller";  // robot-only, for logs
   }
   return "local";
 }

@@ -32,7 +32,7 @@ void send(CommandType type, JogDirection direction) {
   cmd.type = type;
   cmd.direction = direction;
   cmd.priority = TaskPriority::Critical;
-  cmd.source = CommandSource::Local;
+  cmd.source = CommandSource::Controller;
   if (xQueueSend(g_command_queue, &cmd, 0) != pdTRUE) {
     LOG("pad", "command queue full, dropped an input");
   }

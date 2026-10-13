@@ -119,7 +119,7 @@ Bench check, wheels off the ground, with the serial monitor open (`motor` lines)
 
 ## Bluetooth controller
 
-An Xbox Wireless Controller (model 1914, firmware 5.x) pairs with the robot itself over Bluetooth LE; the ESP32-S3 has no classic Bluetooth, so older controllers and firmware won't connect. `tasks/pad_task` turns it into the commands the dashboard sends, on the same queue, so the rules are the dashboard's ([firmware-architecture.md](../../docs/firmware-architecture.md#manual-control)).
+An Xbox Wireless Controller (model 1914, firmware 5.x) pairs with the robot itself over Bluetooth LE; the ESP32-S3 has no classic Bluetooth, so older controllers and firmware won't connect. `tasks/pad_task` turns it into the commands the dashboard sends, on the same queue, so the rules are the dashboard's ([firmware-architecture.md](../../docs/firmware-architecture.md#manual-control)), with one more: the controller's jogs also take over a dock trip (its operator is at the robot), and leaving manual picks the trip back up.
 
 | Input | Does |
 |---|---|
@@ -137,7 +137,7 @@ An Xbox Wireless Controller (model 1914, firmware 5.x) pairs with the robot itse
 
 `pio run -e padtest -t upload` runs the controller alone and prints its stick, buttons and link checks.
 
-Not done yet: the controller can't take over on a dock trip (`jog` is ignored there), and any Xbox controller in pairing mode can connect.
+Not done yet: any Xbox controller in pairing mode can connect.
 
 Task state is RAM only: the robot never writes to flash. A rebooted robot starts with no task and the orchestrator requeues it.
 

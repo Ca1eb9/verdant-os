@@ -87,7 +87,7 @@ void NavCore::on_command(const Command& cmd, uint32_t now) {
     case CommandType::Resume: resume(now); break;
     case CommandType::ReturnToDock: return_to_dock(cmd.task_id, now); break;
     case CommandType::Cancel: cancel(cmd.task_id); break;
-    case CommandType::Jog: jog(cmd.direction, now); break;
+    case CommandType::Jog: jog(cmd.direction, cmd.source == CommandSource::Controller, now); break;
   }
 }
 
@@ -356,7 +356,7 @@ void NavCore::cancel(const char* task_id) {
   }
 }
 
-void NavCore::jog(JogDirection direction, uint32_t now) {
+void NavCore::jog(JogDirection direction, bool controller, uint32_t now) {
   switch (status_) {
     case RobotStatus::Idle:
     case RobotStatus::EnRoute:
@@ -365,6 +365,14 @@ void NavCore::jog(JogDirection direction, uint32_t now) {
     case RobotStatus::Error:
     case RobotStatus::Manual:
       break;
+    case RobotStatus::ReturningToDock:
+    case RobotStatus::Docking:
+    case RobotStatus::Charging:
+      // The controller's operator is at the robot: it overrides a dock
+      // trip too. Leaving manual picks the trip back up.
+      if (controller) break;
+      out_.note("ignored: jog not allowed on a dock trip");
+      return;
     default:
       out_.note("ignored: jog not allowed now");
       return;
