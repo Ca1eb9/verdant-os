@@ -450,6 +450,10 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
   release. Today the stick past half way sends a fixed-speed `jog`
   (`JOG_SPEED`). Needs its own nav entry point (a variable-speed timed drive),
   not `jog`
+- Maybe: slow down near obstacles in `manual` too. Today a jog drives at
+  `JOG_SPEED` until the hard stop at `OBSTACLE_STOP_CM`; the `SLOW_ZONE_CM`
+  slow-down to `APPROACH_SPEED` only applies while following an edge. Would
+  fit with analog controller driving
 - Controller confirmation: tell the dashboard when a Bluetooth controller
   connects or drops (after **Connect to RC**, and later), e.g. as robot events
   or a telemetry field, and show it there; and confirm on the controller
