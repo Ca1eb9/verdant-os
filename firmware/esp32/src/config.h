@@ -28,6 +28,11 @@
 #ifndef MQTT_PORT
 #define MQTT_PORT 1883
 #endif
+// The one Bluetooth controller this robot accepts, set in secrets.h. Empty:
+// any Xbox controller in pairing mode can connect (README "Bluetooth controller").
+#ifndef PAD_ADDRESS
+#define PAD_ADDRESS ""
+#endif
 
 // ---- Comms timing -------------------------------------------------------------
 
@@ -185,6 +190,13 @@ constexpr uint32_t PAD_JOG_INTERVAL_MS = 200;   // held stick: jog this often (u
 // A link check slower than this (they take about 20 ms): the stick has to be
 // centred again before it drives.
 constexpr uint32_t PAD_LINK_LOST_MS = 400;
+// Looking for a controller takes radio time from WiFi. Flat out only while the
+// robot can't reach the Pi's broker; otherwise a short window each interval,
+// which still finds a controller that's switched on. Window <= interval.
+constexpr uint16_t PAD_SCAN_FULL_MS = 97;          // interval = window: always listening
+constexpr uint16_t PAD_SCAN_IDLE_INTERVAL_MS = 320;  // TBD: check pairing time on the robot
+constexpr uint16_t PAD_SCAN_IDLE_WINDOW_MS = 32;     // about 10% of the radio
+constexpr uint32_t PAD_SCAN_CHUNK_MS = 10000;        // each scan this long, then a fresh one
 
 // ---- Motor task (tasks/motor_task.h) ------------------------------------------------
 

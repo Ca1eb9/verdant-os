@@ -27,6 +27,31 @@ bool probe_link() {
   return level && level->readValue().size() > 0;
 }
 
+// The library starts a full-time 4 s scan whenever onLoop() runs without a
+// controller. This keeps one running instead, so onLoop() never starts its
+// own: flat out while the Pi is unreachable, otherwise a short window each
+// interval. Restarted when that changes; stopped once connected.
+//
+// Each scan lasts PAD_SCAN_CHUNK_MS: a restart clears the scan's results,
+// which otherwise grow with every device nearby. Never while the library
+// holds a found controller (advDevice) it hasn't connected to yet: that
+// points into those results.
+void keep_scanning(XboxSeriesXControllerESP32_asukiaaa::Core& pad, bool full, bool& scan_full) {
+  if (XboxSeriesXControllerESP32_asukiaaa::advDevice != nullptr) return;
+  NimBLEScan* scan = NimBLEDevice::getScan();
+  if (scan->isScanning() && full == scan_full) return;
+  scan->setDuplicateFilter(false);
+  scan->setScanCallbacks(pad.scanCBs);
+  scan->setInterval(full ? PAD_SCAN_FULL_MS : PAD_SCAN_IDLE_INTERVAL_MS);
+  scan->setWindow(full ? PAD_SCAN_FULL_MS : PAD_SCAN_IDLE_WINDOW_MS);
+  if (!scan->start(PAD_SCAN_CHUNK_MS)) return;  // tried again next cycle
+  scan_full = full;
+  static int8_t logged = -1;  // one task calls this
+  if (logged == (int8_t)full) return;
+  logged = (int8_t)full;
+  LOG("pad", "looking for a controller (%s)", full ? "flat out: no broker" : "low duty");
+}
+
 void send(CommandType type, JogDirection direction) {
   Command cmd = {};
   cmd.type = type;
@@ -41,19 +66,31 @@ void send(CommandType type, JogDirection direction) {
 }  // namespace
 
 void pad_task(void* /*param*/) {
-  XboxSeriesXControllerESP32_asukiaaa::Core pad;  // any Xbox controller in pairing mode
+  XboxSeriesXControllerESP32_asukiaaa::Core pad(PAD_ADDRESS);
   pad.begin();
-  LOG("pad", "looking for a controller");
+  if (PAD_ADDRESS[0]) {
+    LOG("pad", "accepting only controller %s", PAD_ADDRESS);
+  } else {
+    LOG("pad", "accepting any Xbox controller: set PAD_ADDRESS in secrets.h");
+  }
 
   PadCore core;
   bool connected = false;
   bool link_ok = false;
   uint32_t last_ok_ms = 0;
   PadAction last_logged = PadAction::None;
+  bool scan_full = false;
 
   for (;;) {
     vTaskDelay(pdMS_TO_TICKS(PAD_LOOP_MS));
-    pad.onLoop();
+    if (!pad.isConnected()) {
+      // TODO: also flat out after a "find controller" command from the
+      // dashboard (docs/firmware-architecture.md, TBD).
+      keep_scanning(pad, !g_mqtt_connected, scan_full);
+    } else if (NimBLEDevice::getScan()->isScanning()) {
+      NimBLEDevice::getScan()->stop();
+    }
+    pad.onLoop();  // connects to a controller the scan found
 
     bool ready = pad.isConnected() && !pad.isWaitingForFirstNotification();
     if (ready != connected) {

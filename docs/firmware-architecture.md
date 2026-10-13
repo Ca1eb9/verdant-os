@@ -438,5 +438,11 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
 - Battery ADC calibration curve
 - Turns (single drive motor: an edge to the side faults for now)
 - `harvest` action
+- A "find controller" command from the dashboard: the robot scans for a
+  Bluetooth controller flat out only while it can't reach the broker, and at a
+  low duty cycle otherwise (`firmware/esp32/README.md`, "Bluetooth
+  controller"). The command would make it scan flat out for a while on request.
+  It's a new `RobotCommand`, so it needs `types.ts` and every copy (dashboard,
+  orchestrator validators, simulator, `comms_json`)
 - Graph updates from the orchestrator (the only case where the robot would
   write to flash)
