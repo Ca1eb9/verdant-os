@@ -548,7 +548,15 @@ function onRemoteCommand(raw: unknown, topic: string) {
       console.log(`[REMOTE] Unknown robot: ${msg.robot_id}`);
       return;
     }
-    for (const [robotId] of targets) {
+    for (const [robotId, state] of targets) {
+      // A robot that hasn't read a tag (initializing, or driven by hand
+      // before one) never takes queued work, so a queued stop would never
+      // reach it: send it now.
+      if (msg.command.command === "stop" && state?.current_node === null) {
+        mqtt.publish(TOPICS.robot.command(robotId), msg.command);
+        console.log(`[REMOTE] → ${robotId}: stop (no position yet, sent now)`);
+        continue;
+      }
       const task = remoteTask(msg, msg.robot_id ? msg.id : `${msg.id}-${robotId}`);
       if (isKnownTask(task.task_id)) {
         console.log(`[REMOTE] Duplicate task ${task.task_id}, ignored`);
