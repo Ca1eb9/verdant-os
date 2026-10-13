@@ -343,6 +343,8 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
     keeping the task;
   - kill motors at about 5%, in every status. They stay off until the battery
     is back above 15%, so noise near the cutoff can't toggle them.
+    `BATTERY_FAILSAFE = false` in `config.h` turns this cutoff off, for bench
+    tests only.
 - **Obstacle:** two VL53L4CX sensors, front and rear, each on its own I2C bus
   (they share one fixed address). The sensor task sets a front and a rear
   obstacle flag, and the motor task hard-stops only on the flag for the side

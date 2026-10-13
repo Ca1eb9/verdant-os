@@ -137,6 +137,10 @@ constexpr uint32_t TELEMETRY_PERIOD_MS = 1000;
 // TBD: tune on the real farm.
 constexpr uint32_t MISSED_TAG_TIMEOUT_MS = 5000;   // no next tag this long while driving: error
 constexpr uint32_t PATH_BLOCKED_TIMEOUT_MS = 10000; // obstacle this long: path_blocked
+// After boot (and on resume while initializing) the robot creeps forward to
+// find its first tag. Set false to have it wait in place for a tag instead
+// (bench tests): the Bluetooth controller can still drive it. Logged at boot.
+constexpr bool BOOT_CREEP = true;
 constexpr uint32_t CREEP_TIMEOUT_MS = 15000;        // no tag this long while creeping after boot
 constexpr int16_t CRUISE_SPEED = 150;               // between tags (0..255)
 constexpr int16_t CREEP_SPEED = 90;                 // looking for a tag after boot (0..255)
@@ -172,6 +176,10 @@ constexpr uint32_t DEFAULT_IDLE_MS = 0;
 constexpr float BATTERY_WARN_PCT = 20.0f;       // battery_low
 constexpr float BATTERY_RETURN_PCT = 15.0f;     // battery_critical, go to dock
 constexpr float BATTERY_CUTOFF_PCT = 5.0f;      // kill motors
+// The motor cutoff protects the pack from over-discharge. Set false to
+// bench-test without the battery divider wired (it then reads 0%): the
+// warning and the forced return still apply. Logged at boot when off.
+constexpr bool BATTERY_FAILSAFE = true;
 // The charging diode (docs/wiring/robot.md) drops ~0.4 V, so the pack tops
 // out around 4.1 V a cell, not 4.2. Matches orchestrator charge_complete_pct.
 constexpr float CHARGE_COMPLETE_PCT = 85.0f;

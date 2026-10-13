@@ -69,7 +69,7 @@ void NavCore::snapshot(TelemetryMsg& t) const {
 
 void NavCore::begin() {
   status_ = RobotStatus::Initializing;
-  out_.creep();
+  if (BOOT_CREEP) out_.creep();
 }
 
 void NavCore::on_battery(float battery_pct) { battery_pct_ = battery_pct; }
@@ -300,7 +300,8 @@ void NavCore::resume(uint32_t now) {
   // Halted while initializing (after manual control, or after the search
   // timed out): look for a tag again.
   if (status_ == RobotStatus::Initializing) {
-    out_.creep();
+    if (BOOT_CREEP) out_.creep();
+    else out_.note("ignored: BOOT_CREEP is off, waiting for a tag");
     return;
   }
   if (!ctx_.stop_latched) {
@@ -398,7 +399,7 @@ void NavCore::jog(JogDirection direction, bool controller, uint32_t now) {
       out_.note("ignored: jog not allowed now");
       return;
   }
-  if (!isnan(battery_pct_) && battery_pct_ <= BATTERY_CUTOFF_PCT) {
+  if (BATTERY_FAILSAFE && !isnan(battery_pct_) && battery_pct_ <= BATTERY_CUTOFF_PCT) {
     out_.note("ignored: battery below the motor cutoff");
     return;
   }
@@ -591,7 +592,8 @@ void NavCore::continue_from(RobotStatus from, uint32_t now) {
         return;
       }
       status_ = RobotStatus::Initializing;
-      out_.creep();
+      if (BOOT_CREEP) out_.creep();
+      else out_.halt();
       return;
     case RobotStatus::ReturningToDock:
     case RobotStatus::Docking:

@@ -110,6 +110,14 @@ The chip's inputs have pull-downs, so the motor coasts while the ESP32 boots. Po
 
 The motor task (`tasks/motor_task`) applies `motor/motor_core` every `MOTOR_LOOP_MS`: the newest `DriveCommand` wins, a timed Drive (a jog pulse) ends by itself, reversing slows to 0 over `REVERSE_RAMP_MS` first, and the kill flag or the obstacle flag on the side it's driving toward holds the motor off until it clears. A stop brakes the motor rather than letting it coast.
 
+**Bench settings** in `config.h`, each logged at boot while off. Turn them back on before running on the farm:
+
+| Setting | Off (`false`) |
+|---|---|
+| `OBSTACLE_FAILSAFE` | A missing or dead ToF sensor no longer holds the motor (no sensors plugged in) |
+| `BATTERY_FAILSAFE` | No motor cutoff at low battery (battery divider not wired: it reads 0%). The low-battery warning and forced return still apply |
+| `BOOT_CREEP` | After boot the robot waits in place for a tag instead of creeping forward for up to `CREEP_TIMEOUT_MS`; the controller can still drive it |
+
 Bench check, wheels off the ground, with the serial monitor open (`motor` lines):
 
 1. Jog forward and backward from the dashboard or the controller: the wheel turns each way and stops 500 ms after the last jog.

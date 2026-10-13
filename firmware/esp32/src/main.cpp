@@ -37,6 +37,10 @@ void setup() {
   delay(200);  // let the USB serial settle; setup() only, before any tasks
 #endif
   LOG("main", "=== robot '%s' ===", ROBOT_ID);
+  // Bench settings that turn off a protection: easy to forget before a real run.
+  if (!OBSTACLE_FAILSAFE) LOG("main", "WARNING: OBSTACLE_FAILSAFE off: a dead ToF sensor won't stop the motor");
+  if (!BATTERY_FAILSAFE) LOG("main", "WARNING: BATTERY_FAILSAFE off: no motor cutoff at low battery");
+  if (!BOOT_CREEP) LOG("main", "BOOT_CREEP off: waiting in place for the first tag");
 
   if (!create_queues()) {
     // Nothing can run without them; no task exists, so the motors stay off.

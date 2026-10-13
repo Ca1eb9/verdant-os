@@ -29,7 +29,7 @@ void Survival::check_battery(float battery_pct, uint32_t now) {
     core_.report(RobotEventType::BatteryLow, details);
   }
 
-  bool newly_cut_off = !cut_off_ && battery_pct <= BATTERY_CUTOFF_PCT;
+  bool newly_cut_off = BATTERY_FAILSAFE && !cut_off_ && battery_pct <= BATTERY_CUTOFF_PCT;
   if (newly_cut_off) cut_off_ = true;
   // Whenever it tries to drive itself (e.g. resumed after a stop), not just
   // once: otherwise it waits forever with the motors off. Initializing never
