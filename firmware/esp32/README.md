@@ -146,7 +146,9 @@ Otherwise it doesn't look, so with the Pi up a controller that turns on, or drop
 
 `pio run -e padtest -t upload` runs the controller alone and prints its stick, buttons and link checks.
 
-Not done yet (TBD in [firmware-architecture.md](../../docs/firmware-architecture.md#tbd)): analog driving with speed from the stick, driving while `initializing`, and reporting to the dashboard whether a controller connected.
+**Before the first tag.** The controller drives the robot while it's `initializing` too (creeping for a tag, or after giving up), so it can be moved or bench-tested off the farm. When manual times out with no tag read, the robot stays `initializing` and halted; **A** (resume) starts the tag search again.
+
+Not done yet (TBD in [firmware-architecture.md](../../docs/firmware-architecture.md#tbd)): analog driving with speed from the stick, and reporting to the dashboard whether a controller connected.
 
 Task state is RAM only: the robot never writes to flash. A rebooted robot starts with no task and the orchestrator requeues it.
 

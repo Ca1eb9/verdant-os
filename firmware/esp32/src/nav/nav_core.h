@@ -80,6 +80,8 @@ class NavCore {
   void begin();
 
   // ---- Inputs ----
+  // Before the first tag only stop, resume and the Bluetooth controller's
+  // jogs are accepted (the controller can drive it off the farm).
   void on_command(const Command& cmd, uint32_t now);
   // A new tag arrival (SensorData.tag_seq changed). NO_NODE for a tag that
   // isn't in the graph: ignored.
