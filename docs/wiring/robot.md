@@ -71,12 +71,15 @@ continues on the ESP32, and every ground symbol is the same shared ground.
   usually red is 5 V and black or brown is GND. Its label says "7–12 V input"
   and a full pack is 12.6 V; Adafruit recommends 6–16 V, so it's fine.
 - **DRV8871 → motor.** VM takes the battery after the switch. GPIO 5 and 6
-  drive IN1 and IN2: one held low while the other is switched on and off
-  rapidly (PWM) sets direction and speed. Both inputs have pull-downs inside
-  the chip, so the motor stays off while the ESP32 boots. Its ~2 A limit also
-  protects a jammed motor. If the robot drives the wrong way, swap the motor's
-  red and black wires. The motor's other four wires are an encoder the
-  firmware doesn't use: insulate them and leave them unconnected.
+  drive IN1 and IN2: one held high while the other is switched on and off
+  rapidly (PWM) sets direction and speed; both high brakes. Holding one high
+  rather than low (slow decay) makes speed follow the PWM evenly, where the
+  other way the motor barely moves below half speed. Both inputs have
+  pull-downs inside the chip, so the motor stays off while the ESP32 boots.
+  Its ~2 A limit also protects a jammed motor. If the robot drives the wrong
+  way, swap the motor's red and black wires. The motor's other four wires are
+  an encoder the firmware doesn't use: insulate them and leave them
+  unconnected.
 - **Shared ground.** Battery −, pad −, the converter, the driver, the ESP32
   and both dividers all join. Signals only mean something relative to a
   shared ground.

@@ -102,9 +102,11 @@ An Adafruit DRV8871 drives the one motor from `PIN_MOTOR_IN1` and `PIN_MOTOR_IN2
 
 | Speed | IN1 | IN2 |
 |---|---|---|
-| Forward | PWM | low |
-| Backward | low | PWM |
+| Forward | high | PWM: low for the speed's share of each cycle |
+| Backward | PWM: low for the speed's share of each cycle | high |
 | Stop | high | high (brake: both motor terminals shorted) |
+
+This is the DRV8871's slow-decay mode: between pulses the motor is briefly braked, so it gets about speed / 255 of the battery voltage. In fast decay (the other input low instead), each off-time drives the motor's current back against the battery, and below about half speed the motor gets nothing.
 
 The chip's inputs have pull-downs, so the motor coasts while the ESP32 boots. Positive speeds must drive the robot the way it faces (`ROBOT_HEADING`); if it goes the other way, swap the motor's red and black wires.
 

@@ -142,6 +142,8 @@ constexpr uint32_t PATH_BLOCKED_TIMEOUT_MS = 10000; // obstacle this long: path_
 // (bench tests): the Bluetooth controller can still drive it. Logged at boot.
 constexpr bool BOOT_CREEP = true;
 constexpr uint32_t CREEP_TIMEOUT_MS = 15000;        // no tag this long while creeping after boot
+// Speeds are a share of the battery voltage (speed / 255, slow decay:
+// drivers/motor_driver). TBD: tune on the robot, loaded, on the real track.
 constexpr int16_t CRUISE_SPEED = 150;               // between tags (0..255)
 constexpr int16_t CREEP_SPEED = 90;                 // looking for a tag after boot (0..255)
 constexpr uint32_t ELEVATOR_WAIT_MS = 5000;         // per level ridden: stay put, then drive off
