@@ -52,7 +52,7 @@ export type PlantType =
 
 export type GrowthStage = "seedling" | "vegetative" | "mature" | "harvest_ready";
 
-export type CommandType = "navigate" | "return_to_dock" | "stop" | "resume" | "cancel" | "jog";
+export type CommandType = "navigate" | "return_to_dock" | "stop" | "resume" | "cancel" | "jog" | "connect_controller";
 
 export type JogDirection = "forward" | "backward";
 

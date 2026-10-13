@@ -50,6 +50,8 @@ function parseCommand(body: unknown): { farmId: string; robotId: string; command
   if (typeof robotId !== "string" || !ID_PATTERN.test(robotId)) return "robot_id is missing or invalid.";
   // too slow and lossy over Supabase; the local data source sends jogs on the farm network
   if (raw.command === "jog") return "Manual driving is only available on the farm network.";
+  // for an operator at the robot; the orchestrator refuses it from Supabase too
+  if (raw.command === "connect_controller") return "Connecting a controller is only available on the farm network.";
   if (!COMMANDS.includes(raw.command as CommandType)) return "command must be navigate, return_to_dock, stop, resume or cancel.";
 
   const type = raw.command as CommandType;

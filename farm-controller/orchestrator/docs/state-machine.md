@@ -204,6 +204,7 @@ From `farm/commands/local` (dashboard on the farm network) and
 | `resume` | Always sent straight to the robot(s); also ends `manual` |
 | `cancel` | Needs a `robot_id` or `task_id`. Cancels that queued or assigned task, or the robot's current task, including while `lost`. Refused for an assigned stop task (use `resume`) |
 | `jog` | Only from `farm/commands/local` and for a known robot; sent straight to it, never queued |
+| `connect_controller` | Same as `jog`: the robot looks for its Bluetooth controller for 10 s |
 
 `immediate` is read from the message or from inside `command`.
 

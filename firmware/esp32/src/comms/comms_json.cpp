@@ -51,6 +51,7 @@ const char* to_wire(CommandType c) {
     case CommandType::Resume: return "resume";
     case CommandType::Cancel: return "cancel";
     case CommandType::Jog: return "jog";
+    case CommandType::ConnectController: return "connect_controller";
   }
   return "stop";
 }
@@ -235,7 +236,8 @@ CommandParseResult parse_command_json(const char* json, size_t len, Command& out
   // command (required)
   JsonVariantConst cmd = o["command"];
   if (!cmd.is<const char*>()) return CommandParseResult::MissingCommand;
-  if (!from_wire(cmd.as<const char*>(), CommandType::Navigate, CommandType::Jog, out.type))
+  if (!from_wire(cmd.as<const char*>(), CommandType::Navigate, CommandType::ConnectController,
+                 out.type))
     return CommandParseResult::UnknownCommand;
 
   // task_id, target_node (optional strings)

@@ -23,6 +23,8 @@ const POLL_MS = 5_000;
 const JOG_REPEAT_MS = 400;
 /** Same as MANUAL_TIMEOUT_MS on the robot: a session ends after this long without a jog */
 const MANUAL_TIMEOUT_S = 5;
+/** Same as PAD_CONNECT_WINDOW_MS on the robot: how long it looks for its controller */
+const RC_WINDOW_S = 10;
 /** States the robot accepts a jog in */
 const JOGGABLE: RobotStatus[] = ["idle", "en_route", "working", "stopped", "error", "manual"];
 
@@ -48,6 +50,7 @@ const COMMAND_LABEL: Record<RobotCommand["command"], string> = {
   resume: "Resume",
   cancel: "Cancel task",
   jog: "Jog",
+  connect_controller: "Connect to RC",
 };
 
 function readKey() {
@@ -231,6 +234,17 @@ export function ControlPanel({
 
   const sendResume = () =>
     robot && send({ robot_id: robot.id, command: { command: "resume", priority: "critical", immediate: true } });
+
+  // The robot only looks for its Bluetooth controller when asked (or when it
+  // can't reach the farm). It doesn't report back whether one connected.
+  const sendConnectRc = () =>
+    robot &&
+    send({ robot_id: robot.id, command: { command: "connect_controller", priority: "critical", immediate: true } }, () =>
+      setMessage({
+        tone: "ok",
+        text: `${robot.id} is looking for its controller for ${RC_WINDOW_S} s: press the controller's Xbox button.`,
+      }),
+    );
 
   // --- Manual control (farm network only) ---
   const inManual = status === "manual";
@@ -536,6 +550,11 @@ export function ControlPanel({
               </button>
             </span>
           )}
+          <span className={styles.tip} title={online ? `The robot looks for its controller for ${RC_WINDOW_S} s.` : "The robot is offline."}>
+            <button type="button" className={styles.btn} disabled={!online || busy} onClick={sendConnectRc}>
+              Connect to RC
+            </button>
+          </span>
         </section>
       ) : null}
 

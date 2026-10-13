@@ -135,11 +135,18 @@ An Xbox Wireless Controller (model 1914, firmware 5.x) pairs with the robot itse
 
 **Losing the controller.** A held stick sends nothing, and a dead controller takes about 3 s to show as disconnected (measured). So the task reads the controller's battery level every `PAD_LOOP_MS` and only acts on the stick after an answer. No answer, no jog: the robot stops when its last 500 ms jog pulse runs out.
 
-**One radio.** WiFi and Bluetooth share it, so WiFi modem sleep stays on (`comms_task`); commands from the Pi can arrive a little later than before. While no controller is connected the robot looks for one, which takes radio time from WiFi: flat out (`PAD_SCAN_FULL_MS`) only while it can't reach the broker, otherwise a `PAD_SCAN_IDLE_WINDOW_MS` window every `PAD_SCAN_IDLE_INTERVAL_MS` (about 10%), which still finds a controller that's switched on, if a little later. It stops looking once one connects.
+**When it looks for a controller.** Looking takes radio time from WiFi, so the robot only does it:
+
+- while it can't reach the broker: it may be on its own (there's no Pi heartbeat, so this is the only sign), and the controller is then the only way to drive it;
+- for `PAD_CONNECT_WINDOW_MS` (10 s) after **Connect to RC** on the dashboard (the `connect_controller` command), in any status. Press it, then the controller's Xbox button.
+
+Otherwise it doesn't look, so with the Pi up a controller that turns on, or drops out, stays disconnected until **Connect to RC**. It stops looking once one connects. The boot log says `looking for a controller (...)` and `stopped looking for a controller`; a window that finds nothing logs `connect_controller: no controller found`.
+
+**One radio.** WiFi and Bluetooth share it, so WiFi modem sleep stays on (`comms_task`); commands from the Pi can arrive a little later than before.
 
 `pio run -e padtest -t upload` runs the controller alone and prints its stick, buttons and link checks.
 
-Not done yet: a "find controller" command from the dashboard to look flat out on request (TBD in [firmware-architecture.md](../../docs/firmware-architecture.md#tbd)).
+Not done yet (TBD in [firmware-architecture.md](../../docs/firmware-architecture.md#tbd)): analog driving with speed from the stick, driving while `initializing`, and reporting to the dashboard whether a controller connected.
 
 Task state is RAM only: the robot never writes to flash. A rebooted robot starts with no task and the orchestrator requeues it.
 

@@ -238,7 +238,8 @@ The robot never queues commands: each one acts on the current state right away.
 | `stop` | Pause in place: halt motors, hold the action timer, report `stopped`, keep `task_id`, set the stop latch. Ignored if already stopped. |
 | `resume` | In `manual`: leave manual control (see [Manual control](#manual-control)) and clear the stop latch. Otherwise only acts if the stop latch is set: clear it and restore the paused status (the action timer continues with the remaining time). If it was on a task, re-plan from the current node first, since manual control may have moved it while stopped; a robot still at its target keeps working. If the robot is stopped at the dock with a kept task, re-plan and continue it. |
 | `return_to_dock` | Ignored if already returning, docking or charging. Otherwise head to the dock. A task in progress or paused is kept and resumed after charging. With no task and a `task_id` on the command, adopt it as a dock task and publish `task_complete` for it once connected to the charger. If already at the dock but not charging, run the dock sequence again (straight to `docking`, no `arrived`). No path to the dock: publish `task_failed` for a dock task's `task_id`, else ignore it. A latched stop stays latched. |
-| `jog` | Manual driving from the dashboard; `direction` is `forward` or `backward`. Accepted in `idle`, `en_route`, `working`, `stopped`, `error` and `manual`; ignored otherwise (dock trips, `initializing`) and below the motor cutoff. The first jog enters `manual`. Each jog drives for a fixed **500 ms** from when it is received (`JOG_PULSE_MS` in `config.h`); a jog arriving while driving restarts the 500 ms. When the window runs out, the motors stop by themselves. `backward` reverses without turning; the heading doesn't change. |
+| `jog` | Manual driving from the dashboard; `direction` is `forward` or `backward`. Accepted in `idle`, `en_route`, `working`, `stopped`, `error` and `manual`; ignored otherwise (dock trips, `initializing`) and below the motor cutoff. The Bluetooth controller's jogs (robot-only) are also accepted on a dock trip. The first jog enters `manual`. Each jog drives for a fixed **500 ms** from when it is received (`JOG_PULSE_MS` in `config.h`); a jog arriving while driving restarts the 500 ms. When the window runs out, the motors stop by themselves. `backward` reverses without turning; the heading doesn't change. |
+| `connect_controller` | Look for the Bluetooth controller for `PAD_CONNECT_WINDOW_MS` (10 s), in any status, `initializing` included. Otherwise the robot only looks while it can't reach the broker. No reply: whether a controller connected shows in the serial log only. Farm network only, like `jog`. |
 | `cancel` | Drop the task with this `task_id` if it is the current, paused or kept task: clear it without setting `last_completed_task_id` and without an event. A cancelled task that was moving or working goes to `idle` (or stays `stopped`). Cancelling a dock task stops the trip to the dock. Cancelling a kept task leaves the dock trip running, so the robot still charges. Ignore it if the id doesn't match. The orchestrator resends it whenever telemetry still shows the cancelled task, e.g. after the robot was offline. |
 
 The orchestrator sends a queued `stop` only when the robot is idle, so it acts as
@@ -438,11 +439,14 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
 - Battery ADC calibration curve
 - Turns (single drive motor: an edge to the side faults for now)
 - `harvest` action
-- A "find controller" command from the dashboard: the robot scans for a
-  Bluetooth controller flat out only while it can't reach the broker, and at a
-  low duty cycle otherwise (`firmware/esp32/README.md`, "Bluetooth
-  controller"). The command would make it scan flat out for a while on request.
-  It's a new `RobotCommand`, so it needs `types.ts` and every copy (dashboard,
-  orchestrator validators, simulator, `comms_json`)
+- Analog Bluetooth controller driving: speed from how far the stick is
+  pushed, with a shorter pulse than `JOG_PULSE_MS` so it stops sooner on
+  release. Today the stick past half way sends a fixed-speed `jog`
+  (`JOG_SPEED`). Needs its own nav entry point (a variable-speed timed drive),
+  not `jog`
+- Bluetooth controller while `initializing`: it connects, but nav ignores
+  every command until the first tag, so the controller can't drive or stop it
+- Report whether a controller connected (after `connect_controller`): today
+  only the serial log says
 - Graph updates from the orchestrator (the only case where the robot would
   write to flash)

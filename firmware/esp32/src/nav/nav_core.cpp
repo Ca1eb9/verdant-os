@@ -88,6 +88,7 @@ void NavCore::on_command(const Command& cmd, uint32_t now) {
     case CommandType::ReturnToDock: return_to_dock(cmd.task_id, now); break;
     case CommandType::Cancel: cancel(cmd.task_id); break;
     case CommandType::Jog: jog(cmd.direction, cmd.source == CommandSource::Controller, now); break;
+    case CommandType::ConnectController: break;  // comms hands it to the pad task
   }
 }
 

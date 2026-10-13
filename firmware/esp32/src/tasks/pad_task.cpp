@@ -27,29 +27,26 @@ bool probe_link() {
   return level && level->readValue().size() > 0;
 }
 
-// The library starts a full-time 4 s scan whenever onLoop() runs without a
-// controller. This keeps one running instead, so onLoop() never starts its
-// own: flat out while the Pi is unreachable, otherwise a short window each
-// interval. Restarted when that changes; stopped once connected.
-//
-// Each scan lasts PAD_SCAN_CHUNK_MS: a restart clears the scan's results,
-// which otherwise grow with every device nearby. Never while the library
-// holds a found controller (advDevice) it hasn't connected to yet: that
-// points into those results.
-void keep_scanning(XboxSeriesXControllerESP32_asukiaaa::Core& pad, bool full, bool& scan_full) {
+// While looking, keeps one scan running so the library's onLoop() never
+// starts its own. Each scan lasts PAD_SCAN_CHUNK_MS: a restart clears the
+// scan's results, which otherwise grow with every device nearby. Never while
+// the library holds a found controller (advDevice) it hasn't connected to
+// yet: that points into those results.
+void keep_scanning(XboxSeriesXControllerESP32_asukiaaa::Core& pad) {
   if (XboxSeriesXControllerESP32_asukiaaa::advDevice != nullptr) return;
   NimBLEScan* scan = NimBLEDevice::getScan();
-  if (scan->isScanning() && full == scan_full) return;
+  if (scan->isScanning()) return;
   scan->setDuplicateFilter(false);
   scan->setScanCallbacks(pad.scanCBs);
-  scan->setInterval(full ? PAD_SCAN_FULL_MS : PAD_SCAN_IDLE_INTERVAL_MS);
-  scan->setWindow(full ? PAD_SCAN_FULL_MS : PAD_SCAN_IDLE_WINDOW_MS);
-  if (!scan->start(PAD_SCAN_CHUNK_MS)) return;  // tried again next cycle
-  scan_full = full;
-  static int8_t logged = -1;  // one task calls this
-  if (logged == (int8_t)full) return;
-  logged = (int8_t)full;
-  LOG("pad", "looking for a controller (%s)", full ? "flat out: no broker" : "low duty");
+  scan->setInterval(PAD_SCAN_MS);
+  scan->setWindow(PAD_SCAN_MS);
+  scan->start(PAD_SCAN_CHUNK_MS);  // if it fails, tried again next cycle
+}
+
+// Stopping keeps the results, so a found controller can still be connected.
+void stop_scanning() {
+  NimBLEScan* scan = NimBLEDevice::getScan();
+  if (scan->isScanning()) scan->stop();
 }
 
 void send(CommandType type, JogDirection direction) {
@@ -79,18 +76,52 @@ void pad_task(void* /*param*/) {
   bool link_ok = false;
   uint32_t last_ok_ms = 0;
   PadAction last_logged = PadAction::None;
-  bool scan_full = false;
+  uint32_t seen_requests = g_pad_connect_requests;
+  bool window_open = false;
+  uint32_t window_opened_ms = 0;
+  bool looking = false;
 
   for (;;) {
     vTaskDelay(pdMS_TO_TICKS(PAD_LOOP_MS));
-    if (!pad.isConnected()) {
-      // TODO: also flat out after a "find controller" command from the
-      // dashboard (docs/firmware-architecture.md, TBD).
-      keep_scanning(pad, !g_mqtt_connected, scan_full);
-    } else if (NimBLEDevice::getScan()->isScanning()) {
-      NimBLEDevice::getScan()->stop();
+    uint32_t loop_ms = millis();
+
+    // connect_controller from the dashboard: look for PAD_CONNECT_WINDOW_MS.
+    uint32_t requests = g_pad_connect_requests;
+    if (requests != seen_requests) {
+      seen_requests = requests;
+      if (pad.isConnected()) {
+        LOG("pad", "connect_controller: a controller is already connected");
+      } else {
+        window_open = true;
+        window_opened_ms = loop_ms;
+      }
     }
-    pad.onLoop();  // connects to a controller the scan found
+    if (window_open && (pad.isConnected() || loop_ms - window_opened_ms >= PAD_CONNECT_WINDOW_MS)) {
+      window_open = false;
+      if (!pad.isConnected()) LOG("pad", "connect_controller: no controller found");
+    }
+
+    // Only look while the robot is on its own (no broker: there's no
+    // heartbeat to tell otherwise) or during a connect_controller window.
+    bool look = !pad.isConnected() && (!g_mqtt_connected || window_open);
+    if (look != looking) {
+      looking = look;
+      if (look) {
+        LOG("pad", "looking for a controller (%s)", window_open ? "connect_controller" : "no broker");
+      } else if (!pad.isConnected()) {
+        LOG("pad", "stopped looking for a controller");
+      }
+    }
+    if (look) {
+      keep_scanning(pad);
+    } else {
+      stop_scanning();
+    }
+    // onLoop() connects to a controller a scan found, but with none it starts
+    // a scan of its own: only while looking, or to finish connecting.
+    if (pad.isConnected() || look || XboxSeriesXControllerESP32_asukiaaa::advDevice != nullptr) {
+      pad.onLoop();
+    }
 
     bool ready = pad.isConnected() && !pad.isWaitingForFirstNotification();
     if (ready != connected) {

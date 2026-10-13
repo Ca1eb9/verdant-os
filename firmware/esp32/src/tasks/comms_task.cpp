@@ -38,6 +38,12 @@ void on_message(char* topic, uint8_t* payload, unsigned int len) {
     LOG("comms", "rejected command (%s): %.*s", to_string(r), (int)min(len, 200u), payload);
     return;
   }
+  if (cmd.type == CommandType::ConnectController) {
+    // The pad task's, in any status (initializing too): nav has no part in it.
+    g_pad_connect_requests = g_pad_connect_requests + 1;  // only comms writes it
+    LOG("comms", "command connect_controller -> pad");
+    return;
+  }
   if (xQueueSend(g_command_queue, &cmd, 0) != pdTRUE) {
     LOG("comms", "command queue full, dropped '%s'", to_wire(cmd.type));
     return;
