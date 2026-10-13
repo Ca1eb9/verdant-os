@@ -248,10 +248,14 @@ export function ControlPanel({
 
   // --- Manual control (farm network only) ---
   const inManual = status === "manual";
-  const canJog = localMode && online && Boolean(status && JOGGABLE.includes(status));
+  // Before its first tag the robot only takes the Bluetooth controller's jogs
+  const placed = Boolean(robot?.currentNode);
+  const canJog = localMode && online && placed && Boolean(status && JOGGABLE.includes(status));
   const manualTitle = !online
     ? "The robot is offline."
-    : canJog
+    : !placed
+      ? "Not available until the robot has read a tag. Its Bluetooth controller can drive it."
+      : canJog
       ? "Drive the robot with Forward and Back until you press Resume."
       : `Not available while the robot is ${statusLabel(status ?? "idle").toLowerCase()}.`;
 
