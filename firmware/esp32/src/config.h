@@ -211,6 +211,11 @@ constexpr uint32_t PAD_SCAN_CHUNK_MS = 10000;   // each scan this long, then a f
 // ---- Motor task (tasks/motor_task.h) ------------------------------------------------
 
 constexpr uint32_t REVERSE_RAMP_MS = 150;       // TBD: slow to 0 over this before reversing
+// TBD: every stop slows to 0 over this rather than braking at once (a stop
+// command, a tag, an obstacle, the motor cutoff), so the robot doesn't jerk.
+// It rolls on a little: allow for it in OBSTACLE_STOP_CM, ELEVATOR_STOP_CM and
+// DOCK_STOP_CM.
+constexpr uint32_t STOP_RAMP_MS = 300;
 constexpr uint32_t MOTOR_LOOP_MS = 5;           // safety flags are checked this often
 constexpr uint32_t MOTOR_PWM_HZ = 20000;        // above hearing; the DRV8871 takes up to 200 kHz
 constexpr uint8_t MOTOR_PWM_BITS = 8;           // speeds are 0..255

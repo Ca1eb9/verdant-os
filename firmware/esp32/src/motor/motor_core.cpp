@@ -25,44 +25,48 @@ void MotorCore::command(const DriveCommand& c, uint32_t now) {
   seq_ = c.seq;
   received_ms_ = now;
   duration_ms_ = c.mode == DriveMode::Drive ? c.duration_ms : 0;
+  // From receipt, so a ramp's length doesn't depend on the motor cycle.
+  start_ramp(speed, now);
+}
 
-  if (opposite(output_, speed)) {
-    // A second command the new way mid-ramp keeps the ramp already running.
-    if (!ramping_) {
-      ramping_ = true;
-      ramp_from_ = output_;
-      ramp_started_ms_ = now;
-    }
-  } else {
-    // A stop, or back the way the motor is already turning: nothing to ramp.
-    ramping_ = false;
+void MotorCore::start_ramp(int16_t want, uint32_t now) {
+  // Back the way it was going: no need to slow down any more.
+  if (ramping_ && want != 0 && !opposite(ramp_from_, want)) ramping_ = false;
+  // Never down to 0 or through it at once: stopping (for any reason) takes
+  // STOP_RAMP_MS, reversing REVERSE_RAMP_MS. A ramp already running carries
+  // on, e.g. for a second command the new way.
+  if (!ramping_ && output_ != 0 && (want == 0 || opposite(output_, want))) {
+    ramping_ = true;
+    ramp_from_ = output_;
+    ramp_ms_ = want == 0 ? STOP_RAMP_MS : REVERSE_RAMP_MS;
+    ramp_started_ms_ = now;
   }
 }
 
 int16_t MotorCore::update(uint32_t now, bool kill, bool obstacle_front, bool obstacle_rear) {
   if (target_ != 0 && duration_ms_ != 0 && now - received_ms_ >= duration_ms_) {
     target_ = 0;
-    ramping_ = false;
     done_seq_ = seq_;
   }
 
-  int16_t out = target_;
-  if (target_ != 0 && ramping_) {
+  // The side the motor is turning toward (during a reversal, still the old
+  // way) and the side it's commanded toward: a flag on either holds it.
+  auto toward_flag = [&](int16_t speed) {
+    return (speed > 0 && obstacle_front) || (speed < 0 && obstacle_rear);
+  };
+  bool blocked = kill || toward_flag(output_) || toward_flag(target_);
+  held_ = blocked && target_ != 0;
+  int16_t want = blocked ? 0 : target_;
+  start_ramp(want, now);
+
+  int16_t out = want;
+  if (ramping_) {
     uint32_t elapsed = now - ramp_started_ms_;
-    if (elapsed >= REVERSE_RAMP_MS) {
+    if (elapsed >= ramp_ms_) {
       ramping_ = false;
     } else {
-      out = (int16_t)((int32_t)ramp_from_ * (int32_t)(REVERSE_RAMP_MS - elapsed) /
-                      (int32_t)REVERSE_RAMP_MS);
+      out = (int16_t)((int32_t)ramp_from_ * (int32_t)(ramp_ms_ - elapsed) / (int32_t)ramp_ms_);
     }
-  }
-
-  // The side the motor is turning toward: during a reversal ramp that is
-  // still the old way. Never ramped: the motor stops at once.
-  held_ = kill || (out > 0 && obstacle_front) || (out < 0 && obstacle_rear);
-  if (held_) {
-    out = 0;
-    ramping_ = false;
   }
   output_ = out;
   return out;

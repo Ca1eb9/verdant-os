@@ -122,8 +122,9 @@ struct SensorData {
 //
 // A Drive the opposite way to the motor's current direction (e.g. a backward
 // jog straight after a forward one) first slows to 0 over REVERSE_RAMP_MS, then
-// drives the new way. duration_ms still counts from receipt, ramp included. A
-// kill or obstacle stop is never ramped: the motors stop at once.
+// drives the new way. duration_ms still counts from receipt, ramp included.
+// Every stop slows to 0 over STOP_RAMP_MS rather than braking at once: a Stop,
+// a timed Drive running out, the kill flag and the obstacle flags alike.
 
 enum class DriveMode : uint8_t {
   Stop,   // motors off

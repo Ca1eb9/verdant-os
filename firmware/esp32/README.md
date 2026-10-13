@@ -110,7 +110,7 @@ This is the DRV8871's slow-decay mode: between pulses the motor is briefly brake
 
 The chip's inputs have pull-downs, so the motor coasts while the ESP32 boots. Positive speeds must drive the robot the way it faces (`ROBOT_HEADING`); if it goes the other way, swap the motor's red and black wires.
 
-The motor task (`tasks/motor_task`) applies `motor/motor_core` every `MOTOR_LOOP_MS`: the newest `DriveCommand` wins, a timed Drive (a jog pulse) ends by itself, reversing slows to 0 over `REVERSE_RAMP_MS` first, and the kill flag or the obstacle flag on the side it's driving toward holds the motor off until it clears. A stop brakes the motor rather than letting it coast.
+The motor task (`tasks/motor_task`) applies `motor/motor_core` every `MOTOR_LOOP_MS`: the newest `DriveCommand` wins, a timed Drive (a jog pulse) ends by itself, reversing slows to 0 over `REVERSE_RAMP_MS` first, and the kill flag or the obstacle flag on the side it's driving toward holds the motor off until it clears. Every stop slows to 0 over `STOP_RAMP_MS` (a stop command, a jog pulse running out, a tag, an obstacle, the motor cutoff), so the robot doesn't jerk; once stopped, the motor is braked rather than left to coast. The robot rolls on a little while it slows: `OBSTACLE_STOP_CM`, `ELEVATOR_STOP_CM` and `DOCK_STOP_CM` need to allow for it.
 
 **Bench settings** in `config.h`, each logged at boot while off. Turn them back on before running on the farm:
 
@@ -122,10 +122,10 @@ The motor task (`tasks/motor_task`) applies `motor/motor_core` every `MOTOR_LOOP
 
 Bench check, wheels off the ground, with the serial monitor open (`motor` lines):
 
-1. Jog forward and backward from the dashboard or the controller: the wheel turns each way and stops 500 ms after the last jog.
+1. Jog forward and backward from the dashboard or the controller: the wheel turns each way and, 500 ms after the last jog, slows to a stop.
 2. Forward then backward straight away: it slows before reversing.
 3. Hand in front of the front sensor: a forward jog does nothing (`held off: obstacle`), a backward one still drives. Same at the rear, the other way round.
-4. An obstacle during a reversal stops it at once.
+4. An obstacle during a reversal holds it at 0 once it has slowed down.
 
 ## Bluetooth controller
 

@@ -29,7 +29,7 @@ Five FreeRTOS tasks. `loop()` is empty.
 
 | Task | Priority | Core | Responsibility |
 |---|---|---|---|
-| Motor | Highest | 1 | Drives motors from the drive queue. Checks safety flags every cycle and stops immediately if one is set. Slows to 0 briefly before reversing (`REVERSE_RAMP_MS`). |
+| Motor | Highest | 1 | Drives motors from the drive queue. Checks safety flags every cycle and stops while one is set. Every stop slows to 0 over `STOP_RAMP_MS` rather than braking at once, and reversing slows to 0 first (`REVERSE_RAMP_MS`). |
 | Sensor | High | 1 | RFID reads, battery voltage, front and rear obstacle distance. Writes the sensor queue and sets safety flags. |
 | Navigation | Medium | 1 | Robot state machine, survival overrides, path following, turn decisions. Produces telemetry and events. |
 | Comms | Lowest | 0 | WiFi and MQTT. Publishes outbound messages and pushes received commands onto the command queue. |
@@ -347,8 +347,9 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
     tests only.
 - **Obstacle:** two VL53L4CX sensors, front and rear, each on its own I2C bus
   (they share one fixed address). The sensor task sets a front and a rear
-  obstacle flag, and the motor task hard-stops only on the flag for the side
-  it's driving toward, so the robot can still back away from an obstacle in
+  obstacle flag, and the motor task stops (easing off over `STOP_RAMP_MS`)
+  only on the flag for the side it's driving toward, so the robot can still
+  back away from an obstacle in
   front. Telemetry `obstacle_cm` comes from the sensor on the side of the last
   drive direction: front, or rear after reversing (kept while stopped). Note
   this is the drive direction, not `heading`, which doesn't change when the
@@ -423,7 +424,7 @@ dashboard asks for confirmation again before the next session.
      latch is kept); `resume` clears the latch and continues the task instead.
    - nothing: `idle`.
 
-**Safety in manual:** the obstacle flag still hard-stops the motors, and a jog
+**Safety in manual:** the obstacle flag still stops the motors, and a jog
 that runs into an obstacle publishes `obstacle_detected` (then `path_blocked`),
 so an operator who didn't see it knows why the robot stopped. Battery
 survival is limited to the motor cutoff (about 5%): there is no forced return to
@@ -451,7 +452,7 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
   (`JOG_SPEED`). Needs its own nav entry point (a variable-speed timed drive),
   not `jog`
 - Maybe: slow down near obstacles in `manual` too. Today a jog drives at
-  `JOG_SPEED` until the hard stop at `OBSTACLE_STOP_CM`; the `SLOW_ZONE_CM`
+  `JOG_SPEED` until it stops at `OBSTACLE_STOP_CM`; the `SLOW_ZONE_CM`
   slow-down to `APPROACH_SPEED` only applies while following an edge. Would
   fit with analog controller driving
 - Controller confirmation: tell the dashboard when a Bluetooth controller
