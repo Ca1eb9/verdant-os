@@ -129,7 +129,12 @@ void pad_task(void* /*param*/) {
       link_ok = false;
       core.reset();
       if (connected) {
-        LOG("pad", "controller connected (%s)", pad.buildDeviceAddressStr().c_str());
+        // The address to pin as PAD_ADDRESS. The library pins public
+        // addresses only, so say when it's a random one.
+        NimBLEClient* client = XboxSeriesXControllerESP32_asukiaaa::pConnectedClient;
+        bool is_public = !client || client->getPeerAddress().getType() == BLE_ADDR_PUBLIC;
+        LOG("pad", "controller connected (%s%s)", pad.buildDeviceAddressStr().c_str(),
+            is_public ? "" : ", a random address: PAD_ADDRESS can't pin it");
       } else {
         LOG("pad", "controller disconnected");
       }

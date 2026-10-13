@@ -129,7 +129,7 @@ An Xbox Wireless Controller (model 1914, firmware 5.x) pairs with the robot itse
 
 **Pairing:** turn the controller on and hold its pair button (top edge) until the Xbox light flashes fast. Until `PAD_ADDRESS` is set, the robot connects to any Xbox controller in pairing mode, and the light goes solid. After that the Xbox button alone reconnects it. A controller that was paired with a console or PC goes back to that first: turn that device's Bluetooth off.
 
-**Pin the controller.** Copy the address from the `controller connected (...)` log line into `secrets.h` as `#define PAD_ADDRESS "44:16:22:5e:b2:d4"` and reflash: from then on only that controller can connect. If it no longer connects, check the address, or remove the line to accept any controller again.
+**Pin the controller.** Copy the address from the `controller connected (...)` log line (printed on every connection, the first included) into `secrets.h` as `#define PAD_ADDRESS "44:16:22:5e:b2:d4"` and reflash: from then on only that controller can connect. If it no longer connects, check the address, or remove the line to accept any controller again. The library only pins public addresses: if the log line says the controller has a random address, pinning can't work.
 
 **The stick only starts driving from the centre.** If it is already pushed when the controller connects, after **B**, or after the link stalled, let go first.
 
