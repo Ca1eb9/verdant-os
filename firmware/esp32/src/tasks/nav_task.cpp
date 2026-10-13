@@ -157,6 +157,12 @@ void show_status_led(Adafruit_NeoPixel& led, const NavCore& core, const QueueOut
     hue = ORANGE; sat = 255; val = FULL;
   }
   if (!g_mqtt_connected && now % LED_OFFLINE_EVERY_MS < 2 * LED_FLASH_MS) val = 0;
+  // Bluetooth controller: three blue flashes on connect, one long one when lost.
+  uint32_t pad = since(g_pad_link_changed_ms);
+  if (pad < 6 * LED_FLASH_MS) {
+    hue = BLUE; sat = 255;
+    val = !g_pad_connected || (pad / LED_FLASH_MS) % 2 == 0 ? FULL : 0;
+  }
   // Two quick dim blips: a command arrived but was ignored (the log says why).
   uint32_t t = since(out.last_note_ms);
   if (t < 4 * LED_FLASH_MS) {

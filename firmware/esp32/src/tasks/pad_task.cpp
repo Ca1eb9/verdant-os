@@ -128,6 +128,8 @@ void pad_task(void* /*param*/) {
       connected = ready;
       link_ok = false;
       core.reset();
+      g_pad_connected = connected;
+      g_pad_link_changed_ms = millis();
       if (connected) {
         // The address to pin as PAD_ADDRESS. The library pins public
         // addresses only, so say when it's a random one.

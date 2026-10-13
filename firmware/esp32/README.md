@@ -185,6 +185,8 @@ The onboard NeoPixel (GPIO38) shows the robot's state: colour is the status, the
 | Dark gap every 2 s | MQTT offline |
 | Orange blink while moving | Obstacle flag set |
 | Amber blip every 5 s | Battery at or below 20% |
+| Three blue flashes | Bluetooth controller connected |
+| One long blue flash | Bluetooth controller lost |
 
 ## Flash graph
 

@@ -227,6 +227,10 @@ extern volatile uint32_t g_last_command_ms;
 // connect_controller commands received (comms counts, the pad task watches):
 // each one opens a PAD_CONNECT_WINDOW_MS window to look for the controller.
 extern volatile uint32_t g_pad_connect_requests;
+// The Bluetooth controller's link (pad task writes, the status LED reads):
+// connected or not, and millis() of the last change. 0 = never.
+extern volatile bool g_pad_connected;
+extern volatile uint32_t g_pad_link_changed_ms;
 
 // Creates every queue. Call once from setup() before creating tasks.
 // Returns false if any allocation failed.
