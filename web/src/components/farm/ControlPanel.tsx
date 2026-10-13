@@ -203,8 +203,12 @@ export function ControlPanel({
   };
 
   const status = robot?.status;
+  // Before its first tag the robot can't plan a route, and only takes the
+  // Bluetooth controller's jogs
+  const placed = Boolean(robot?.currentNode);
   const canStop = online;
-  const canDock = online && status !== "docking" && status !== "charging" && Boolean(dockNode);
+  // queued unplaced, it would set off for the dock as soon as the robot read a tag
+  const canDock = online && placed && status !== "docking" && status !== "charging" && Boolean(dockNode);
   const canResume = online && (status === "stopped" || status === "manual" || status === "idle");
   // Cancel works offline too: the orchestrator resends it when the robot reconnects.
   // A stop can't be cancelled; Resume releases the robot instead.
@@ -248,8 +252,6 @@ export function ControlPanel({
 
   // --- Manual control (farm network only) ---
   const inManual = status === "manual";
-  // Before its first tag the robot only takes the Bluetooth controller's jogs
-  const placed = Boolean(robot?.currentNode);
   const canJog = localMode && online && placed && Boolean(status && JOGGABLE.includes(status));
   const manualTitle = !online
     ? "The robot is offline."
@@ -516,8 +518,9 @@ export function ControlPanel({
                 </button>
               </div>
               <p className={styles.muted}>
-                Hold to drive; the robot stops within half a second of letting go. After {MANUAL_TIMEOUT_S} s without
-                input, or on Resume, it takes back control{task ? ` and continues ${taskText}` : ""}.
+                {canJog
+                  ? `Hold to drive; the robot stops within half a second of letting go. After ${MANUAL_TIMEOUT_S} s without input, or on Resume, it takes back control${task ? ` and continues ${taskText}` : ""}.`
+                  : manualTitle}
               </p>
             </>
           ) : confirmingManual ? (
