@@ -448,7 +448,10 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
   release. Today the stick past half way sends a fixed-speed `jog`
   (`JOG_SPEED`). Needs its own nav entry point (a variable-speed timed drive),
   not `jog`
-- Report whether a controller connected (after `connect_controller`): today
-  only the serial log says
+- Controller confirmation: tell the dashboard when a Bluetooth controller
+  connects or drops (after **Connect to RC**, and later), e.g. as robot events
+  or a telemetry field, and show it there; and confirm on the controller
+  itself (a rumble). Today only the serial log says. New events or fields are
+  a contract change (`types.ts` and every copy)
 - Graph updates from the orchestrator (the only case where the robot would
   write to flash)
