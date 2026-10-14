@@ -7,11 +7,11 @@ import { RobotsCard } from "@/components/dashboard/RobotsCard";
 import { SensorCard, type MetricTone } from "@/components/dashboard/SensorCard";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { NoFarmNotice } from "@/components/farms/NoFarmNotice";
-import { alertKey, currentAlertsByReading, useFarmAlerts } from "@/hooks/useFarmAlerts";
+import { alertKey, currentSeverityByReading, useFarmAlerts } from "@/hooks/useFarmAlerts";
 import { useFarmTelemetry } from "@/hooks/useFarmTelemetry";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { formatMetric } from "@/lib/format";
-import type { FarmAlert } from "@/lib/farm/types";
+import type { AlertSeverity } from "@/lib/farm/types";
 import styles from "@/components/dashboard/DashboardView.module.css";
 
 const AIR_FALLBACK = "\uD83C\uDF2C\uFE0F";
@@ -27,14 +27,14 @@ function formatOptionalMetric(value: number | null, unit: string, precision = 1)
  * Alerts card always agree. `metric` is the engine's name for the reading.
  */
 function toneOf(
-  alerts: Map<string, FarmAlert> | null,
+  alerts: Map<string, AlertSeverity> | null,
   device: string | null,
   metric: string,
   value: number | boolean | null,
 ): MetricTone {
   if (value === null) return "none";
   if (!alerts) return "unknown";
-  const severity = device ? alerts.get(alertKey("shelf", device, metric))?.severity : undefined;
+  const severity = device ? alerts.get(alertKey("shelf", device, metric)) : undefined;
   return severity === "warning" || severity === "critical" ? severity : "ok";
 }
 
@@ -48,7 +48,7 @@ export function DashboardView() {
   useEffect(() => setMounted(true), []);
   const { reading, lastUpdate, liveStatus } = useFarmTelemetry(farm?.id ?? null);
   const farmAlerts = useFarmAlerts();
-  const alerts = useMemo(() => (farmAlerts ? currentAlertsByReading(farmAlerts) : null), [farmAlerts]);
+  const alerts = useMemo(() => (farmAlerts ? currentSeverityByReading(farmAlerts) : null), [farmAlerts]);
   const device = reading?.device ?? null;
 
   const airTemperature = reading?.airTemperature ?? null;
