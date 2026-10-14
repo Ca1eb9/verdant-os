@@ -162,4 +162,19 @@ describe("ThresholdEvaluator", () => {
     assert.equal(refilled.message, "shelf-1 reservoir is back above the level sensor");
     assert.deepEqual(run(evaluator, [[62_000, level(false)], [92_000, level(false)]]), ["92000:critical"]);
   });
+
+  it("keeps open alerts across a restart, so a clear still resolves them", () => {
+    const before = new ThresholdEvaluator([threshold], 0, COOLDOWN);
+    const [{ alert }] = before.evaluate(temp(31), 0);
+    const saved = JSON.parse(JSON.stringify(before.openAlerts()));
+    assert.deepEqual(saved, { "shelf:shelf-1:temperature_c": { band: "criticalHigh", alert_id: alert.alert_id } });
+
+    const after = new ThresholdEvaluator([threshold], 0, COOLDOWN);
+    after.restore({ ...saved, bad: { band: "ok", alert_id: "x" }, worse: null }, 5);
+    // Still out of range: no new alert, as before the restart
+    assert.equal(after.evaluate(temp(31), 6).length, 0);
+    const [{ alert: cleared }] = after.evaluate(temp(22), 7);
+    assert.equal(cleared.resolves, alert.alert_id);
+    assert.deepEqual(after.openAlerts(), {});
+  });
 });

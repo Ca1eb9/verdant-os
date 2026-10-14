@@ -17,6 +17,12 @@ export interface RaisedAlert {
 
 type Band = "ok" | "warningLow" | "warningHigh" | "criticalLow" | "criticalHigh";
 
+/** A raised metric and its last alert, kept across restarts so a clear still resolves it */
+export interface OpenAlert {
+  band: Exclude<Band, "ok">;
+  alert_id: string;
+}
+
 const RANK: Record<Band, number> = { ok: 0, warningLow: 1, warningHigh: 1, criticalLow: 2, criticalHigh: 2 };
 
 /** The reservoir has a level switch, not a gauge: below it is already critical */
@@ -126,6 +132,32 @@ export class ThresholdEvaluator {
     }
 
     return raised;
+  }
+
+  /** Raised metrics by key, for the state file */
+  openAlerts(): Record<string, OpenAlert> {
+    const open: Record<string, OpenAlert> = {};
+    for (const [key, state] of this.states) {
+      if (state.raised !== "ok" && state.lastAlertId) open[key] = { band: state.raised, alert_id: state.lastAlertId };
+    }
+    return open;
+  }
+
+  /**
+   * Restores raised metrics from the state file, as raised now: the next
+   * reading clears them (resolving their alert) or holds them, and the
+   * cooldown starts over. Entries that aren't an OpenAlert are skipped.
+   */
+  restore(open: unknown, now: number) {
+    if (typeof open !== "object" || open === null) return;
+    for (const [key, entry] of Object.entries(open)) {
+      const { band, alert_id: alertId } = (entry ?? {}) as Record<string, unknown>;
+      if (typeof band !== "string" || !(band in RANK) || band === "ok") continue;
+      if (typeof alertId !== "string" || alertId === "") continue;
+      this.states.set(key, {
+        raised: band as Band, candidate: band as Band, since: now, lastAlertedAt: now, lastAlertId: alertId,
+      });
+    }
   }
 
   private key(reading: Reading, metric: string) {

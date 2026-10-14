@@ -147,8 +147,11 @@ npm run orch
 - The plant scheduler queues water and grow tasks for each robot in
   `robot_plants` (`orchestrator/docs/state-machine.md`, section 6). Tests:
   `npm -w @farm/orchestrator test`.
-- Queued, assigned and finished tasks are saved to
-  `farm-controller/orchestrator-state.json` (gitignored) and restored on restart.
+- Queued, assigned and finished tasks, and each robot's open lost and error
+  alerts, are saved to `farm-controller/orchestrator-state.json` (gitignored)
+  and restored on restart. "Robot recovered" resolves the open alert, also
+  after a restart; a lost or error alert raised again while one is open
+  replaces it (`resolves` set to the old one).
 - Environment overrides: `BROKER_URL`, `CONFIG_PATH`, `TOPOLOGY_PATH`, `STATE_PATH`.
 - It exits if the broker isn't reachable at startup. On the Pi it runs as a
   systemd service that starts after Mosquitto and restarts on failure: see
@@ -169,9 +172,12 @@ npm run shelf
   serial port, shelf id, level and pH calibration. On the Pi, prefer the
   `/dev/serial/by-id/...` path over `/dev/ttyACM0`.
 - An unplugged node is reopened automatically; a shelf with no readings for
-  `silence_timeout_ms` raises one alert on `farm/alerts`.
-- Environment overrides: `BROKER_URL`, `CONFIG_PATH`. On the Pi it runs as
-  the `farm-shelf-bridge` service with its config in `/etc/verdant/`
+  `silence_timeout_ms` raises one alert on `farm/alerts`, and its next reading
+  publishes an info alert resolving it. Open silence alerts are saved to
+  `farm-controller/shelf-bridge-state.json` (gitignored), so this works across
+  a restart or reboot.
+- Environment overrides: `BROKER_URL`, `CONFIG_PATH`, `STATE_PATH`. On the Pi
+  it runs as the `farm-shelf-bridge` service with its config in `/etc/verdant/`
   ([docs/PI-SERVICES.md](../docs/PI-SERVICES.md)); by hand, your user needs to
   be in the `dialout` group.
 
@@ -207,10 +213,12 @@ npm run alert
   except this service's repeats. Without all three, or without internet, it
   runs the same and sends nothing; a failed send is logged and dropped. See
   `deploy/env/alert-engine.env.example`.
-- State is in memory: after a restart, an out-of-range reading waits out the
-  hold time again.
-- Environment overrides: `BROKER_URL`, `CONFIG_PATH`. On the Pi it runs as
-  the `farm-alert-engine` service ([docs/PI-SERVICES.md](../docs/PI-SERVICES.md)).
+- Raised metrics and their last alert are saved to
+  `farm-controller/alert-engine-state.json` (gitignored) and restored on
+  restart, so a reading back in range after a restart or reboot still resolves
+  its alert. Hold times and cooldowns are in memory and start over.
+- Environment overrides: `BROKER_URL`, `CONFIG_PATH`, `STATE_PATH`. On the Pi
+  it runs as the `farm-alert-engine` service ([docs/PI-SERVICES.md](../docs/PI-SERVICES.md)).
 
 ### Other services
 

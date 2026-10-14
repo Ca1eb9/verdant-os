@@ -13,8 +13,8 @@ Every service is a **systemd** unit. systemd is built into the OS, so there's no
 | Mosquitto | `mosquitto` | MQTT broker, ports 1883 and 9001 (WebSockets) | — |
 | Orchestrator | `farm-orchestrator` | Robot state, task queue, commands | `/var/lib/verdant/orchestrator-state.json` |
 | Ingester | `farm-ingester` | Records telemetry and operator commands to SQLite | `/var/lib/verdant/farm_telemetry.db` |
-| Shelf bridge | `farm-shelf-bridge` | Reads the shelf sensor node over USB serial and publishes its readings ([shelf-sensors.md](shelf-sensors.md)) | — |
-| Alert engine | `farm-alert-engine` | Publishes an alert when a robot's or shelf's sensor reading stays out of range; optionally emails critical alerts ([farm-controller/README.md](../farm-controller/README.md#alert-engine)) | — |
+| Shelf bridge | `farm-shelf-bridge` | Reads the shelf sensor node over USB serial and publishes its readings ([shelf-sensors.md](shelf-sensors.md)) | `/var/lib/verdant/shelf-bridge-state.json` |
+| Alert engine | `farm-alert-engine` | Publishes an alert when a robot's or shelf's sensor reading stays out of range; optionally emails critical alerts ([farm-controller/README.md](../farm-controller/README.md#alert-engine)) | `/var/lib/verdant/alert-engine-state.json` |
 | Dashboard | `farm-dashboard` | Web app on `http://farmnet.local:3000` | — |
 
 Networks (set up in [WIFI-SETUP.md](WIFI-SETUP.md)):
@@ -82,7 +82,7 @@ In `dashboard.env`, set the Supabase values (the URL and the publishable key, ne
 
 In `shelf-bridge-config.json`, set each shelf's `port` to its node's stable path (plug the Uno in, then `ls /dev/serial/by-id/`) and its pH calibration ([shelf-sensors.md](shelf-sensors.md#ph-calibration)). This copy belongs to this Pi; the repo's file is only the template, and a deploy never touches this one. The service can open serial ports through the `dialout` group (set in its unit).
 
-The orchestrator, ingester and shelf bridge `.env` files work as they are. So does the alert engine's; to have it email critical alerts, `sudo nano /etc/verdant/alert-engine.env` and set the three Resend values described there (an API key from [resend.com](https://resend.com), the sender and the recipients). Without them it only publishes alerts.
+The orchestrator, ingester and shelf bridge `.env` files work as they are. So does the alert engine's; to have it email critical alerts, `sudo nano /etc/verdant/alert-engine.env` and set the three Resend values described there (an API key from [resend.com](https://resend.com), the sender and the recipients). Without them it only publishes alerts. On a Pi set up before the shelf bridge and alert engine kept state files, add the `STATE_PATH` line from each one's example to its `.env`; without it they log `Could not write` and forget open alerts on a restart.
 
 These files are readable by root and the `farm` user only. Never copy them into the repo; it's public.
 

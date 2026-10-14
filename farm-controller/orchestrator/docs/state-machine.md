@@ -119,7 +119,9 @@ Notes:
   requeue puts it back to `pending`.
 - Queued, assigned and finished tasks are saved to `orchestrator-state.json` and
   restored on restart; restored assigned tasks are reconciled by the robot's
-  next telemetry.
+  next telemetry. Each robot's open lost and error alerts are saved with them:
+  a robot lost before a restart gets its "Robot recovered" alert on its first
+  telemetry after it, resolving the saved one.
 
 ## 3. Telemetry handling
 

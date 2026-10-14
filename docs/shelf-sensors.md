@@ -105,7 +105,7 @@ Restart the bridge after editing the config: `sudo systemctl restart farm-shelf-
 | Node hangs (I2C, firmware bug) | Watchdog resets it within 8 s | Logs the restart (`seq` went back) |
 | Port open but silent (node hung past its watchdog, wedged USB) | Reset by the reopen (DTR) | After 20 s closes and reopens the port, and keeps doing so every 20 s until readings return |
 | USB unplugged / node rebooting | — | Reopens the port every 3 s; one alert after 20 s of silence; when readings resume, logs it and publishes an info alert resolving it |
-| Pi reboots or loses power | Powered by the Pi's USB, so it restarts with it | systemd starts the bridge; it waits for the port and broker, readings resume within about 10 s |
+| Pi reboots or loses power | Powered by the Pi's USB, so it restarts with it | systemd starts the bridge; it waits for the port and broker, readings resume within about 10 s. A silence alert still open from before resolves on the first reading (it's saved in `STATE_PATH`) |
 | Pi clock jumps (no RTC; NTP syncs late or never) | — | Silence is timed on a monotonic clock, so no false alerts; published `timestamp` follows the Pi's clock like every other service |
 | Garbage, partial or library error lines | — | Never published; non-JSON lines are logged as node output, repeats once |
 | Broker down | — | The shared MQTT client reconnects and sends readings queued while it was offline |

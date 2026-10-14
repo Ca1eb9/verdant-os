@@ -192,7 +192,8 @@ export interface FarmAlert {
   timestamp: number;
   /**
    * The alert_id this one resolves, or null. An info alert with it set means
-   * the problem cleared; a warning with it set eased a critical alert.
+   * the problem cleared; a warning with it set eased a critical alert; any
+   * other alert with it set replaces the earlier alert for the same problem.
    */
   resolves: string | null;
 }

@@ -16,6 +16,8 @@ import {
   TOPICS,
   createMqttClient,
   extractIdFromTopic,
+  readStateFile,
+  writeStateFile,
   type FarmAlert,
   type TypedMqttClient,
 } from "@farm/shared";
@@ -26,6 +28,10 @@ import { isFarmAlert, isRobotTelemetry, isShelfSensorData } from "./validate.js"
 
 const BROKER_URL = process.env.BROKER_URL ?? "mqtt://localhost:1883";
 const CONFIG_PATH = process.env.CONFIG_PATH ?? "../../alert-engine-config.json";
+/** Raised metrics and their last alert, so a restart or reboot still resolves them */
+const STATE_PATH = fileURLToPath(
+  new URL(process.env.STATE_PATH ?? "../../alert-engine-state.json", import.meta.url),
+);
 
 /** Topics whose last payload was invalid, so a bad sender logs once, not on every message */
 const invalidTopics = new Set<string>();
@@ -47,11 +53,13 @@ async function main() {
 
   email = emailConfigFromEnv(process.env, (message) => console.warn(`[ALERT] ${message}`));
   const evaluator = new ThresholdEvaluator(config.thresholds, config.hold_ms, config.cooldown_ms);
+  evaluator.restore(readStateFile(STATE_PATH), performance.now());
   const mqtt = await createMqttClient({ serviceName: "alert-engine", brokerUrl: BROKER_URL });
 
   console.log("[ALERT] Alert engine running");
   console.log(`[ALERT]   broker:     ${BROKER_URL}`);
   console.log(`[ALERT]   config:     ${CONFIG_PATH}`);
+  console.log(`[ALERT]   state:      ${STATE_PATH} (${Object.keys(evaluator.openAlerts()).length} open)`);
   console.log(`[ALERT]   metrics:    ${config.thresholds.map((t) => t.metric).join(", ")}, water_level_ok`);
   console.log(`[ALERT]   hold:       ${config.hold_ms}ms, cooldown ${config.cooldown_ms}ms`);
   console.log(`[ALERT]   email:      ${email ? `critical alerts to ${email.to.length} address(es)` : "off"}`);
@@ -106,11 +114,13 @@ function subscribe(
       console.log(`[ALERT] Valid ${sourceType} telemetry on ${receivedTopic} again`);
     }
 
-    for (const { alert, reminder } of evaluator.evaluate({ source: topicId, sourceType, values: payload }, performance.now())) {
+    const raised = evaluator.evaluate({ source: topicId, sourceType, values: payload }, performance.now());
+    for (const { alert, reminder } of raised) {
       if (reminder && email) reminderIds.add(alert.alert_id);
       mqtt.publish<FarmAlert>(TOPICS.alerts, alert);
       console.log(`[ALERT] ${alert.severity.toUpperCase()}${reminder ? " (still)" : ""}: ${alert.message}`);
     }
+    if (raised.length > 0) writeStateFile(STATE_PATH, evaluator.openAlerts());
   });
 }
 

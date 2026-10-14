@@ -71,9 +71,9 @@ coverage/
 *.db-wal
 *.db-shm
 
-# Orchestrator task state
-orchestrator-state.json
-orchestrator-state.json.tmp
+# Pi services' state files (STATE_PATH)
+*-state.json
+*-state.json.tmp
 
 # ──────────────────────────────────────────
 # PlatformIO
