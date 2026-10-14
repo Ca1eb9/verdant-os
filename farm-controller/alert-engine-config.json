@@ -1,0 +1,46 @@
+{
+  "hold_ms": 30000,
+  "cooldown_ms": 900000,
+  "thresholds": [
+    {
+      "metric": "temperature_c",
+      "warning_min": 18,
+      "warning_max": 28,
+      "critical_min": 16,
+      "critical_max": 30,
+      "deadband": 1,
+      "message_template": "{source} air temperature {value} °C is {direction} the {severity} limit of {limit} °C",
+      "resolved_template": "{source} air temperature is back in range at {value} °C"
+    },
+    {
+      "metric": "humidity_pct",
+      "warning_min": 40,
+      "warning_max": 70,
+      "critical_min": 35,
+      "critical_max": 80,
+      "deadband": 3,
+      "message_template": "{source} humidity {value}% is {direction} the {severity} limit of {limit}%",
+      "resolved_template": "{source} humidity is back in range at {value}%"
+    },
+    {
+      "metric": "water_temp_c",
+      "warning_min": 18,
+      "warning_max": 24,
+      "critical_min": 16,
+      "critical_max": 26,
+      "deadband": 0.3,
+      "message_template": "{source} water temperature {value} °C is {direction} the {severity} limit of {limit} °C",
+      "resolved_template": "{source} water temperature is back in range at {value} °C"
+    },
+    {
+      "metric": "ph",
+      "warning_min": 5.5,
+      "warning_max": 6.8,
+      "critical_min": 5.2,
+      "critical_max": 7.2,
+      "deadband": 0.1,
+      "message_template": "{source} pH {value} is {direction} the {severity} limit of {limit}",
+      "resolved_template": "{source} pH is back in range at {value}"
+    }
+  ]
+}

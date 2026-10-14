@@ -55,6 +55,8 @@ export const TOPICS = {
 
   /** Farm-wide alerts from any service */
   alerts: "farm/alerts" as const,
+  /** Clear every alert: stored ones, open ones and the dashboards' lists (npm run clear-alerts) */
+  alertsClear: "farm/alerts/clear" as const,
 
   /** System-level topics */
   system: {

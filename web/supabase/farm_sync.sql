@@ -67,8 +67,12 @@ create table if not exists public.alerts (
   value double precision not null,
   threshold double precision not null,
   "timestamp" bigint not null,
+  -- The alert_id this one resolves, or null
+  resolves text,
   created_at timestamptz not null default now()
 );
+-- Tables created before resolves existed
+alter table public.alerts add column if not exists resolves text;
 create index if not exists alerts_farm_idx on public.alerts (farm_id, created_at desc);
 
 -- FarmTopology from farm/system/topology (retained). One row per farm.

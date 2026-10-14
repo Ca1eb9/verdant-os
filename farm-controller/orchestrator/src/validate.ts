@@ -4,6 +4,7 @@
 // ============================================================
 
 import {
+  type AlertsCleared,
   type RobotTelemetry,
   type RobotEvent,
   type RemoteCommand,
@@ -85,4 +86,8 @@ export function isRemoteCommand(v: unknown): v is RemoteCommand {
     PRIORITIES.has(c.priority as string) &&
     SOURCES.has(c.source as string)
   );
+}
+
+export function isAlertsCleared(v: unknown): v is AlertsCleared {
+  return isObj(v) && isNum(v.timestamp);
 }

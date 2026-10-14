@@ -170,6 +170,20 @@ export interface FarmAlert {
   value: number;
   threshold: number;
   timestamp: number;
+  /**
+   * The alert_id this one resolves, or null. An info alert with it set means
+   * the problem cleared; a warning with it set eased a critical alert; any
+   * other alert with it set replaces the earlier alert for the same problem.
+   */
+  resolves: string | null;
+}
+
+/**
+ * Published to farm/alerts/clear by `npm run clear-alerts`: every service
+ * forgets its alerts, stored and open, and dashboards empty their lists
+ */
+export interface AlertsCleared {
+  timestamp: number;
 }
 
 export interface PlantRecord {

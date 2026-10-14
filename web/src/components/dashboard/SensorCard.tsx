@@ -4,14 +4,15 @@ import { MetricValue } from "@/components/ui/MetricValue";
 import styles from "@/components/dashboard/DashboardView.module.css";
 
 type CardAccent = "cyan" | "teal" | "lime";
-/** A reading's alert state: in range, warning, critical, or no reading */
-export type MetricTone = "ok" | "warning" | "critical" | "none";
+/** A reading's alert state: in range, warning, critical, no reading, or no alerts to tell */
+export type MetricTone = "ok" | "warning" | "critical" | "none" | "unknown";
 
 const TONE_LABEL: Record<MetricTone, string> = {
   ok: "In range",
   warning: "Warning: outside the target range",
   critical: "Critical: outside the safe range",
   none: "No reading",
+  unknown: "Alerts aren't available here yet",
 };
 
 function ToneDot({ tone }: { tone: MetricTone }) {

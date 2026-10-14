@@ -147,8 +147,11 @@ npm run orch
 - The plant scheduler queues water and grow tasks for each robot in
   `robot_plants` (`orchestrator/docs/state-machine.md`, section 6). Tests:
   `npm -w @farm/orchestrator test`.
-- Queued, assigned and finished tasks are saved to
-  `farm-controller/orchestrator-state.json` (gitignored) and restored on restart.
+- Queued, assigned and finished tasks, and each robot's open lost and error
+  alerts, are saved to `farm-controller/orchestrator-state.json` (gitignored)
+  and restored on restart. "Robot recovered" resolves the open alert, also
+  after a restart; a lost or error alert raised again while one is open
+  replaces it (`resolves` set to the old one).
 - Environment overrides: `BROKER_URL`, `CONFIG_PATH`, `TOPOLOGY_PATH`, `STATE_PATH`.
 - It exits if the broker isn't reachable at startup. On the Pi it runs as a
   systemd service that starts after Mosquitto and restarts on failure: see
@@ -169,11 +172,57 @@ npm run shelf
   serial port, shelf id, level and pH calibration. On the Pi, prefer the
   `/dev/serial/by-id/...` path over `/dev/ttyACM0`.
 - An unplugged node is reopened automatically; a shelf with no readings for
-  `silence_timeout_ms` raises one alert on `farm/alerts`.
-- Environment overrides: `BROKER_URL`, `CONFIG_PATH`. On the Pi it runs as
-  the `farm-shelf-bridge` service with its config in `/etc/verdant/`
+  `silence_timeout_ms` raises one alert on `farm/alerts`, and its next reading
+  publishes an info alert resolving it. Open silence alerts are saved to
+  `farm-controller/shelf-bridge-state.json` (gitignored), so this works across
+  a restart or reboot.
+- Environment overrides: `BROKER_URL`, `CONFIG_PATH`, `STATE_PATH`. On the Pi
+  it runs as the `farm-shelf-bridge` service with its config in `/etc/verdant/`
   ([docs/PI-SERVICES.md](../docs/PI-SERVICES.md)); by hand, your user needs to
   be in the `dialout` group.
+
+### Alert engine
+
+Watches robot telemetry and shelf readings and publishes a `FarmAlert` to
+`farm/alerts` when a reading stays outside its range.
+
+```bash
+npm run alert
+```
+
+- Ranges load from `alert-engine-config.json`: per telemetry field, a warning
+  band inside a critical band, and a deadband. They apply to every payload
+  carrying that field, so a robot's AHT20 `temperature_c` and `humidity_pct`
+  use the shelf air ranges. The dashboard shows these alerts (its sensor dots
+  included) and checks no ranges of its own.
+- A shelf's `water_level_ok: false` is critical. A `null` or missing reading
+  raises nothing and keeps the metric's state; silence is the shelf bridge's
+  and the orchestrator's to alert on.
+- An alert is raised, or escalated from warning to critical, only after the
+  readings have stayed out of range for `hold_ms`, so a one-off spike raises
+  nothing. Easing or clearing is immediate, but a raised alert clears only once
+  the value is back inside its limit by the deadband, so a value sitting on a
+  limit doesn't flap. While a metric stays in the same band, it repeats at most
+  every `cooldown_ms`.
+- Easing from critical to warning publishes a warning, and clearing publishes
+  an info alert (`resolved_template`), each with `resolves` set to the
+  metric's last alert. The dashboard shows that alert as resolved.
+- Optional email: with `RESEND_API_KEY`, `ALERT_EMAIL_FROM` and
+  `ALERT_EMAIL_TO` set, every critical alert on `farm/alerts` (from any
+  service, e.g. a lost robot) is emailed through [Resend](https://resend.com),
+  except this service's repeats. Without all three, or without internet, it
+  runs the same and sends nothing; a failed send is logged and dropped. See
+  `deploy/env/alert-engine.env.example`.
+- `npm run clear-alerts` (`src/clear.ts`) publishes `farm/alerts/clear`:
+  the ingester deletes its stored alerts, this service, the orchestrator and
+  the shelf bridge forget their open ones, and open dashboards empty their
+  lists. See "Common tasks" in [docs/PI-SERVICES.md](../docs/PI-SERVICES.md).
+- Raised metrics and their last alert are saved to
+  `farm-controller/alert-engine-state.json` (gitignored) and restored on
+  restart, so a reading back in range after a restart or reboot still resolves
+  its alert. Hold times and cooldowns are in memory and start over.
+- Environment overrides: `BROKER_URL`, `CONFIG_PATH`, `STATE_PATH`. On the Pi
+  it runs as the `farm-alert-engine` service ([docs/PI-SERVICES.md](../docs/PI-SERVICES.md)).
 
 ### Other services
 
@@ -196,12 +245,13 @@ farm-controller/
 ├── ingester/            # Telemetry → SQLite recorder
 ├── orchestrator/        # Robot state, task queue, commands
 ├── shelf-bridge/        # Shelf sensor node (USB serial) → MQTT
-├── alert-engine/        # (to be built) Threshold monitoring
+├── alert-engine/        # Sensor readings out of range → alerts
 ├── supabase-bridge/     # (to be built) Cloud sync
 ├── dashboard-api/       # (to be built) REST API for dashboard
 ├── topology.json        # Farm layout (nodes + edges)
 ├── orchestrator-config.json  # Tunable orchestrator settings
 ├── shelf-bridge-config.json  # Shelf serial ports and pH calibration
+├── alert-engine-config.json  # Alert ranges, hold time and cooldown
 └── package.json         # Workspace root
 ```
 

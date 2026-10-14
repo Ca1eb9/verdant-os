@@ -42,9 +42,10 @@ import {
   processTelemetry,
   processEvent,
   processWatchdog,
+  type AlertProblem,
   type SideEffect,
 } from "./state-machine.js";
-import { isRobotTelemetry, isRobotEvent, isRemoteCommand } from "./validate.js";
+import { isAlertsCleared, isRobotTelemetry, isRobotEvent, isRemoteCommand } from "./validate.js";
 import { loadTasks, saveTasks } from "./persistence.js";
 import { validatePlants, nextTask } from "./scheduler.js";
 
@@ -74,6 +75,11 @@ function recordFinished(task: FarmTask) {
 }
 
 const robots = new Map<string, RobotState>();
+/**
+ * Each robot's open problem alerts by kind, for the recovery alert to resolve.
+ * Saved with the tasks, so a recovery after a restart still resolves them.
+ */
+const problemAlerts = new Map<string, Map<AlertProblem, string>>();
 const queue = new TaskQueue();
 let mqtt: TypedMqttClient;
 
@@ -130,6 +136,10 @@ function persist() {
     queue: [...queue.all()],
     assigned: [...robots.values()].flatMap((s) => (s.assigned_task ? [s.assigned_task] : [])),
     finished: completedTasks,
+    open_alerts: Object.fromEntries(
+      [...problemAlerts].filter(([, problems]) => problems.size > 0)
+        .map(([robotId, problems]) => [robotId, Object.fromEntries(problems)]),
+    ),
   });
 }
 
@@ -181,6 +191,13 @@ function executeEffects(robotId: string, effects: SideEffect[]) {
       }
 
       case "publish_alert": {
+        const problems = problemAlerts.get(effect.robotId) ?? new Map<AlertProblem, string>();
+        problemAlerts.set(effect.robotId, problems);
+        // A problem raised again while its alert is open (lost again after a
+        // restart, a second error) replaces that alert, so it isn't left open
+        const resolved = effect.resolves ?? effect.problem;
+        const resolves = resolved ? problems.get(resolved) ?? null : null;
+        if (resolved) problems.delete(resolved);
         const alert: FarmAlert = {
           alert_id: randomUUID(),
           severity: effect.severity,
@@ -191,7 +208,9 @@ function executeEffects(robotId: string, effects: SideEffect[]) {
           value: 0,
           threshold: 0,
           timestamp: Date.now(),
+          resolves,
         };
+        if (effect.problem) problems.set(effect.problem, alert.alert_id);
         mqtt.publish(TOPICS.alerts, alert);
         console.log(`[ALERT] ${effect.message}`);
         break;
@@ -411,6 +430,18 @@ function onTelemetry(raw: unknown, topic: string) {
 
   const { effects } = processTelemetry(state, msg, config, state.last_seen, stopPending);
   executeEffects(robotId, effects);
+
+  // Lost before a restart: the rebuilt state isn't lost, so the state machine
+  // doesn't see the recovery. Resolve the saved alert here instead.
+  if (state.status !== RobotStatus.LOST && problemAlerts.get(robotId)?.has("lost")) {
+    executeEffects(robotId, [{
+      type: "publish_alert",
+      robotId,
+      severity: AlertSeverity.INFO,
+      message: `Robot recovered at ${state.current_node ?? "unknown node"}`,
+      resolves: "lost",
+    }]);
+  }
 
   // Robot is still working on a cancelled task (e.g. it was offline when
   // cancelled): tell it again, at most once per grace period
@@ -689,6 +720,9 @@ async function main() {
     if (task.assigned_robot) getOrCreateRobot(task.assigned_robot).assigned_task = task;
   }
   completedTasks.push(...saved.finished.slice(-config.completed_task_limit));
+  for (const [robotId, problems] of Object.entries(saved.open_alerts)) {
+    problemAlerts.set(robotId, new Map(Object.entries(problems) as [AlertProblem, string][]));
+  }
   publishStates();
 
   console.log(`[ORCH]   queue:     ${queue.length} tasks, ${saved.assigned.length} assigned (${STATE_PATH})`);
@@ -704,6 +738,14 @@ async function main() {
 
   // Subscribe to local commands (from dashboard)
   mqtt.subscribe<unknown>(TOPICS.commands.local, persisting(onRemoteCommand));
+
+  // npm run clear-alerts: forget open alerts, so a recovery resolves nothing.
+  // A robot still lost stays lost without a new alert.
+  mqtt.subscribe<unknown>(TOPICS.alertsClear, persisting((msg: unknown) => {
+    if (!isAlertsCleared(msg)) return;
+    problemAlerts.clear();
+    console.log("[ORCH] Alerts cleared");
+  }));
 
   // Start watchdog timer
   setInterval(persisting(runWatchdog), config.watchdog_interval_ms);

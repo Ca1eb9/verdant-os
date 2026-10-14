@@ -208,7 +208,8 @@
   box-shadow: 0 0 6px rgb(var(--danger-rgb) / 0.5);
 }
 
-.tonenone {
+.tonenone,
+.toneunknown {
   background: var(--muted);
   opacity: 0.45;
 }

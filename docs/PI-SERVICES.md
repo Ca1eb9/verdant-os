@@ -13,7 +13,8 @@ Every service is a **systemd** unit. systemd is built into the OS, so there's no
 | Mosquitto | `mosquitto` | MQTT broker, ports 1883 and 9001 (WebSockets) | — |
 | Orchestrator | `farm-orchestrator` | Robot state, task queue, commands | `/var/lib/verdant/orchestrator-state.json` |
 | Ingester | `farm-ingester` | Records telemetry and operator commands to SQLite | `/var/lib/verdant/farm_telemetry.db` |
-| Shelf bridge | `farm-shelf-bridge` | Reads the shelf sensor node over USB serial and publishes its readings ([shelf-sensors.md](shelf-sensors.md)) | — |
+| Shelf bridge | `farm-shelf-bridge` | Reads the shelf sensor node over USB serial and publishes its readings ([shelf-sensors.md](shelf-sensors.md)) | `/var/lib/verdant/shelf-bridge-state.json` |
+| Alert engine | `farm-alert-engine` | Publishes an alert when a robot's or shelf's sensor reading stays out of range; optionally emails critical alerts ([farm-controller/README.md](../farm-controller/README.md#alert-engine)) | `/var/lib/verdant/alert-engine-state.json` |
 | Dashboard | `farm-dashboard` | Web app on `http://farmnet.local:3000` | — |
 
 Networks (set up in [WIFI-SETUP.md](WIFI-SETUP.md)):
@@ -69,7 +70,7 @@ The services run as `farm`, which can't log in and can only write to its own fol
 
 ```bash
 sudo install -d -m 750 -o root -g farm /etc/verdant
-for f in orchestrator ingester shelf-bridge dashboard; do
+for f in orchestrator ingester shelf-bridge alert-engine dashboard; do
   sudo install -m 640 -o root -g farm /opt/verdant-os/deploy/env/$f.env.example /etc/verdant/$f.env
 done
 sudo install -m 640 -o root -g farm /opt/verdant-os/farm-controller/shelf-bridge-config.json /etc/verdant/shelf-bridge-config.json
@@ -81,7 +82,7 @@ In `dashboard.env`, set the Supabase values (the URL and the publishable key, ne
 
 In `shelf-bridge-config.json`, set each shelf's `port` to its node's stable path (plug the Uno in, then `ls /dev/serial/by-id/`) and its pH calibration ([shelf-sensors.md](shelf-sensors.md#ph-calibration)). This copy belongs to this Pi; the repo's file is only the template, and a deploy never touches this one. The service can open serial ports through the `dialout` group (set in its unit).
 
-The orchestrator, ingester and shelf bridge `.env` files work as they are.
+The orchestrator, ingester and shelf bridge `.env` files work as they are. So does the alert engine's; to have it email critical alerts, `sudo nano /etc/verdant/alert-engine.env` and set the three Resend values described there (an API key from [resend.com](https://resend.com), the sender and the recipients). Without them it only publishes alerts. On a Pi set up before the shelf bridge and alert engine kept state files, add the `STATE_PATH` line from each one's example to its `.env`; without it they log `Could not write` and forget open alerts on a restart.
 
 These files are readable by root and the `farm` user only. Never copy them into the repo; it's public.
 
@@ -104,7 +105,7 @@ sudo systemctl restart systemd-journald
 sudo bash /opt/verdant-os/scripts/pi-deploy.sh
 ```
 
-The first run takes several minutes, mostly the dashboard build. It installs the unit files, enables them at boot and starts them. It ends by printing each service's status; all four should be `active (running)`.
+The first run takes several minutes, mostly the dashboard build. It installs the unit files, enables them at boot and starts them. It ends by printing each service's status; all five should be `active (running)`.
 
 ### 7. Firewall
 
@@ -146,7 +147,7 @@ sudo reboot
 
 After it's back:
 
-1. `systemctl status mosquitto farm-orchestrator farm-ingester farm-shelf-bridge farm-dashboard`: all `active (running)`
+1. `systemctl status mosquitto farm-orchestrator farm-ingester farm-shelf-bridge farm-alert-engine farm-dashboard`: all `active (running)`
 2. `journalctl -u farm-orchestrator -n 20`: connected to the broker
 3. `curl -sI http://localhost:3000 | head -1`: `HTTP/1.1 200 OK`
 4. `systemctl show -p RuntimeWatchdogUSec`: `14s`
@@ -167,7 +168,10 @@ After it's back:
 | Update to the latest code | `sudo bash /opt/verdant-os/scripts/pi-deploy.sh` |
 | Try a branch | `sudo bash /opt/verdant-os/scripts/pi-deploy.sh <branch>` |
 | Watch MQTT traffic | `mosquitto_sub -t 'farm/#' -v` |
+| Clear all alerts (e.g. before a demo) | `cd /opt/verdant-os && npm run clear-alerts` |
 | Turn the Pi off | `sudo poweroff`, then wait for the green LED to stop before unplugging |
+
+Clearing alerts deletes them from the Pi's database and from Supabase (through the Supabase bridge), empties the Alerts page in every open dashboard, and makes the services forget their open alerts: a problem that's still there is raised again (a sensor reading after the alert engine's hold time, a silent shelf after the shelf bridge's timeout). A robot that's still lost isn't raised again until it reconnects and goes silent again. A service that's stopped at the time misses it and keeps its alerts.
 
 The deploy script stops the services while it installs (a few minutes). That's safe: the robots keep working without the Pi and report their real state when it's back.
 
@@ -229,3 +233,10 @@ SD cards fail from sudden power loss during a write and from wear. With this set
 | Dashboard says "No farm to show" on FarmNet | `NEXT_PUBLIC_FARM_ID` is empty or not a valid id (lowercase letters, digits, dashes) in `/etc/verdant/dashboard.env`. Set it and rerun the deploy script. |
 | Dashboard says "Disconnected" on FarmNet | Mosquitto is down or its port 9001 listener is missing ([WIFI-SETUP.md](WIFI-SETUP.md) step 5), or `NEXT_PUBLIC_MQTT_WS_URL` is wrong in `/etc/verdant/dashboard.env`; fix it and rerun the deploy script (it's fixed at build time). |
 | Dashboard map shows "Default farm layout" | The orchestrator isn't running, or Mosquitto lost its retained messages (persistence off): restart the orchestrator. |
+
+## TBD
+
+Known problems, not fixed yet:
+
+- **The shared MQTT client logs every message that isn't JSON** (`farm-controller/shared`), with no rate limit, so one bad sender can flood a service's journal. It should log once per topic until that topic is valid again, as the alert engine does.
+- **After a reconnect, the shared MQTT client resubscribes at QoS 0**, not the QoS 1 its subscriptions were made with, so messages can be lost after a broker restart.

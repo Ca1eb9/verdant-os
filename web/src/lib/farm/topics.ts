@@ -30,6 +30,8 @@ export const TOPICS = {
   },
   /** Alerts from every service; not retained */
   alerts: "farm/alerts",
+  /** Every alert cleared (npm run clear-alerts on the Pi); not retained */
+  alertsClear: "farm/alerts/clear",
 } as const;
 
 /** "farm/robot/robot-1/telemetry" → "robot-1" */

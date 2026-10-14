@@ -190,6 +190,20 @@ export interface FarmAlert {
   value: number;
   threshold: number;
   timestamp: number;
+  /**
+   * The alert_id this one resolves, or null. An info alert with it set means
+   * the problem cleared; a warning with it set eased a critical alert; any
+   * other alert with it set replaces the earlier alert for the same problem.
+   */
+  resolves: string | null;
+}
+
+/**
+ * Published to farm/alerts/clear by `npm run clear-alerts`: every service
+ * forgets its alerts, stored and open, and dashboards empty their lists
+ */
+export interface AlertsCleared {
+  timestamp: number;
 }
 
 /** Published to farm/commands/remote by Supabase bridge */
@@ -299,18 +313,28 @@ export interface PlantRecord {
 
 // --- Alert threshold config ---------
 
+/** Acceptable range of one telemetry field, by its name in the payload */
 export interface SensorThreshold {
   metric: string;
-  min: number;
-  max: number;
-  severity: AlertSeverity;
+  warning_min: number;
+  warning_max: number;
+  critical_min: number;
+  critical_max: number;
+  /** Once raised, an alert clears only when the value is back inside its limit by this much */
+  deadband: number;
+  /** Placeholders: {source} {value} {limit} {direction} ("below"/"above") {severity} */
   message_template: string;
+  /** The message once the value is back in range. Placeholders: {source} {value} */
+  resolved_template: string;
 }
 
+/** The alert engine's config. Silence is the orchestrator's and shelf bridge's job */
 export interface AlertConfig {
+  /** A reading must stay out of range this long before it raises (or escalates) an alert */
+  hold_ms: number;
+  /** While a metric stays in the same band, it re-alerts at most this often */
+  cooldown_ms: number;
   thresholds: SensorThreshold[];
-  robot_heartbeat_timeout_ms: number;
-  elevator_heartbeat_timeout_ms: number;
 }
 
 export interface PlantSchedule {

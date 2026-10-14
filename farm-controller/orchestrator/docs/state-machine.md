@@ -36,7 +36,7 @@ stateDiagram-v2
     }
 
     Reported --> lost : watchdog - no telemetry or event<br/>for heartbeat_timeout_ms<br/>[CRITICAL alert, task and path kept]
-    lost --> Reported : any telemetry<br/>[INFO alert "Robot recovered"]
+    lost --> Reported : any telemetry<br/>[INFO alert "Robot recovered", resolving the lost alert]
 ```
 
 Inside the box the orchestrator copies `status` from every valid telemetry
@@ -119,7 +119,9 @@ Notes:
   requeue puts it back to `pending`.
 - Queued, assigned and finished tasks are saved to `orchestrator-state.json` and
   restored on restart; restored assigned tasks are reconciled by the robot's
-  next telemetry.
+  next telemetry. Each robot's open lost and error alerts are saved with them:
+  a robot lost before a restart gets its "Robot recovered" alert on its first
+  telemetry after it, resolving the saved one.
 
 ## 3. Telemetry handling
 
@@ -141,7 +143,7 @@ flowchart TD
     I -- yes --> J[WARNING alert: deviated]
     I -- no --> K
     J --> K{Was lost?}
-    K -- yes --> L[INFO alert: recovered]
+    K -- yes --> L[INFO alert: recovered,<br/>resolves the lost alert]
     K -- no --> M
     L --> M{Assigned task?}
     M -- no --> Q
@@ -183,7 +185,7 @@ Events are a fast path; telemetry corrects anything missed.
 | `task_complete` | Only if `task_id` matches the assigned task: complete it, request the next task |
 | `task_failed` | Only if `task_id` matches: fail it, WARNING alert, request the next task |
 | `error` | CRITICAL alert; task and path kept |
-| `recovery` | INFO alert; request the next task |
+| `recovery` | INFO alert resolving the error alert; request the next task |
 | `path_blocked` | WARNING alert (while stored status is `en_route`) |
 | `charge_complete` | Request the next task (while stored status is `charging`) |
 | `arrived`, `task_started`, `dock_connected`, `battery_low`, `battery_critical`, `obstacle_detected` | No effect; status comes from telemetry |

@@ -34,13 +34,12 @@ flowchart LR
         subgraph ClientState[Client State + Browser Storage]
             FarmContext["FarmContext"]
             TelemetryHook["useFarmTelemetry"]
-            LocalStorage["localStorage\nlast reading per farm + alert history"]
+            LocalStorage["localStorage\nlast reading per farm"]
             ServiceWorker["service-worker.js\noffline shell cache"]
         end
 
         subgraph DomainLib[Shared Domain Libraries]
             MockData["mock-data.ts\nmock farms + telemetry (off)"]
-            AlertsLib["alerts.ts\nthreshold evaluation + persistence"]
             LightCal["light-calibration.ts"]
             FormatLib["format.ts"]
             Types["types.ts"]
@@ -80,16 +79,13 @@ flowchart LR
     AlertsView --> TelemetryHook
     FarmContext --> FarmsRoute
     FarmContext -. mock on .-> MockData
-    AlertsView --> AlertsLib
     ConfigView --> StatusRoute
 
     TelemetryHook --> LatestRoute
-    TelemetryHook --> AlertsLib
     TelemetryHook -. mock on .-> MockData
     TelemetryHook --> LightCal
     TelemetryHook --> LocalStorage
 
-    AlertsLib --> LocalStorage
 
     LatestRoute --> SupabaseConfig
     FarmsRoute --> SupabaseConfig
@@ -127,16 +123,13 @@ sequenceDiagram
         D-->>R: Latest record
         R-->>H: JSON event payload
         H->>H: Map DB row to SensorReading
-        H->>H: Evaluate alert thresholds
         H->>L: Store latest reading
-        H->>L: Store alert history
-        H-->>V: Updated reading, status, alerts
+        H-->>V: Updated reading and status
         V-->>U: Refresh dashboard cards and badges
     end
 
     opt No fresh heartbeat for threshold window
         H->>H: Mark stale/live status from lastUpdate
-        H->>H: Emit warning or critical connection alert
         H-->>V: Show stale state
     end
 ```

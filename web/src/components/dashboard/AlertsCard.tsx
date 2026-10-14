@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
-import { useFarmAlerts } from "@/hooks/useFarmAlerts";
-import type { TelemetryAlert } from "@/lib/types";
+import { listAlerts, useFarmAlerts } from "@/hooks/useFarmAlerts";
 import styles from "@/components/dashboard/DashboardView.module.css";
 
 const SHOWN_ALERTS = 4;
@@ -15,33 +14,26 @@ interface AlertRow {
   severity: "info" | "warning" | "critical";
   source: string;
   at: number;
+  resolved: boolean;
 }
 
-/**
- * The newest alerts: the sensor readings' active ones (passed in, so the
- * dashboard reads its feed once) and those from the farm's robots and services.
- */
-export function AlertsCard({ environmentAlerts }: { environmentAlerts: TelemetryAlert[] }) {
+/** The newest alerts from the farm's services (orchestrator, alert engine) */
+export function AlertsCard() {
   const { fmt } = usePreferences();
   const farmAlerts = useFarmAlerts();
 
-  const rows = useMemo<AlertRow[]>(() => {
-    const environment = environmentAlerts.map((alert) => ({
-      key: alert.id,
-      title: alert.title,
-      severity: alert.severity,
-      source: "Environment",
-      at: new Date(alert.detectedAt).getTime(),
-    }));
-    const services = (farmAlerts ?? []).map((alert) => ({
-      key: alert.alert_id,
-      title: alert.message,
-      severity: alert.severity,
-      source: alert.source,
-      at: alert.timestamp,
-    }));
-    return [...environment, ...services].sort((a, b) => b.at - a.at).slice(0, SHOWN_ALERTS);
-  }, [environmentAlerts, farmAlerts]);
+  const rows = useMemo<AlertRow[]>(
+    () =>
+      listAlerts(farmAlerts ?? []).slice(0, SHOWN_ALERTS).map(({ alert, resolvedAt }) => ({
+        key: alert.alert_id,
+        title: alert.message,
+        severity: alert.severity,
+        source: alert.source,
+        at: alert.timestamp,
+        resolved: resolvedAt !== null,
+      })),
+    [farmAlerts],
+  );
 
   return (
     <article className={`glassPanel ${styles.sensorCard} ${styles.alertsCard}`}>
@@ -62,12 +54,15 @@ export function AlertsCard({ environmentAlerts }: { environmentAlerts: Telemetry
               </div>
               <span className={styles.metricLabel} suppressHydrationWarning>
                 {row.source} · {fmt.time(row.at)}
+                {row.resolved ? " · resolved" : ""}
               </span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className={styles.emptyNote}>No alerts right now.</p>
+        <p className={styles.emptyNote}>
+          {farmAlerts === null ? "Alerts aren't available here yet." : "No alerts right now."}
+        </p>
       )}
     </article>
   );

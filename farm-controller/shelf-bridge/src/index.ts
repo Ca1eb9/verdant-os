@@ -13,10 +13,13 @@ import { randomUUID } from "crypto";
 import { performance } from "perf_hooks";
 import { SerialPort } from "serialport";
 import {
+  type AlertsCleared,
   type FarmAlert,
   AlertSeverity,
   TOPICS,
   createMqttClient,
+  readStateFile,
+  writeStateFile,
   type TypedMqttClient,
 } from "@farm/shared";
 
@@ -27,6 +30,10 @@ import { parseLine } from "./parse.js";
 
 const CONFIG_PATH = process.env.CONFIG_PATH ?? "../../shelf-bridge-config.json";
 const BROKER_URL = process.env.BROKER_URL ?? "mqtt://localhost:1883";
+/** Open silence alerts by shelf, so readings after a restart or reboot still resolve them */
+const STATE_PATH = fileURLToPath(
+  new URL(process.env.STATE_PATH ?? "../../shelf-bridge-state.json", import.meta.url),
+);
 
 let config: ShelfBridgeConfig;
 try {
@@ -48,7 +55,8 @@ interface ShelfLink {
   /** Monotonic ms the port last opened; a node needs time to boot before it's silent */
   openedAt: number;
   lastSeq: number | null;
-  silent: boolean;
+  /** The open silence alert, while the shelf is silent, for the next reading to resolve */
+  silenceAlertId: string | null;
   /** Last non-reading line, so a sensor library repeating its error logs once */
   lastNodeLog: string;
 }
@@ -62,7 +70,7 @@ const links: ShelfLink[] = config.shelves.map((shelf) => ({
   lastReadingAt: performance.now(),
   openedAt: 0,
   lastSeq: null,
-  silent: false,
+  silenceAlertId: null,
   lastNodeLog: "",
 }));
 
@@ -96,9 +104,25 @@ function onLine(link: ShelfLink, raw: string) {
   if (link.lastSeq !== null && reading.seq <= link.lastSeq) {
     console.log(`${tag(link)} node restarted (seq ${link.lastSeq} → ${reading.seq})`);
   }
-  if (link.silent) {
-    console.log(`${tag(link)} reporting again after ${Math.round((now - link.lastReadingAt) / 1000)}s`);
-    link.silent = false;
+  if (link.silenceAlertId) {
+    // Since this run started, if the silence began before a restart
+    const silence = Math.round((now - link.lastReadingAt) / 1000);
+    console.log(`${tag(link)} reporting again after ${silence}s`);
+    const alert: FarmAlert = {
+      alert_id: randomUUID(),
+      severity: AlertSeverity.INFO,
+      source: link.shelf.shelf_id,
+      source_type: "shelf",
+      message: "Sensor readings resumed",
+      metric: "silence_s",
+      value: silence,
+      threshold: Math.round(config.silence_timeout_ms / 1000),
+      timestamp: Date.now(),
+      resolves: link.silenceAlertId,
+    };
+    mqtt.publish(TOPICS.alerts, alert);
+    link.silenceAlertId = null;
+    saveSilenceAlerts();
   }
   link.lastSeq = reading.seq;
   link.lastReadingAt = now;
@@ -171,6 +195,22 @@ function openPort(link: ShelfLink) {
 
 // --- Silence watchdog ----------------------------------------
 
+function saveSilenceAlerts() {
+  writeStateFile(STATE_PATH, Object.fromEntries(
+    links.flatMap((link) => (link.silenceAlertId ? [[link.shelf.shelf_id, link.silenceAlertId]] : [])),
+  ));
+}
+
+/** Shelves still silent when the last run stopped: the shelf's next reading resolves the alert */
+function restoreSilenceAlerts() {
+  const saved = readStateFile(STATE_PATH);
+  if (typeof saved !== "object" || saved === null) return;
+  for (const link of links) {
+    const alertId = (saved as Record<string, unknown>)[link.shelf.shelf_id];
+    if (typeof alertId === "string" && alertId !== "") link.silenceAlertId = alertId;
+  }
+}
+
 function checkSilence() {
   const now = performance.now();
   for (const link of links) {
@@ -182,8 +222,7 @@ function checkSilence() {
     }
 
     const silence = now - link.lastReadingAt;
-    if (link.silent || silence <= config.silence_timeout_ms) continue;
-    link.silent = true;
+    if (link.silenceAlertId || silence <= config.silence_timeout_ms) continue;
 
     const port = link.port?.isOpen ? `${link.shelf.port} open` : `${link.shelf.port} not open`;
     const alert: FarmAlert = {
@@ -196,7 +235,10 @@ function checkSilence() {
       value: Math.round(silence / 1000),
       threshold: Math.round(config.silence_timeout_ms / 1000),
       timestamp: Date.now(),
+      resolves: null,
     };
+    link.silenceAlertId = alert.alert_id;
+    saveSilenceAlerts();
     mqtt.publish(TOPICS.alerts, alert);
     console.warn(`[ALERT] ${link.shelf.shelf_id}: ${alert.message}`);
   }
@@ -216,7 +258,17 @@ async function main() {
     console.log(`[SHELF]   ${shelf.shelf_id} (level ${shelf.level}) ← ${shelf.port}`);
   }
 
+  restoreSilenceAlerts();
+  const stillSilent = links.filter((link) => link.silenceAlertId).length;
+  console.log(`[SHELF]   state:   ${STATE_PATH} (${stillSilent} silent before the restart)`);
   for (const link of links) openPort(link);
+  // npm run clear-alerts: forget open silence alerts; a shelf still silent alerts again
+  mqtt.subscribe<unknown>(TOPICS.alertsClear, (msg) => {
+    if (!Number.isFinite((msg as Partial<AlertsCleared> | null)?.timestamp)) return;
+    for (const link of links) link.silenceAlertId = null;
+    saveSilenceAlerts();
+    console.log("[SHELF] Alerts cleared");
+  });
   setInterval(checkSilence, config.watchdog_interval_ms);
 
   const shutdown = async () => {

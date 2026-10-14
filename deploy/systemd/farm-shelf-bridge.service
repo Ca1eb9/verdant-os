@@ -22,6 +22,8 @@ RestartSec=5
 KillSignal=SIGINT
 TimeoutStopSec=10
 
+# shelf-bridge-state.json lives here (STATE_PATH)
+StateDirectory=verdant
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

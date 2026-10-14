@@ -107,7 +107,8 @@ function isAlert(v: unknown): v is FarmAlert {
   return isRecord(v) && typeof v.alert_id === "string" && v.alert_id.length > 0 &&
     SEVERITIES.includes(v.severity as AlertSeverity) && typeof v.source === "string" &&
     ALERT_SOURCES.includes(v.source_type as string) && typeof v.message === "string" &&
-    typeof v.metric === "string" && isNum(v.value) && isNum(v.threshold) && isNum(v.timestamp);
+    typeof v.metric === "string" && isNum(v.value) && isNum(v.threshold) && isNum(v.timestamp) &&
+    (v.resolves === null || (typeof v.resolves === "string" && v.resolves.length > 0));
 }
 
 function isShelfData(v: unknown): v is ShelfSensorData {
@@ -222,6 +223,12 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       updateConnection();
       return;
     }
+    if (topic === TOPICS.alertsClear) {
+      if (!isRecord(msg) || !isNum(msg.timestamp)) return ignore(topic);
+      alerts = [];
+      alertListeners.forEach((listener) => listener(alerts));
+      return;
+    }
     if (topic === TOPICS.alerts) {
       if (!isAlert(msg)) return ignore(topic);
       if (alerts.some((a) => a.alert_id === msg.alert_id)) return;
@@ -278,7 +285,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       client.on("error", (err) => console.warn(`[local-source] ${err.message}`));
       client.subscribe([
         TOPICS.robot.telemetryAll, TOPICS.robot.stateAll, TOPICS.system.topology, TOPICS.commands.all, TOPICS.alerts,
-        TOPICS.shelf.sensorsAll,
+        TOPICS.alertsClear, TOPICS.shelf.sensorsAll,
       ]);
     } else if (!needed && client) {
       client.end(true);
