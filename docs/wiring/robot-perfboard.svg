@@ -508,6 +508,13 @@
 <path d="M 237,310 C 237,296 259,296 259,310" fill="none" stroke="#888" stroke-width="2"/>
 <circle cx="237" cy="310" r="8" fill="#e8a33c" stroke="#9a6416"/>
 <circle cx="259" cy="310" r="3" fill="#888"/>
+<path d="M 215,222 C 231,222 231,180 215,180" fill="none" stroke="#888" stroke-width="2"/>
+<circle cx="215" cy="222" r="9" fill="#e8d3a6" stroke="#8a6d3b"/>
+<circle cx="215" cy="222" r="8" fill="none" stroke="#7a4a1e" stroke-width="1.6"/>
+<circle cx="215" cy="222" r="6" fill="none" stroke="#111" stroke-width="1.6"/>
+<circle cx="215" cy="222" r="4" fill="none" stroke="#ff7f0e" stroke-width="1.6"/>
+<circle cx="215" cy="222" r="2" fill="none" stroke="#c9a227" stroke-width="1.6"/>
+<circle cx="215" cy="180" r="3" fill="#888"/>
 <path d="M 215,358 L 158,358 L 158,358" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M 215,358 L 158,358 L 158,358" fill="none" stroke="#c2185b" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="215" cy="358" r="3.2" fill="#c2185b" stroke="#fff" stroke-width="1"/>
@@ -716,7 +723,7 @@
 <circle cx="831" cy="446" r="3.2" fill="#ff8a65" stroke="#fff" stroke-width="1"/>
 <circle cx="831" cy="571" r="3.2" fill="#ff8a65" stroke="#fff" stroke-width="1"/>
 <text x="831" y="586" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="bold" fill="#c75b39">5V in</text>
-<text x="831" y="600" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" font-weight="normal" fill="#c75b39">(converter)</text>
+<text x="831" y="600" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" font-weight="normal" fill="#c75b39">(via 5 V switch)</text>
 <path d="M 369,510 L 369,638" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M 369,510 L 369,638" fill="none" stroke="#222222" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="369" cy="510" r="3.2" fill="#222222" stroke="#fff" stroke-width="1"/>
@@ -724,12 +731,13 @@
 <text x="375" y="652" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="start" font-weight="bold" fill="#222">shared ground in (power side)</text>
 <text x="160" y="732" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" font-weight="normal" fill="#444">The AHT20 needs nothing here: a STEMMA QT cable joins it to the rear VL53L4CX, as on the breadboard.</text>
 <text x="160" y="750" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" font-weight="normal" fill="#444">Gold squares are male header pins: each takes a female jumper to its module. Arcs are insulated wires on top of the board; they touch only their two holes.</text>
-<rect x="269" y="250" width="104" height="71" rx="4" fill="#174a2d"/>
+<rect x="269" y="250" width="104" height="84" rx="4" fill="#174a2d"/>
 <text x="274" y="262" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="bold" fill="#fff">charge contact (dock):</text>
 <text x="274" y="275" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#fff">100 kΩ rows 1–2, h</text>
 <text x="274" y="288" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#fff">22 kΩ rows 2–3, g</text>
 <text x="274" y="301" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#fff">0.1 µF rows 2–3, f</text>
 <text x="274" y="314" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#fff">(0.1 µF: optional)</text>
+<text x="274" y="327" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#fff">10 kΩ row 1 j → rail</text>
 <rect x="269" y="342" width="104" height="71" rx="4" fill="#174a2d"/>
 <text x="274" y="354" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="bold" fill="#fff">battery voltage:</text>
 <text x="274" y="367" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="normal" fill="#fff">100 kΩ rows 1–2, c</text>

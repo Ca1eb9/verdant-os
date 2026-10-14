@@ -69,7 +69,16 @@ standing_cap(2, HOLE["e"])
 draw_standing_resistor(rx(1), rx(2), HOLE["h"], BROWN_BLACK_YELLOW, "")
 draw_standing_resistor(rx(2), rx(3), HOLE["g"], RED_RED_ORANGE, "")
 standing_cap(2, HOLE["f"])
-for y0, lines in ((HOLE["h"] - 4, ["charge contact (dock):", "100 kΩ rows 1–2, h", "22 kΩ rows 2–3, g", "0.1 µF rows 2–3, f", "(0.1 µF: optional)"]),
+# 10 kΩ on end in row 1 hole j, its bent lead in the top - rail: holds pad + at 0 V off the dock
+x10 = rx(1)
+add(f'<path d="M {x10},{HOLE["j"]} C {x10 + 16},{HOLE["j"]} {x10 + 16},{RAIL_T["-"]} {x10},{RAIL_T["-"]}" '
+    f'fill="none" stroke="#888" stroke-width="2"/>')
+add(f'<circle cx="{x10}" cy="{HOLE["j"]}" r="9" fill="#e8d3a6" stroke="#8a6d3b"/>')
+for i, c in enumerate(["#7a4a1e", "#111", "#ff7f0e", "#c9a227"]):   # 10 kΩ
+    add(f'<circle cx="{x10}" cy="{HOLE["j"]}" r="{8 - i * 2}" fill="none" stroke="{c}" stroke-width="1.6"/>')
+add(f'<circle cx="{x10}" cy="{RAIL_T["-"]}" r="3" fill="#888"/>')
+for y0, lines in ((HOLE["h"] - 4, ["charge contact (dock):", "100 kΩ rows 1–2, h", "22 kΩ rows 2–3, g", "0.1 µF rows 2–3, f", "(0.1 µF: optional)",
+                                     "10 kΩ row 1 j → rail"]),
                   (HOLE["e"] - 4, ["battery voltage:", "100 kΩ rows 1–2, c", "22 kΩ rows 2–3, d", "0.1 µF rows 2–3, e", "(0.1 µF: optional)"])):
     add(f'<rect x="{rx(4) - 12}" y="{y0 - 12}" width="104" height="{len(lines) * 13 + 6}" rx="4" fill="#174a2d"/>', "late")
     for i, line in enumerate(lines):
@@ -132,7 +141,7 @@ text(rx(5), LABEL_Y + 48, "PN532, DRV8871 GND", 11, weight="bold", fill=C["gnd"]
 x5, y5 = hole(j1("5V"), "a")
 wire([(x5, y5), (x5, LABEL_Y - 15)], C["5v"], 3)
 text(x5, LABEL_Y, "5V in", 11, weight="bold", fill="#c75b39")
-text(x5, LABEL_Y + 14, "(converter)", 10, fill="#c75b39")
+text(x5, LABEL_Y + 14, "(via 5 V switch)", 10, fill="#c75b39")
 xg = rx(8)
 wire([(xg, RAIL["-"]), (xg, LABEL_Y + 52)], C["gnd"], 3)
 text(xg + 6, LABEL_Y + 66, "shared ground in (power side)", 10, "start", "bold")

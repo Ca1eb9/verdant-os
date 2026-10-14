@@ -74,8 +74,9 @@ constexpr int PIN_MOTOR_IN1 = 5;
 constexpr int PIN_MOTOR_IN2 = 6;
 
 // Charge contact sense: the dock pad's voltage through a 100k/22k divider,
+// with a 10k from the pad to ground for the charging diode's leakage,
 // 1.8-2.3 V while docked (the charger's output follows the pack while it
-// charges), 0 V off the dock. ADC1, so it reads with WiFi on.
+// charges), under 0.5 V off the dock. ADC1, so it reads with WiFi on.
 constexpr int PIN_CHARGE_SENSE = 1;
 
 // Onboard NeoPixel (GPIO38 on DevKitC-1 v1.1 boards)
