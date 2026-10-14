@@ -187,7 +187,8 @@ npm run alert
 - Ranges load from `alert-engine-config.json`: per telemetry field, a warning
   band inside a critical band, and a deadband. They apply to every payload
   carrying that field, so a robot's AHT20 `temperature_c` and `humidity_pct`
-  use the shelf air ranges. They match the dashboard's (`web/src/lib/alerts.ts`).
+  use the shelf air ranges. The dashboard shows these alerts (its sensor dots
+  included) and checks no ranges of its own.
 - A shelf's `water_level_ok: false` is critical. A `null` or missing reading
   raises nothing and keeps the metric's state; silence is the shelf bridge's
   and the orchestrator's to alert on.

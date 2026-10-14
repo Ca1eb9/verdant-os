@@ -2,14 +2,6 @@ export type ConnectionState = "online" | "offline";
 export type LiveStatus = "live" | "stale" | "waiting";
 export type HistoryRange = "24h" | "72h" | "7d";
 export type FloatSensorState = 0 | 1;
-export type AlertSeverity = "warning" | "critical";
-export type AlertMetric =
-  | "connection"
-  | "air.temperature"
-  | "air.humidity"
-  | "water.temperature"
-  | "water.ph"
-  | "water.level";
 
 /** A row of Supabase's farms table (or the Pi's own farm on FarmNet) */
 export interface FarmIdentity {
@@ -71,19 +63,6 @@ export interface HistoryPoint {
   air: { temperature: number | null; humidity: number | null };
   water: { temperature: number | null; ph: number | null };
   light: { lux: number | null };
-}
-
-export interface TelemetryAlert {
-  id: string;
-  farmId: string;
-  farmName: string;
-  metric: AlertMetric;
-  severity: AlertSeverity;
-  title: string;
-  message: string;
-  detectedAt: string;
-  value?: string;
-  threshold?: string;
 }
 
 export interface SensorEventPayload {

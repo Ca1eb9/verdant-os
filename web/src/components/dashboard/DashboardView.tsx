@@ -7,10 +7,11 @@ import { RobotsCard } from "@/components/dashboard/RobotsCard";
 import { SensorCard, type MetricTone } from "@/components/dashboard/SensorCard";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { NoFarmNotice } from "@/components/farms/NoFarmNotice";
+import { alertKey, currentAlertsByReading, useFarmAlerts } from "@/hooks/useFarmAlerts";
 import { useFarmTelemetry } from "@/hooks/useFarmTelemetry";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { formatMetric } from "@/lib/format";
-import type { AlertMetric, TelemetryAlert } from "@/lib/types";
+import type { FarmAlert } from "@/lib/farm/types";
 import styles from "@/components/dashboard/DashboardView.module.css";
 
 const AIR_FALLBACK = "\uD83C\uDF2C\uFE0F";
@@ -21,10 +22,20 @@ function formatOptionalMetric(value: number | null, unit: string, precision = 1)
   return value === null ? "No reading" : formatMetric(value, unit, precision);
 }
 
-/** A dot shows its reading's alert, so a dot and the Alerts card always agree */
-function toneOf(alerts: TelemetryAlert[], metric: AlertMetric, value: number | boolean | null): MetricTone {
+/**
+ * A dot shows its reading's alert from the alert engine, so a dot and the
+ * Alerts card always agree. `metric` is the engine's name for the reading.
+ */
+function toneOf(
+  alerts: Map<string, FarmAlert> | null,
+  device: string | null,
+  metric: string,
+  value: number | boolean | null,
+): MetricTone {
   if (value === null) return "none";
-  return alerts.find((alert) => alert.metric === metric)?.severity ?? "ok";
+  if (!alerts) return "unknown";
+  const severity = device ? alerts.get(alertKey("shelf", device, metric))?.severity : undefined;
+  return severity === "warning" || severity === "critical" ? severity : "ok";
 }
 
 const STATUS_LABEL = { live: "Live feed", stale: "Stale snapshot", waiting: "Waiting for data" };
@@ -35,7 +46,10 @@ export function DashboardView() {
   // readings load in the browser; the prerendered page shows placeholders instead
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const { reading, lastUpdate, liveStatus, alerts } = useFarmTelemetry(farm?.id ?? null);
+  const { reading, lastUpdate, liveStatus } = useFarmTelemetry(farm?.id ?? null);
+  const farmAlerts = useFarmAlerts();
+  const alerts = useMemo(() => (farmAlerts ? currentAlertsByReading(farmAlerts) : null), [farmAlerts]);
+  const device = reading?.device ?? null;
 
   const airTemperature = reading?.airTemperature ?? null;
   const humidity = reading?.humidity ?? null;
@@ -53,12 +67,12 @@ export function DashboardView() {
         accent: "cyan" as const,
         heroLabel: "Air Temperature",
         heroValue: fmt.temp(airTemperature, 1),
-        heroTone: toneOf(alerts, "air.temperature", airTemperature),
+        heroTone: toneOf(alerts, device, "temperature_c", airTemperature),
         metrics: [
           {
             label: "Humidity",
             value: formatOptionalMetric(humidity, "%", 0),
-            tone: toneOf(alerts, "air.humidity", humidity),
+            tone: toneOf(alerts, device, "humidity_pct", humidity),
           },
         ],
       },
@@ -69,17 +83,17 @@ export function DashboardView() {
         accent: "teal" as const,
         heroLabel: "Water Temperature",
         heroValue: fmt.temp(waterTemperature, 1),
-        heroTone: toneOf(alerts, "water.temperature", waterTemperature),
+        heroTone: toneOf(alerts, device, "water_temp_c", waterTemperature),
         metrics: [
           {
             label: "pH",
             value: formatOptionalMetric(waterPh, "", 2),
-            tone: toneOf(alerts, "water.ph", waterPh),
+            tone: toneOf(alerts, device, "ph", waterPh),
           },
           {
             label: "Water Level",
             value: waterLevelOk === null ? "No reading" : waterLevelOk ? "OK" : "LOW",
-            tone: toneOf(alerts, "water.level", waterLevelOk),
+            tone: toneOf(alerts, device, "water_level_ok", waterLevelOk),
           },
         ],
       },
@@ -96,6 +110,7 @@ export function DashboardView() {
     [
       airTemperature,
       alerts,
+      device,
       fmt,
       humidity,
       lightLux,
@@ -137,7 +152,7 @@ export function DashboardView() {
         <FarmMapCard />
         <div className={styles.sideStack}>
           <RobotsCard />
-          <AlertsCard environmentAlerts={alerts} />
+          <AlertsCard />
         </div>
       </div>
     </section>

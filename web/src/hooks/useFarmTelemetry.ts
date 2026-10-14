@@ -1,15 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSelectedFarm } from "@/components/farms/FarmContext";
-import { evaluateTelemetryAlerts, keepFirstDetection, recordTelemetryAlerts } from "@/lib/alerts";
 import { getFarmDataSource, onFarmDataSourceChange, type ShelfReading } from "@/lib/farm/data-source";
 import { MOCK_DATA_ENABLED, buildLiveTelemetry } from "@/lib/mock-data";
 import type {
   LiveStatus,
   SensorEventRecord,
   SensorReading,
-  TelemetryAlert,
   TelemetrySnapshot,
 } from "@/lib/types";
 
@@ -98,13 +95,10 @@ interface LatestSensorResponse {
   error?: string;
 }
 
-// Keyed by farm, so a switch never shows (or alerts on) the last farm's reading.
-// `polled`: the feed has answered since the switch; until then the reading may
-// be a cached one, too old to judge.
+// Keyed by farm, so a switch never shows the last farm's reading
 interface FeedState {
   farmId: string | null;
   reading: SensorReading | null;
-  polled: boolean;
 }
 
 /**
@@ -114,8 +108,7 @@ interface FeedState {
  * farm has reported one.
  */
 export function useFarmTelemetry(farmId: string | null) {
-  const { farm } = useSelectedFarm();
-  const [feed, setFeed] = useState<FeedState>({ farmId: null, reading: null, polled: false });
+  const [feed, setFeed] = useState<FeedState>({ farmId: null, reading: null });
   const [source, setSource] = useState(getFarmDataSource);
   /** Whether the source streams shelf readings; null until it has said */
   const [hasShelfFeed, setHasShelfFeed] = useState<boolean | null>(null);
@@ -124,12 +117,12 @@ export function useFarmTelemetry(farmId: string | null) {
 
   useEffect(() => {
     if (!farmId) {
-      setFeed({ farmId, reading: null, polled: false });
+      setFeed({ farmId, reading: null });
     } else if (MOCK_DATA_ENABLED) {
       const frames = buildLiveTelemetry(farmId);
-      setFeed({ farmId, reading: snapshotToReading(frames[frames.length - 1]), polled: true });
+      setFeed({ farmId, reading: snapshotToReading(frames[frames.length - 1]) });
     } else {
-      setFeed({ farmId, reading: readStoredReading(farmId), polled: false });
+      setFeed({ farmId, reading: readStoredReading(farmId) });
     }
   }, [farmId]);
 
@@ -145,11 +138,11 @@ export function useFarmTelemetry(farmId: string | null) {
         null,
       );
       if (!newest) {
-        setFeed((current) => (current.farmId === farmId ? { ...current, polled: true } : current));
+        setFeed((current) => (current.farmId === farmId ? { ...current } : current));
         return;
       }
       const next = shelfToReading(newest);
-      setFeed({ farmId, reading: next, polled: true });
+      setFeed({ farmId, reading: next });
       storeReading(farmId, next);
     });
   }, [source, farmId]);
@@ -183,16 +176,16 @@ export function useFarmTelemetry(farmId: string | null) {
         const payload = (await response.json()) as LatestSensorResponse;
         if (isCancelled) return;
         if (!payload.event) {
-          setFeed((current) => (current.farmId === farmId ? { ...current, polled: true } : current));
+          setFeed((current) => (current.farmId === farmId ? { ...current } : current));
           return;
         }
 
         const next = eventToReading(payload.event);
-        setFeed({ farmId, reading: next, polled: true });
+        setFeed({ farmId, reading: next });
         storeReading(farmId, next);
       } catch {
         // keep the last reading; it turns stale
-        if (!isCancelled) setFeed((current) => (current.farmId === farmId ? { ...current, polled: true } : current));
+        if (!isCancelled) setFeed((current) => (current.farmId === farmId ? { ...current } : current));
       }
     };
 
@@ -207,32 +200,14 @@ export function useFarmTelemetry(farmId: string | null) {
 
   const current = feed.farmId === farmId ? feed : null;
   const reading = current?.reading ?? null;
-  const polled = current?.polled ?? false;
   const lastUpdate = useMemo(() => (reading ? new Date(reading.timestamp) : null), [reading]);
   // Mock readings are generated, never stale
   const isStale = !MOCK_DATA_ENABLED && lastUpdate !== null && now - lastUpdate.getTime() > STALE_AFTER_MS;
   const liveStatus: LiveStatus = !reading ? "waiting" : isStale ? "stale" : "live";
-  const alerts = useMemo<TelemetryAlert[]>(
-    () =>
-      farm?.id === farmId && polled && reading && lastUpdate
-        ? keepFirstDetection(
-            farmId,
-            MOCK_DATA_ENABLED
-              ? evaluateTelemetryAlerts(farm, reading, lastUpdate, lastUpdate.getTime(), 0)
-              : evaluateTelemetryAlerts(farm, reading, lastUpdate, now),
-          )
-        : [],
-    [farm, farmId, lastUpdate, now, polled, reading],
-  );
-
-  useEffect(() => {
-    if (farmId) recordTelemetryAlerts(farmId, alerts);
-  }, [alerts, farmId]);
 
   return {
     reading,
     lastUpdate,
     liveStatus,
-    alerts,
   };
 }
