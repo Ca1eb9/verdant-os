@@ -56,12 +56,17 @@ void motor_driver_set(int16_t speed) {
   uint32_t magnitude = (uint32_t)(speed > 0 ? speed : -speed);
   if (magnitude > 255) magnitude = 255;
   uint32_t duty = magnitude * FULL_DUTY / 255;
-  // The other input low first, so the bridge never sees both PWMed at once.
+  // Slow decay: one input held high, the other low for `duty` of each cycle
+  // and high (brake) for the rest. The motor gets about duty x the battery.
+  // With the other input low instead (fast decay), each off-time drives the
+  // current back against the battery, and below about half duty the motor
+  // gets nothing. The held input goes high first, so the bridge never sees
+  // both PWMed at once.
   if (speed > 0) {
-    pwm_write(PIN_MOTOR_IN2, MOTOR_PWM_CHANNEL_IN2, 0);
-    pwm_write(PIN_MOTOR_IN1, MOTOR_PWM_CHANNEL_IN1, duty);
+    pwm_write(PIN_MOTOR_IN1, MOTOR_PWM_CHANNEL_IN1, FULL_DUTY);
+    pwm_write(PIN_MOTOR_IN2, MOTOR_PWM_CHANNEL_IN2, FULL_DUTY - duty);
   } else {
-    pwm_write(PIN_MOTOR_IN1, MOTOR_PWM_CHANNEL_IN1, 0);
-    pwm_write(PIN_MOTOR_IN2, MOTOR_PWM_CHANNEL_IN2, duty);
+    pwm_write(PIN_MOTOR_IN2, MOTOR_PWM_CHANNEL_IN2, FULL_DUTY);
+    pwm_write(PIN_MOTOR_IN1, MOTOR_PWM_CHANNEL_IN1, FULL_DUTY - duty);
   }
 }

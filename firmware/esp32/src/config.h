@@ -142,6 +142,8 @@ constexpr uint32_t PATH_BLOCKED_TIMEOUT_MS = 10000; // obstacle this long: path_
 // (bench tests): the Bluetooth controller can still drive it. Logged at boot.
 constexpr bool BOOT_CREEP = true;
 constexpr uint32_t CREEP_TIMEOUT_MS = 15000;        // no tag this long while creeping after boot
+// Speeds are a share of the battery voltage (speed / 255, slow decay:
+// drivers/motor_driver). TBD: tune on the robot, loaded, on the real track.
 constexpr int16_t CRUISE_SPEED = 150;               // between tags (0..255)
 constexpr int16_t CREEP_SPEED = 90;                 // looking for a tag after boot (0..255)
 constexpr uint32_t ELEVATOR_WAIT_MS = 5000;         // per level ridden: stay put, then drive off
@@ -209,6 +211,11 @@ constexpr uint32_t PAD_SCAN_CHUNK_MS = 10000;   // each scan this long, then a f
 // ---- Motor task (tasks/motor_task.h) ------------------------------------------------
 
 constexpr uint32_t REVERSE_RAMP_MS = 150;       // TBD: slow to 0 over this before reversing
+// TBD: every stop slows to 0 over this rather than braking at once (a stop
+// command, a tag, an obstacle, the motor cutoff), so the robot doesn't jerk.
+// It rolls on a little: allow for it in OBSTACLE_STOP_CM. Reaching the
+// elevator or dock wall (ELEVATOR_STOP_CM, DOCK_STOP_CM) brakes at once.
+constexpr uint32_t STOP_RAMP_MS = 300;
 constexpr uint32_t MOTOR_LOOP_MS = 5;           // safety flags are checked this often
 constexpr uint32_t MOTOR_PWM_HZ = 20000;        // above hearing; the DRV8871 takes up to 200 kHz
 constexpr uint8_t MOTOR_PWM_BITS = 8;           // speeds are 0..255

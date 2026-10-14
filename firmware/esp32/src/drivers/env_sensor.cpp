@@ -57,7 +57,10 @@ void EnvSensor::fail(const char* why) {
 bool EnvSensor::begin() {
   ok_ = true;
   measuring_ = false;
-  if (bus_.requestFrom(AHT20_ADDR, (uint8_t)1) != 1) {
+  // Ask for an acknowledgement first: Wire logs every failed read as an
+  // error, which with no AHT20 plugged in would repeat on every retry.
+  bus_.beginTransmission(AHT20_ADDR);
+  if (bus_.endTransmission() != 0 || bus_.requestFrom(AHT20_ADDR, (uint8_t)1) != 1) {
     fail("not found");
     return false;
   }

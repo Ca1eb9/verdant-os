@@ -122,8 +122,10 @@ struct SensorData {
 //
 // A Drive the opposite way to the motor's current direction (e.g. a backward
 // jog straight after a forward one) first slows to 0 over REVERSE_RAMP_MS, then
-// drives the new way. duration_ms still counts from receipt, ramp included. A
-// kill or obstacle stop is never ramped: the motors stop at once.
+// drives the new way. duration_ms still counts from receipt, ramp included.
+// Every stop slows to 0 over STOP_RAMP_MS rather than braking at once: a Stop,
+// a timed Drive running out, the kill flag and the obstacle flags alike. Only
+// a Stop with `brake` brakes at once (reaching the elevator or dock wall).
 
 enum class DriveMode : uint8_t {
   Stop,   // motors off
@@ -138,6 +140,7 @@ struct DriveCommand {
   int16_t right_speed;   // -255..255, Drive only
   Turn turn;             // Turn only: Right, Left or UTurn
   uint32_t duration_ms;  // Drive only: stop after this long; 0 = until replaced
+  bool brake;            // Stop only: brake at once instead of over STOP_RAMP_MS
 };
 
 // ---- comms task -> nav task (g_command_queue) --------------------------------

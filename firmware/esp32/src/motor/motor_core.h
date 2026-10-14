@@ -2,10 +2,12 @@
 // What the drive motor should be doing right now: the DriveCommand contract
 // (types.h) as a signed speed for the motor driver.
 //
-// The newest command replaces the last. A timed Drive stops by itself.
-// Reversing slows to 0 over REVERSE_RAMP_MS first. The kill flag, or the
-// obstacle flag on the side the motor is turning toward, stops it at once for
-// as long as the flag is set; the command carries on when the flag clears.
+// The newest command replaces the last. A timed Drive stops by itself. The
+// kill flag, or the obstacle flag on the side the motor is turning toward,
+// stops it for as long as the flag is set; the command carries on when the
+// flag clears. Slowing to 0 takes STOP_RAMP_MS, whatever the reason, except a
+// Stop with `brake`, which stops it at once. Reversing slows to 0 over
+// REVERSE_RAMP_MS first.
 //
 // Single drive motor: left_speed and right_speed are always equal, so only
 // left_speed is read. A Turn stops the motor (the robot can't turn).
@@ -40,8 +42,12 @@ class MotorCore {
   uint32_t duration_ms_ = 0;  // 0 = until replaced
   uint32_t done_seq_ = 0;
   bool held_ = false;
-  // Reversing: output_ falls from ramp_from_ to 0 before target_ applies.
+  // Stopping or reversing: output_ falls from ramp_from_ to 0 over ramp_ms_.
   bool ramping_ = false;
   int16_t ramp_from_ = 0;
+  uint32_t ramp_ms_ = 0;
   uint32_t ramp_started_ms_ = 0;
+
+  // Starts (or ends) a ramp for heading to `want`, if it needs one.
+  void start_ramp(int16_t want, uint32_t now);
 };

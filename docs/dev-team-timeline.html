@@ -290,7 +290,7 @@ gantt
     <summary>Requirements</summary>
     <ul>
       <li>Battery thresholds at three levels: warn, force return to dock, kill motors. Checked every loop iteration before normal logic runs.</li>
-      <li>Obstacle flag: set by the sensor task, checked by the motor task — hard stop when triggered</li>
+      <li>Obstacle flag: set by the sensor task, checked by the motor task — stops the motor when triggered</li>
       <li>No Pi heartbeat watchdog: losing the Pi is not a reason to return to dock. The robot keeps working on its task until the battery thresholds send it to charge.</li>
     </ul>
   </details>
@@ -460,7 +460,7 @@ gantt
     <ul>
       <li>Poll the PN532 RFID reader (I2C or SPI) at a regular interval. When a tag is present, read its UID.</li>
       <li>Read battery voltage through an ADC pin and a voltage divider. Convert the raw reading to a usable percentage.</li>
-      <li>Read distance from the obstacle sensor (ultrasonic or IR). When the distance drops below a safety threshold, set the shared obstacle flag so the motor task stops immediately.</li>
+      <li>Read distance from the obstacle sensor (ultrasonic or IR). When the distance drops below a safety threshold, set the shared obstacle flag so the motor task stops.</li>
       <li>Now done: two VL53L4CX sensors set a front and a rear flag. The nav task lowers a side's stop distance (<code>g_obstacle_*_stop_cm</code>) while it creeps into the elevator or onto the dock; the sensor task flags against it (see <code>COMMS-SENSOR.md</code>).</li>
       <li>Now done: an AHT20 on the rear sensor's I2C bus reports air temperature and humidity in telemetry, for the dashboard only (wiring in <code>docs/wiring/robot.md</code>).</li>
       <li>Write all sensor readings into a struct and push it to the sensor queue for the nav task</li>
@@ -485,9 +485,10 @@ gantt
     <ul>
       <li>Read <code>DriveCommand</code>s from the drive mailbox (<code>types.h</code>): <code>Stop</code>, or <code>Drive</code> with a signed speed (−255..255; <code>left_speed</code> and <code>right_speed</code> are always equal). The newest command replaces the last. Nav never sends <code>Turn</code> (turns are a placeholder).</li>
       <li>A <code>Drive</code> with <code>duration_ms</code> stops by itself when the time runs out (a jog pulse), then sets <code>g_drive_done_seq</code> to its <code>seq</code>; <code>duration_ms</code> 0 drives until replaced</li>
-      <li><strong>Changing direction</strong>: a <code>Drive</code> the opposite way to the motor's current direction (e.g. a backward jog straight after a forward one) first slows to 0 over <code>REVERSE_RAMP_MS</code> (<code>config.h</code>), then drives the new way. A timed <code>Drive</code>'s <code>duration_ms</code> still counts from receipt, ramp included. Never ramp a kill or obstacle stop: those stop at once.</li>
+      <li><strong>Changing direction</strong>: a <code>Drive</code> the opposite way to the motor's current direction (e.g. a backward jog straight after a forward one) first slows to 0 over <code>REVERSE_RAMP_MS</code> (<code>config.h</code>), then drives the new way. A timed <code>Drive</code>'s <code>duration_ms</code> still counts from receipt, ramp included.</li>
+      <li><strong>Stopping</strong>: every stop slows to 0 over <code>STOP_RAMP_MS</code> rather than braking at once, so the robot doesn't jerk: a <code>Stop</code>, a timed <code>Drive</code> running out, the kill flag and the obstacle flags alike. It rolls on a little, which <code>OBSTACLE_STOP_CM</code> allows for. Only a <code>Stop</code> with <code>brake</code> brakes at once: nav sends it on reaching the elevator or dock wall, where it's already at <code>APPROACH_SPEED</code>.</li>
       <li><strong>Before every cycle</strong>: stop the motor while <code>g_motor_kill_flag</code> is set (the battery cutoff), or while the obstacle flag for the side it's driving toward is set (front for a positive speed, rear for a negative one). It must still be able to back away from an obstacle in front.</li>
-      <li>Control the motor driver, an Adafruit DRV8871 (<code>docs/wiring/robot.md</code>): <code>PIN_MOTOR_IN1</code> / <code>PIN_MOTOR_IN2</code> in <code>config.h</code>. One input held low while the other is PWMed sets direction and speed; both low lets the motor coast</li>
+      <li>Control the motor driver, an Adafruit DRV8871 (<code>docs/wiring/robot.md</code>): <code>PIN_MOTOR_IN1</code> / <code>PIN_MOTOR_IN2</code> in <code>config.h</code>. One input held high while the other is PWMed sets direction and speed (slow decay, so speed follows the PWM evenly); both high brakes</li>
     </ul>
   </details>
   <details>
@@ -495,7 +496,7 @@ gantt
     <ul>
       <li>Test with a standalone sketch: drive forward, stop, reverse. Get the basic motor control working before integrating with FreeRTOS.</li>
       <li>Then check each flag on the bench: the kill flag stops it in both directions; an obstacle in front stops forward driving but not reversing</li>
-      <li>Check the reversal ramp on the bench: forward, then backward straight away, slows down before reversing; an obstacle during the ramp still stops it at once</li>
+      <li>Check the reversal ramp on the bench: forward, then backward straight away, slows down before reversing; an obstacle during the ramp holds it at 0 once the ramp ends</li>
     </ul>
   </details>
   <p class="deps">Depends on: queue struct definitions from FreeRTOS skeleton, motor driver wired to ESP32, motor type confirmed by ME team</p>

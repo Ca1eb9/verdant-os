@@ -1,6 +1,7 @@
 // motor_driver.h
 // The drive motor's Adafruit DRV8871: speed and direction from PWM on one of
-// IN1 / IN2 while the other is low. Wiring in docs/wiring/robot.md.
+// IN1 / IN2 while the other is high (slow decay). Wiring in
+// docs/wiring/robot.md.
 
 #pragma once
 
