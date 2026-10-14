@@ -234,6 +234,14 @@ the order drawn: go by the names printed on its board.
   too; two boards' pull-ups side by side are still well within what
   I2C allows. The cable powers it from 3V3, so its pull-ups pull to 3.3 V, as
   the ESP32's pins need.
+- **I2C cable length:** each I2C line is pulled up by those resistors, and
+  every bit of cable adds capacitance they have to charge, slowing each
+  signal edge. At 400 kHz an edge must rise within 300 ns, which allows
+  roughly 30–50 cm of cable. The front sensor's 400 mm STEMMA QT cable is
+  over that, so the front bus runs at 100 kHz (1000 ns, about 2.5× margin):
+  `I2C_FRONT_HZ` in `config.h`. The rear bus has short cables and stays at
+  400 kHz (`I2C_REAR_HZ`), the most the AHT20 on it takes. A slower bus only
+  adds a few milliseconds per distance reading.
 - **PN532:** SPI lines are driven both ways by the chips, so they need none.
 - **DRV8871:** its inputs have pull-downs built in.
 

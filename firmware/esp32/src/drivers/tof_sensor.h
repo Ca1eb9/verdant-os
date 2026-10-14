@@ -17,9 +17,9 @@ enum class TofReading {
 class TofSensor {
  public:
   // `name` is for logs ("front", "rear"). Every VL53L4CX starts at the same
-  // address, so each sensor needs its own I2C bus.
-  TofSensor(const char* name, TwoWire& bus, int sda, int scl, int xshut)
-      : name_(name), bus_(bus), sda_(sda), scl_(scl), dev_(&bus, xshut) {}
+  // address, so each sensor needs its own I2C bus; begin() starts it at `hz`.
+  TofSensor(const char* name, TwoWire& bus, int sda, int scl, uint32_t hz, int xshut)
+      : name_(name), bus_(bus), sda_(sda), scl_(scl), hz_(hz), dev_(&bus, xshut) {}
 
   bool begin();
   bool ok() const { return ok_; }
@@ -33,6 +33,7 @@ class TofSensor {
   TwoWire& bus_;
   int sda_;
   int scl_;
+  uint32_t hz_;
   VL53L4CX dev_;
   bool ok_ = false;
   bool wire_started_ = false;

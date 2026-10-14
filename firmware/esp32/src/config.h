@@ -96,6 +96,12 @@ constexpr float OBSTACLE_STOP_CM = 15.0f;       // set that side's obstacle flag
 constexpr float OBSTACLE_CLEAR_CM = 20.0f;
 constexpr uint8_t OBSTACLE_CLEAR_COUNT = 3;     // consecutive clear readings needed
 constexpr uint32_t TOF_TIMING_BUDGET_US = 33000;
+// I2C clock for each sensor's bus. Every signal edge must rise within the
+// speed's limit, and longer wires slow the edges: the front sensor's 400 mm
+// STEMMA QT cable is too long for 400 kHz. The rear bus (short cables) also
+// carries the AHT20, which takes 400 kHz at most.
+constexpr uint32_t I2C_FRONT_HZ = 100000;
+constexpr uint32_t I2C_REAR_HZ = 400000;
 constexpr uint32_t TOF_TIMEOUT_MS = 500;        // no data this long = sensor fault
 constexpr uint32_t TOF_REINIT_MS = 5000;
 // If the ToF sensor stops responding, hold the obstacle flag (motors stay
