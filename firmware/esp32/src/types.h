@@ -125,7 +125,8 @@ struct SensorData {
 // drives the new way. duration_ms still counts from receipt, ramp included.
 // Every stop slows to 0 over STOP_RAMP_MS rather than braking at once: a Stop,
 // a timed Drive running out, the kill flag and the obstacle flags alike. Only
-// a Stop with `brake` brakes at once (reaching the elevator or dock wall).
+// a Stop with `brake` brakes at once (reaching the elevator or dock wall, the
+// charge contacts touching).
 
 enum class DriveMode : uint8_t {
   Stop,   // motors off

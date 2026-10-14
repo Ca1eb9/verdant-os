@@ -12,6 +12,11 @@ void Motion::halt() {
   send(DriveMode::Stop, 0, 0);
 }
 
+void Motion::brake() {
+  phase_ = Phase::Idle;
+  send(DriveMode::Stop, 0, 0, true);
+}
+
 void Motion::jog(JogDirection direction) {
   // Timed: the motor task stops it, so there's nothing to watch.
   phase_ = Phase::Idle;
@@ -77,7 +82,7 @@ const char* Motion::check(uint32_t now, const SensorData& s, bool motors_killed)
   if (approaching()) {
     bool entering = phase_ == Phase::Entering;
     if (!isnan(ahead_cm) && ahead_cm <= (entering ? ELEVATOR_STOP_CM : DOCK_STOP_CM)) {
-      // Already at APPROACH_SPEED, and easing off would run into the wall.
+      // Already at APPROACH_SPEED, and easing off would roll into the wall.
       send(DriveMode::Stop, 0, 0, true);
       phase_ = entering ? Phase::Riding : Phase::Idle;
       ride_started_ms_ = now;

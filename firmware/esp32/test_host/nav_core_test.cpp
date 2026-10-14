@@ -72,7 +72,7 @@ class Rig : public NavOutput {
   NavCore core{*this};
   uint32_t now = 1000;
   std::vector<Event> events;
-  std::vector<std::string> motion;  // "halt", "edge a>b", "creep", "jog f", "dock"
+  std::vector<std::string> motion;  // "halt", "brake", "edge a>b", "creep", "jog f", "dock"
   EdgeDrive edge_drive = EdgeDrive::Forward;  // of the last edge
 
   Rig() { core.on_battery(80.0f); }
@@ -95,6 +95,7 @@ class Rig : public NavOutput {
     events.push_back({type, task_id, node == NO_NODE ? "" : GRAPH_NODES[node].id, core.status()});
   }
   void halt() override { motion.push_back("halt"); }
+  void brake() override { motion.push_back("brake"); }
   void follow_edge(NodeIndex from, NodeIndex to, EdgeDrive d) override {
     motion.push_back(std::string("edge ") + GRAPH_NODES[from].id + ">" + GRAPH_NODES[to].id);
     edge_drive = d;
@@ -564,6 +565,7 @@ static void test_dock_trip_keeps_task() {
   r.contact();
   CHECK(r.emitted({RobotEventType::DockConnected}));
   CHECK(r.status() == RobotStatus::Charging && r.task() == "t1");
+  CHECK(r.last_motion() == "brake");  // on the contacts: no rolling on
   r.battery(CHARGE_COMPLETE_PCT - 0.1f);
   r.advance(1000);
   CHECK(r.status() == RobotStatus::Charging);

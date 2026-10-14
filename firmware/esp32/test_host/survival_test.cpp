@@ -81,6 +81,7 @@ class Rig : public NavOutput {
     events.push_back(type);
   }
   void halt() override {}
+  void brake() override {}
   void follow_edge(NodeIndex, NodeIndex, EdgeDrive) override {}
   void creep() override {}
   void jog(JogDirection) override {}

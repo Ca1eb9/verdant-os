@@ -274,6 +274,7 @@ class Robot : public NavOutput {
     events.push_back(type);
   }
   void halt() override { motion.halt(); }
+  void brake() override { motion.brake(); }
   void follow_edge(NodeIndex from, NodeIndex to, EdgeDrive drive) override {
     motion.follow_edge(from, to, drive, now);
   }
@@ -359,7 +360,7 @@ static void test_with_nav_core() {
   CHECK(d.core.status() == RobotStatus::Docking && d.sink.last_is_drive(-APPROACH_SPEED));
   d.loop(20, rear(3));
   d.core.on_charge_contact();
-  CHECK(d.core.status() == RobotStatus::Charging && d.sink.last().mode == DriveMode::Stop);
+  CHECK(d.core.status() == RobotStatus::Charging && d.sink.last_is_stop(true));
   d.loop(APPROACH_TIMEOUT_MS * 2);
   CHECK(d.core.status() == RobotStatus::Charging);
 }
