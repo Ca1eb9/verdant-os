@@ -81,7 +81,7 @@ That runs lint, TypeScript, and production build validation.
 
 - `/` - live dashboard
 - `/history` - historical charts (mock data only, for now)
-- `/alerts` - alerts from the farm's robots and services (`FarmDataSource.subscribeAlerts`: live from `farm/alerts` on FarmNet, not available remotely yet), and environment alerts worked out from the sensor readings
+- `/alerts` - alerts from the farm's robots, shelves and services (`FarmDataSource.subscribeAlerts`: live from `farm/alerts` on FarmNet, not available remotely yet), newest first. An alert another one resolved (`FarmAlert.resolves`) is faded with its resolve time (`listAlerts` in `src/hooks/useFarmAlerts.ts`); the Dashboard's Alerts card and sensor dots follow the same alerts. The dashboard checks no sensor ranges itself: that's the alert engine's job
 - `/config` - deployment and ingestion readiness
 - `/api/farms` - the farms in Supabase's `farms` table
 - `/api/sensor-events/latest?farm_id=` - a farm's latest Supabase sensor event
