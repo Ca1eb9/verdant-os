@@ -1,4 +1,4 @@
-import { RobotStatus } from "@farm/shared";
+import { AlertSeverity, RobotStatus, type FarmAlert } from "@farm/shared";
 
 type Telemetry = Record<string, unknown>;
 
@@ -50,5 +50,20 @@ export function isShelfSensorData(value: unknown): value is Telemetry {
     isNullableNumber(value.water_temp_c) &&
     (value.water_level_ok === null || typeof value.water_level_ok === "boolean") &&
     isNullableNumber(value.ph) &&
+    isFiniteNumber(value.timestamp);
+}
+
+const ALERT_SOURCES = ["robot", "elevator", "shelf", "system"];
+
+export function isFarmAlert(value: unknown): value is FarmAlert {
+  if (!isRecord(value)) return false;
+  return typeof value.alert_id === "string" && value.alert_id.length > 0 &&
+    Object.values(AlertSeverity).includes(value.severity as AlertSeverity) &&
+    typeof value.source === "string" &&
+    ALERT_SOURCES.includes(value.source_type as string) &&
+    typeof value.message === "string" &&
+    typeof value.metric === "string" &&
+    isFiniteNumber(value.value) &&
+    isFiniteNumber(value.threshold) &&
     isFiniteNumber(value.timestamp);
 }
