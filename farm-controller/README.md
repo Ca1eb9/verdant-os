@@ -175,6 +175,38 @@ npm run shelf
   ([docs/PI-SERVICES.md](../docs/PI-SERVICES.md)); by hand, your user needs to
   be in the `dialout` group.
 
+### Alert engine
+
+Watches robot telemetry and shelf readings and publishes a `FarmAlert` to
+`farm/alerts` when a reading stays outside its range.
+
+```bash
+npm run alert
+```
+
+- Ranges load from `alert-engine-config.json`: per telemetry field, a warning
+  band inside a critical band, and a deadband. They apply to every payload
+  carrying that field, so a robot's AHT20 `temperature_c` and `humidity_pct`
+  use the shelf air ranges. They match the dashboard's (`web/src/lib/alerts.ts`).
+- A shelf's `water_level_ok: false` is critical. A `null` or missing reading
+  raises nothing and keeps the metric's state; silence is the shelf bridge's
+  and the orchestrator's to alert on.
+- An alert is raised, or escalated from warning to critical, only after the
+  readings have stayed out of range for `hold_ms`, so a one-off spike raises
+  nothing. Easing or clearing is immediate, but a raised alert clears only once
+  the value is back inside its limit by the deadband, so a value sitting on a
+  limit doesn't flap. While a metric stays in the same band, it repeats at most
+  every `cooldown_ms`.
+- Optional email: with `RESEND_API_KEY`, `ALERT_EMAIL_FROM` and
+  `ALERT_EMAIL_TO` set, every critical alert on `farm/alerts` (from any
+  service, e.g. a lost robot) is emailed through [Resend](https://resend.com),
+  except this service's repeats. A failed send is logged and dropped. See
+  `deploy/env/alert-engine.env.example`.
+- State is in memory: after a restart, an out-of-range reading waits out the
+  hold time again.
+- Environment overrides: `BROKER_URL`, `CONFIG_PATH`. On the Pi it runs as
+  the `farm-alert-engine` service ([docs/PI-SERVICES.md](../docs/PI-SERVICES.md)).
+
 ### Other services
 
 As new services are added, they'll follow the same pattern:
@@ -196,12 +228,13 @@ farm-controller/
 ├── ingester/            # Telemetry → SQLite recorder
 ├── orchestrator/        # Robot state, task queue, commands
 ├── shelf-bridge/        # Shelf sensor node (USB serial) → MQTT
-├── alert-engine/        # Telemetry threshold monitoring
+├── alert-engine/        # Sensor readings out of range → alerts
 ├── supabase-bridge/     # (to be built) Cloud sync
 ├── dashboard-api/       # (to be built) REST API for dashboard
 ├── topology.json        # Farm layout (nodes + edges)
 ├── orchestrator-config.json  # Tunable orchestrator settings
 ├── shelf-bridge-config.json  # Shelf serial ports and pH calibration
+├── alert-engine-config.json  # Alert ranges, hold time and cooldown
 └── package.json         # Workspace root
 ```
 
@@ -249,23 +282,3 @@ mosquitto_pub -t 'farm/robot/robot-1/telemetry' -m '{"robot_id":"robot-1","statu
 4. Connect to MQTT using `createMqttClient()` from the shared package
 5. Add a run script to the root `package.json` if convenient
 6. Rebuild shared if you've added new types: `npm -w @farm/shared run build`
-
-### Alert engine
-
-The alert engine subscribes to robot, shelf, and elevator telemetry, then
-publishes `FarmAlert` messages to `farm/alerts` when a configured numeric
-metric falls outside its accepted range. Repeated alerts for the same device
-and metric are suppressed for the configured cooldown; returning to the valid
-range resets the cooldown state.
-
-Edit `alert-engine/config.json` to set thresholds and `cooldown_ms`, then run:
-
-> The checked-in thresholds are example values only. Confirm the exact safe
-> operating ranges with the team before deploying the alert engine.
-
-```bash
-npm run alert
-```
-
-Use `BROKER_URL` to select another MQTT broker or `CONFIG_PATH` to load a
-different JSON configuration file.

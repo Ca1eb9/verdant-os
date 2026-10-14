@@ -14,6 +14,7 @@ Every service is a **systemd** unit. systemd is built into the OS, so there's no
 | Orchestrator | `farm-orchestrator` | Robot state, task queue, commands | `/var/lib/verdant/orchestrator-state.json` |
 | Ingester | `farm-ingester` | Records telemetry and operator commands to SQLite | `/var/lib/verdant/farm_telemetry.db` |
 | Shelf bridge | `farm-shelf-bridge` | Reads the shelf sensor node over USB serial and publishes its readings ([shelf-sensors.md](shelf-sensors.md)) | — |
+| Alert engine | `farm-alert-engine` | Publishes an alert when a robot's or shelf's sensor reading stays out of range; optionally emails critical alerts ([farm-controller/README.md](../farm-controller/README.md#alert-engine)) | — |
 | Dashboard | `farm-dashboard` | Web app on `http://farmnet.local:3000` | — |
 
 Networks (set up in [WIFI-SETUP.md](WIFI-SETUP.md)):
@@ -69,7 +70,7 @@ The services run as `farm`, which can't log in and can only write to its own fol
 
 ```bash
 sudo install -d -m 750 -o root -g farm /etc/verdant
-for f in orchestrator ingester shelf-bridge dashboard; do
+for f in orchestrator ingester shelf-bridge alert-engine dashboard; do
   sudo install -m 640 -o root -g farm /opt/verdant-os/deploy/env/$f.env.example /etc/verdant/$f.env
 done
 sudo install -m 640 -o root -g farm /opt/verdant-os/farm-controller/shelf-bridge-config.json /etc/verdant/shelf-bridge-config.json
@@ -81,7 +82,7 @@ In `dashboard.env`, set the Supabase values (the URL and the publishable key, ne
 
 In `shelf-bridge-config.json`, set each shelf's `port` to its node's stable path (plug the Uno in, then `ls /dev/serial/by-id/`) and its pH calibration ([shelf-sensors.md](shelf-sensors.md#ph-calibration)). This copy belongs to this Pi; the repo's file is only the template, and a deploy never touches this one. The service can open serial ports through the `dialout` group (set in its unit).
 
-The orchestrator, ingester and shelf bridge `.env` files work as they are.
+The orchestrator, ingester and shelf bridge `.env` files work as they are. So does the alert engine's; to have it email critical alerts, `sudo nano /etc/verdant/alert-engine.env` and set the three Resend values described there (an API key from [resend.com](https://resend.com), the sender and the recipients). Without them it only publishes alerts.
 
 These files are readable by root and the `farm` user only. Never copy them into the repo; it's public.
 
@@ -104,7 +105,7 @@ sudo systemctl restart systemd-journald
 sudo bash /opt/verdant-os/scripts/pi-deploy.sh
 ```
 
-The first run takes several minutes, mostly the dashboard build. It installs the unit files, enables them at boot and starts them. It ends by printing each service's status; all four should be `active (running)`.
+The first run takes several minutes, mostly the dashboard build. It installs the unit files, enables them at boot and starts them. It ends by printing each service's status; all five should be `active (running)`.
 
 ### 7. Firewall
 
@@ -146,7 +147,7 @@ sudo reboot
 
 After it's back:
 
-1. `systemctl status mosquitto farm-orchestrator farm-ingester farm-shelf-bridge farm-dashboard`: all `active (running)`
+1. `systemctl status mosquitto farm-orchestrator farm-ingester farm-shelf-bridge farm-alert-engine farm-dashboard`: all `active (running)`
 2. `journalctl -u farm-orchestrator -n 20`: connected to the broker
 3. `curl -sI http://localhost:3000 | head -1`: `HTTP/1.1 200 OK`
 4. `systemctl show -p RuntimeWatchdogUSec`: `14s`

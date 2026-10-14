@@ -1,0 +1,29 @@
+# Alert engine: sensor readings out of range → farm/alerts. See docs/PI-SERVICES.md
+# and farm-controller/README.md.
+[Unit]
+Description=VerdantOS alert engine
+# Wants, not Requires: see farm-orchestrator.service
+After=mosquitto.service
+Wants=mosquitto.service
+StartLimitIntervalSec=0
+
+[Service]
+User=farm
+Group=farm
+WorkingDirectory=/opt/verdant-os/farm-controller/alert-engine
+EnvironmentFile=/etc/verdant/alert-engine.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /opt/verdant-os/node_modules/tsx/dist/cli.mjs src/index.ts
+Restart=always
+RestartSec=5
+# The service closes the broker connection on SIGINT.
+KillSignal=SIGINT
+TimeoutStopSec=10
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
