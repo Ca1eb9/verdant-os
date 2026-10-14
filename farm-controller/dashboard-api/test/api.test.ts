@@ -30,6 +30,14 @@ for (let m = 120; m >= 0; m--) {
 }
 for (const m of [300, 299, 298]) tel.run("robot-02", "charging", "dock", 40, null, m, NOW - m * MIN);
 
+const shelf = db.prepare(
+  `INSERT INTO shelf_sensors (shelf_id, level, temperature_c, humidity_pct, light_lux, water_temp_c, water_level_ok, ph, timestamp, received_at)
+   VALUES (?, 1, 22.5, NULL, 400, 19, ?, 6.1, ?, ?)`,
+);
+// shelf-1 every minute for 2 hours, water level ok / low / unknown in turn; shelf-2 once
+for (let m = 120; m >= 0; m--) shelf.run("shelf-1", [1, 0, null][m % 3], NOW - m * MIN, NOW - m * MIN);
+shelf.run("shelf-2", 1, NOW - 30 * MIN, NOW - 30 * MIN);
+
 const alert = db.prepare(
   `INSERT INTO alerts (alert_id, severity, source, source_type, message, metric, value, threshold, timestamp, resolves, received_at)
    VALUES (?, ?, ?, 'robot', 'msg', 'battery_pct', 10, 15, 1, ?, ?)`,
@@ -109,6 +117,42 @@ describe("GET /telemetry", () => {
       const { status, body } = await get(`/telemetry?${bad}`);
       assert.equal(status, 400);
       assert.ok(body.error);
+    });
+  }
+});
+
+describe("GET /shelves", () => {
+  it("defaults to the last hour of one shelf, oldest first", async () => {
+    const { status, body } = await get("/shelves?shelf_id=shelf-1");
+    assert.equal(status, 200);
+    assert.equal(body.readings.length, 61);
+    assert.equal(body.readings[0].received_at, NOW - 60 * MIN);
+    assert.deepEqual(body.readings.at(-1), {
+      shelf_id: "shelf-1",
+      level: 1,
+      temperature_c: 22.5,
+      humidity_pct: null,
+      light_lux: 400,
+      water_temp_c: 19,
+      water_level_ok: true,
+      ph: 6.1,
+      timestamp: NOW,
+      received_at: NOW,
+    });
+  });
+  it("turns water_level_ok back into a boolean, null staying null", async () => {
+    const { body } = await get(`/shelves?shelf_id=shelf-1&from=${NOW - 2 * MIN}`);
+    assert.deepEqual(body.readings.map((r: any) => r.water_level_ok), [null, false, true]);
+  });
+  it("covers all shelves without shelf_id, with the same limit rules", async () => {
+    const all = await get(`/shelves?from=${NOW - 31 * MIN}&to=${NOW - 29 * MIN}`);
+    assert.deepEqual(all.body.readings.map((r: any) => r.shelf_id), ["shelf-1", "shelf-1", "shelf-2", "shelf-1"]);
+    const limited = await get("/shelves?limit=2");
+    assert.deepEqual(limited.body.readings.map((r: any) => r.received_at), [NOW - MIN, NOW]);
+  });
+  for (const bad of ["limit=abc", `from=${NOW}&to=${NOW - 1}`]) {
+    it(`rejects ${bad}`, async () => {
+      assert.equal((await get(`/shelves?${bad}`)).status, 400);
     });
   }
 });

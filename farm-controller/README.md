@@ -137,12 +137,13 @@ npm run api          # port 3001, reads ingester/farm_telemetry.db
 | `GET /health` | `{ ok, database }`: `database` is false until the ingester has created it (the data routes answer 503 until then) |
 | `GET /robots` | `{ robots }`: each robot's newest telemetry |
 | `GET /telemetry?robot_id=&from=&to=&limit=` | `{ telemetry }`: robot telemetry received between `from` and `to` (default: the last hour), oldest first. `robot_id` optional; `limit` default 1000, at most 10000 (the newest rows are kept) |
+| `GET /shelves?shelf_id=&from=&to=&limit=` | `{ readings }`: `ShelfSensorData` plus `received_at`, oldest first, with the same `from`/`to`/`limit` rules as `/telemetry`. `shelf_id` optional |
 | `GET /alerts?severity=&source=&limit=` | `{ alerts }`: `FarmAlert`s, newest first. Filters optional; `limit` default 50, at most 500 |
 | `GET /commands?robot_id=` | `{ commands }`: the last 10 operator commands, newest first, each `{ id, robot_id, command, issued_by, issued_at, status: "sent" }` (the dashboard's own `/api/commands` shape). `robot_id` optional |
 
 Times are milliseconds since 1970. Everything sorts and filters on
 `received_at` (the Pi's clock), which telemetry rows include; a payload's own
-`timestamp` is the sender's clock. Bad query values get a 400 with an `error`.
+`timestamp` is the sender's clock (a shelf reading's is already the Pi's). Bad query values get a 400 with an `error`.
 
 Settings: `PORT` (3001), `DB_PATH` (`../ingester/farm_telemetry.db`) and
 `CORS_ORIGINS`, the comma-separated pages allowed to call it (default

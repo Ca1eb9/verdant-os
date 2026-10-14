@@ -132,6 +132,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_robot_received ON robot_telemetry(robot_id, received_at);
   CREATE INDEX IF NOT EXISTS idx_robot_received_all ON robot_telemetry(received_at);
   CREATE INDEX IF NOT EXISTS idx_shelf_id ON shelf_sensors(shelf_id, timestamp);
+  CREATE INDEX IF NOT EXISTS idx_shelf_received ON shelf_sensors(shelf_id, received_at);
+  CREATE INDEX IF NOT EXISTS idx_shelf_received_all ON shelf_sensors(received_at);
 `);
 
 if (addResolves) {

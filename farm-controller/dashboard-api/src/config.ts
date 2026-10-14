@@ -14,10 +14,11 @@ export const LIMITS = {
   commands: 10,
   alertsDefault: 50,
   alertsMax: 500,
-  telemetryDefault: 1000,
-  telemetryMax: 10000,
-  /** GET /telemetry with no `from`: this far back */
-  telemetryWindowMs: 60 * 60 * 1000,
+  /** GET /telemetry and /shelves */
+  historyDefault: 1000,
+  historyMax: 10000,
+  /** GET /telemetry or /shelves with no `from`: this far back */
+  historyWindowMs: 60 * 60 * 1000,
 } as const;
 
 /** Throws with the reason; the API can't run without a valid config */

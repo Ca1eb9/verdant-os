@@ -6,7 +6,7 @@
 // clock sync).
 // ============================================================
 
-import type { AlertSeverity, FarmAlert, RobotCommand, RobotTelemetry } from "@farm/shared";
+import type { AlertSeverity, FarmAlert, RobotCommand, RobotTelemetry, ShelfSensorData } from "@farm/shared";
 import { LIMITS } from "./config.js";
 
 /** The part of a SQLite connection the queries use (better-sqlite3, or node:sqlite in tests) */
@@ -17,6 +17,7 @@ export interface Db {
 type Row = Record<string, unknown>;
 
 export type RobotTelemetryRecord = RobotTelemetry & { received_at: number };
+export type ShelfReadingRecord = ShelfSensorData & { received_at: number };
 
 export interface CommandRecord {
   id: string;
@@ -70,28 +71,49 @@ export function latestRobots(db: Db): RobotTelemetryRecord[] {
     .all() as Row[]).map(toTelemetry);
 }
 
-export interface TelemetryQuery {
-  robotId?: string;
+export interface HistoryQuery {
+  /** A robot_id or shelf_id; every one when unset */
+  id?: string;
   from: number;
   to: number;
   limit: number;
 }
 
-/** Telemetry received in [from, to], oldest first; the newest `limit` rows if there are more */
-export function telemetryHistory(db: Db, q: TelemetryQuery): RobotTelemetryRecord[] {
+/** Rows received in [from, to], oldest first; the newest `limit` rows if there are more */
+function history(db: Db, table: string, idColumn: string, q: HistoryQuery): Row[] {
   const where = ["received_at >= ?", "received_at <= ?"];
   const params: (string | number)[] = [q.from, q.to];
-  if (q.robotId) {
-    where.push("robot_id = ?");
-    params.push(q.robotId);
+  if (q.id) {
+    where.push(`${idColumn} = ?`);
+    params.push(q.id);
   }
   const rows = db
     .prepare(
-      `SELECT * FROM robot_telemetry WHERE ${where.join(" AND ")}
+      `SELECT * FROM ${table} WHERE ${where.join(" AND ")}
        ORDER BY received_at DESC, id DESC LIMIT ?`,
     )
     .all(...params, q.limit) as Row[];
-  return rows.reverse().map(toTelemetry);
+  return rows.reverse();
+}
+
+export function telemetryHistory(db: Db, q: HistoryQuery): RobotTelemetryRecord[] {
+  return history(db, "robot_telemetry", "robot_id", q).map(toTelemetry);
+}
+
+export function shelfHistory(db: Db, q: HistoryQuery): ShelfReadingRecord[] {
+  return history(db, "shelf_sensors", "shelf_id", q).map((r) => ({
+    shelf_id: r.shelf_id as string,
+    level: r.level as number,
+    temperature_c: (r.temperature_c as number | null) ?? null,
+    humidity_pct: (r.humidity_pct as number | null) ?? null,
+    light_lux: (r.light_lux as number | null) ?? null,
+    water_temp_c: (r.water_temp_c as number | null) ?? null,
+    // Stored as 0/1: SQLite has no boolean
+    water_level_ok: r.water_level_ok == null ? null : r.water_level_ok === 1,
+    ph: (r.ph as number | null) ?? null,
+    timestamp: r.timestamp as number,
+    received_at: r.received_at as number,
+  }));
 }
 
 export interface AlertQuery {

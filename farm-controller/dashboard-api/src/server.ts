@@ -5,6 +5,7 @@
 //   GET /health                          { ok, database }
 //   GET /robots                          { robots: [newest telemetry per robot] }
 //   GET /telemetry?robot_id=&from=&to=&limit=   { telemetry: [...] } oldest first
+//   GET /shelves?shelf_id=&from=&to=&limit=     { readings: [...] } oldest first
 //   GET /alerts?severity=&source=&limit= { alerts: [...] } newest first
 //   GET /commands?robot_id=              { commands: [...] } newest first, at most 10
 //
@@ -15,7 +16,10 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { AlertSeverity } from "@farm/shared";
 
 import { LIMITS, type ApiConfig } from "./config.js";
-import { latestRobots, recentAlerts, recentCommands, telemetryHistory, type Db } from "./queries.js";
+import {
+  latestRobots, recentAlerts, recentCommands, shelfHistory, telemetryHistory,
+  type Db, type HistoryQuery,
+} from "./queries.js";
 
 /** The database, or null while it can't be opened (e.g. the ingester hasn't created it yet) */
 export type DbProvider = () => Db | null;
@@ -40,6 +44,15 @@ function int(params: URLSearchParams, name: string, fallback: number, max = Numb
 function str(params: URLSearchParams, name: string): string | undefined {
   const v = params.get(name);
   return v ? v : undefined;
+}
+
+/** from/to/limit for /telemetry and /shelves: the last hour by default */
+function historyQuery(params: URLSearchParams, idParam: string, now: number): HistoryQuery {
+  const to = int(params, "to", now);
+  const from = int(params, "from", Math.max(0, to - LIMITS.historyWindowMs));
+  if (from > to) throw new BadRequest("from must not be after to");
+  const limit = int(params, "limit", LIMITS.historyDefault, LIMITS.historyMax);
+  return { id: str(params, idParam), from, to, limit };
 }
 
 export function createHandler(config: ApiConfig, getDb: DbProvider, now: () => number = Date.now) {
@@ -70,7 +83,7 @@ export function createHandler(config: ApiConfig, getDb: DbProvider, now: () => n
       send(res, 200, { ok: true, database: db !== null });
       return;
     }
-    const routes = ["/robots", "/telemetry", "/alerts", "/commands"];
+    const routes = ["/robots", "/telemetry", "/shelves", "/alerts", "/commands"];
     if (!routes.includes(url.pathname)) {
       send(res, 404, { error: `No route ${url.pathname}` });
       return;
@@ -85,14 +98,12 @@ export function createHandler(config: ApiConfig, getDb: DbProvider, now: () => n
         case "/robots":
           send(res, 200, { robots: latestRobots(db) });
           return;
-        case "/telemetry": {
-          const to = int(q, "to", now());
-          const from = int(q, "from", Math.max(0, to - LIMITS.telemetryWindowMs));
-          if (from > to) throw new BadRequest("from must not be after to");
-          const limit = int(q, "limit", LIMITS.telemetryDefault, LIMITS.telemetryMax);
-          send(res, 200, { telemetry: telemetryHistory(db, { robotId: str(q, "robot_id"), from, to, limit }) });
+        case "/telemetry":
+          send(res, 200, { telemetry: telemetryHistory(db, historyQuery(q, "robot_id", now())) });
           return;
-        }
+        case "/shelves":
+          send(res, 200, { readings: shelfHistory(db, historyQuery(q, "shelf_id", now())) });
+          return;
         case "/alerts": {
           const severity = str(q, "severity");
           if (severity && !SEVERITIES.has(severity)) {
