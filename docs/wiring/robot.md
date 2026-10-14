@@ -27,7 +27,7 @@ The pins come from `firmware/esp32/src/config.h`; the firmware is in
 | 1N5822 Schottky diode (3 A, 40 V) | Charging path | **Docking only.** Keeps the pads dead off the dock |
 | 100 kΩ + 22 kΩ + 10 kΩ resistors | Charge contact divider, and a pull-down on pad + | **Docking only** |
 | 2× 0.1 µF ceramic capacitors | Steady the divider readings | **Optional** |
-| 0.01–0.047 µF ceramic capacitor | Across the motor's two terminals: soaks up its electrical noise | **Optional** |
+| 0.1 µF ceramic capacitor | Across the motor's two terminals: soaks up its electrical noise | **Optional** |
 | STEMMA QT cable | Rear VL53L4CX → AHT20 | **Optional**, with the AHT20 |
 | Jumper wires; 20–22 AWG wire for the 12 V side | | |
 
@@ -96,9 +96,10 @@ continues on the ESP32, and every ground symbol is the same shared ground.
   and can upset nearby signal wires (I2C, SPI) or reset the ESP32. A small
   ceramic capacitor soldered straight across the motor's two terminals
   absorbs them where they're made. It doesn't make the motor quieter to the
-  ear. Keep it small, 0.01–0.047 µF: the driver charges and empties it on
-  every PWM pulse, 20 000 times a second, and the usual 0.1 µF would waste
-  about 0.3 W in the driver. Twisting the two motor wires together and keeping
+  ear. Use 0.1 µF ceramic, the usual value. The driver charges and empties it
+  on every PWM pulse, 20 000 times a second, which turns about 0.3 W into
+  heat in the driver, warming it a few degrees more than without it; well
+  within what it handles. Twisting the two motor wires together and keeping
   them away from the I2C cables helps too.
 - **Shared ground.** Battery −, pad −, the converter, the driver, the ESP32
   and both dividers all join. Signals only mean something relative to a

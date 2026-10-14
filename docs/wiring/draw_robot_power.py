@@ -168,7 +168,7 @@ wire([(870, CAP_Y), (891, CAP_Y)], "#888", 2)
 wire([(899, CAP_Y), (920, CAP_Y)], "#888", 2)
 for dx in (-4, 4):
     add(f'<line x1="{895 + dx}" y1="{CAP_Y - 9}" x2="{895 + dx}" y2="{CAP_Y + 9}" stroke="#444" stroke-width="2.5"/>')
-text(895, CAP_Y - 14, "0.01–0.047 µF across its terminals (optional)", 10, fill="#555")
+text(895, CAP_Y - 14, "0.1 µF ceramic across its terminals (optional)", 10, fill="#555")
 text(895, 650, "its 4 encoder wires: insulate", 10, fill="#777")
 text(895, 663, "and leave unconnected", 10, fill="#777")
 

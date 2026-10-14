@@ -149,7 +149,7 @@
 <circle cx="920" cy="512" r="3.2" fill="#888" stroke="#fff" stroke-width="1"/>
 <line x1="891" y1="503" x2="891" y2="521" stroke="#444" stroke-width="2.5"/>
 <line x1="899" y1="503" x2="899" y2="521" stroke="#444" stroke-width="2.5"/>
-<text x="895" y="498" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" font-weight="normal" fill="#555">0.01–0.047 µF across its terminals (optional)</text>
+<text x="895" y="498" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" font-weight="normal" fill="#555">0.1 µF ceramic across its terminals (optional)</text>
 <text x="895" y="650" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" font-weight="normal" fill="#777">its 4 encoder wires: insulate</text>
 <text x="895" y="663" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" font-weight="normal" fill="#777">and leave unconnected</text>
 <circle cx="1000" cy="150" r="4.5" fill="#c2185b"/>
