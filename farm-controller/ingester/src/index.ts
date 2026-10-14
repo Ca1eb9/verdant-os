@@ -48,6 +48,10 @@ if (migrateShelf) {
   `);
 }
 
+// Alert tables from before `resolves` only need the column added
+const alertCols = db.prepare(`PRAGMA table_info(alerts)`).all() as { name: string }[];
+const addResolves = alertCols.length > 0 && !alertCols.some((c) => c.name === "resolves");
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS robot_telemetry (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,6 +118,7 @@ db.exec(`
     value REAL NOT NULL,
     threshold REAL NOT NULL,
     timestamp INTEGER NOT NULL,
+    resolves TEXT,
     received_at INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000)
   );
 
@@ -125,6 +130,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_robot_id ON robot_telemetry(robot_id, timestamp);
   CREATE INDEX IF NOT EXISTS idx_shelf_id ON shelf_sensors(shelf_id, timestamp);
 `);
+
+if (addResolves) {
+  db.exec(`ALTER TABLE alerts ADD COLUMN resolves TEXT`);
+}
 
 if (addLastCompleted) {
   db.exec(`ALTER TABLE robot_telemetry ADD COLUMN last_completed_task_id TEXT`);
@@ -175,8 +184,8 @@ const insertCommand = db.prepare(`
 
 // Same as commands: a redelivered alert is stored once, received_at in ms
 const insertAlert = db.prepare(`
-  INSERT OR IGNORE INTO alerts (alert_id, severity, source, source_type, message, metric, value, threshold, timestamp, received_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT OR IGNORE INTO alerts (alert_id, severity, source, source_type, message, metric, value, threshold, timestamp, resolves, received_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 // --- Counters for logging ------------------------------------
@@ -299,7 +308,7 @@ async function main() {
       return;
     }
     const { changes } = insertAlert.run(msg.alert_id, msg.severity, msg.source, msg.source_type,
-      msg.message, msg.metric, msg.value, msg.threshold, msg.timestamp, Date.now());
+      msg.message, msg.metric, msg.value, msg.threshold, msg.timestamp, msg.resolves, Date.now());
     if (!changes) return; // already stored
     counts.alert++;
     console.log(`Alert: ${msg.severity} | ${msg.source} | ${msg.message}`);

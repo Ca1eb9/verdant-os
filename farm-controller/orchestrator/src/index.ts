@@ -42,6 +42,7 @@ import {
   processTelemetry,
   processEvent,
   processWatchdog,
+  type AlertProblem,
   type SideEffect,
 } from "./state-machine.js";
 import { isRobotTelemetry, isRobotEvent, isRemoteCommand } from "./validate.js";
@@ -74,6 +75,11 @@ function recordFinished(task: FarmTask) {
 }
 
 const robots = new Map<string, RobotState>();
+/**
+ * Each robot's open problem alerts by kind, for the recovery alert to resolve.
+ * In memory: after a restart, a recovery resolves nothing.
+ */
+const problemAlerts = new Map<string, Map<AlertProblem, string>>();
 const queue = new TaskQueue();
 let mqtt: TypedMqttClient;
 
@@ -181,6 +187,10 @@ function executeEffects(robotId: string, effects: SideEffect[]) {
       }
 
       case "publish_alert": {
+        const problems = problemAlerts.get(effect.robotId) ?? new Map<AlertProblem, string>();
+        problemAlerts.set(effect.robotId, problems);
+        const resolves = effect.resolves ? problems.get(effect.resolves) ?? null : null;
+        if (effect.resolves) problems.delete(effect.resolves);
         const alert: FarmAlert = {
           alert_id: randomUUID(),
           severity: effect.severity,
@@ -191,7 +201,9 @@ function executeEffects(robotId: string, effects: SideEffect[]) {
           value: 0,
           threshold: 0,
           timestamp: Date.now(),
+          resolves,
         };
+        if (effect.problem) problems.set(effect.problem, alert.alert_id);
         mqtt.publish(TOPICS.alerts, alert);
         console.log(`[ALERT] ${effect.message}`);
         break;

@@ -117,6 +117,11 @@
   background: rgb(var(--danger-rgb) / 0.1);
 }
 
+/* Kept in the list for the record, but no longer needs anyone */
+.resolved {
+  opacity: 0.6;
+}
+
 .alertMessage {
   margin: 0;
   line-height: 1.6;

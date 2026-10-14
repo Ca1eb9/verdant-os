@@ -15,6 +15,7 @@ const alert: FarmAlert = {
   value: 4.9,
   threshold: 5.2,
   timestamp: 0,
+  resolves: null,
 };
 
 describe("emailConfigFromEnv", () => {

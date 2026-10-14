@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { NoFarmNotice } from "@/components/farms/NoFarmNotice";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
-import { useFarmAlerts } from "@/hooks/useFarmAlerts";
+import { listAlerts, useFarmAlerts } from "@/hooks/useFarmAlerts";
 import { useFarmTelemetry } from "@/hooks/useFarmTelemetry";
 import styles from "@/components/alerts/AlertsView.module.css";
 
@@ -15,10 +15,16 @@ export function AlertsView() {
   const { lastUpdate } = useFarmTelemetry(activeFarmId);
   // From the farm's services: the orchestrator and the alert engine
   const farmAlerts = useFarmAlerts();
-  const visibleFarmAlerts = useMemo(() => farmAlerts?.slice(0, limit) ?? [], [farmAlerts, limit]);
+  const visibleFarmAlerts = useMemo(
+    () => (farmAlerts ? listAlerts(farmAlerts).slice(0, limit) : []),
+    [farmAlerts, limit],
+  );
 
+  // Open problems only: a resolved alert no longer needs anyone
   const counts = useMemo(() => {
-    const severities = visibleFarmAlerts.map((alert) => alert.severity);
+    const severities = visibleFarmAlerts
+      .filter((listed) => listed.resolvedAt === null)
+      .map(({ alert }) => alert.severity);
     return {
       warning: severities.filter((severity) => severity === "warning").length,
       critical: severities.filter((severity) => severity === "critical").length,
@@ -66,12 +72,12 @@ export function AlertsView() {
         <article className={`glassPanel ${styles.summaryCard}`}>
           <span className={styles.summaryLabel}>Warnings</span>
           <strong className={styles.summaryValue}>{counts.warning}</strong>
-          <span className={styles.summaryDetail}>Soft threshold breaches</span>
+          <span className={styles.summaryDetail}>Open, outside the target range</span>
         </article>
         <article className={`glassPanel ${styles.summaryCard}`}>
           <span className={styles.summaryLabel}>Critical</span>
           <strong className={styles.summaryValue}>{counts.critical}</strong>
-          <span className={styles.summaryDetail}>Hard threshold breaches</span>
+          <span className={styles.summaryDetail}>Open, need attention now</span>
         </article>
         <article className={`glassPanel ${styles.summaryCard}`}>
           <span className={styles.summaryLabel}>Heartbeat</span>
@@ -94,8 +100,11 @@ export function AlertsView() {
             <span>Alerts raised since the dashboard opened show here.</span>
           </article>
         ) : (
-          visibleFarmAlerts.map((alert) => (
-            <article key={alert.alert_id} className={`glassPanel ${styles.alertCard}`}>
+          visibleFarmAlerts.map(({ alert, resolvedAt }) => (
+            <article
+              key={alert.alert_id}
+              className={`glassPanel ${styles.alertCard} ${resolvedAt !== null ? styles.resolved : ""}`}
+            >
               <div className={styles.alertHead}>
                 <div>
                   <span className="eyebrow">
@@ -110,6 +119,11 @@ export function AlertsView() {
                 <span>
                   <strong>Raised:</strong> {fmt.time(alert.timestamp)}
                 </span>
+                {resolvedAt !== null ? (
+                  <span>
+                    <strong>Resolved:</strong> {fmt.time(resolvedAt)}
+                  </span>
+                ) : null}
                 {/* metric is empty for alerts that aren't about a reading */}
                 {alert.metric ? (
                   <>

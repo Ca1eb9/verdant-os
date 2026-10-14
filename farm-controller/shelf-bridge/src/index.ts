@@ -48,7 +48,8 @@ interface ShelfLink {
   /** Monotonic ms the port last opened; a node needs time to boot before it's silent */
   openedAt: number;
   lastSeq: number | null;
-  silent: boolean;
+  /** The open silence alert, while the shelf is silent, for the next reading to resolve */
+  silenceAlertId: string | null;
   /** Last non-reading line, so a sensor library repeating its error logs once */
   lastNodeLog: string;
 }
@@ -62,7 +63,7 @@ const links: ShelfLink[] = config.shelves.map((shelf) => ({
   lastReadingAt: performance.now(),
   openedAt: 0,
   lastSeq: null,
-  silent: false,
+  silenceAlertId: null,
   lastNodeLog: "",
 }));
 
@@ -96,9 +97,23 @@ function onLine(link: ShelfLink, raw: string) {
   if (link.lastSeq !== null && reading.seq <= link.lastSeq) {
     console.log(`${tag(link)} node restarted (seq ${link.lastSeq} → ${reading.seq})`);
   }
-  if (link.silent) {
-    console.log(`${tag(link)} reporting again after ${Math.round((now - link.lastReadingAt) / 1000)}s`);
-    link.silent = false;
+  if (link.silenceAlertId) {
+    const silence = Math.round((now - link.lastReadingAt) / 1000);
+    console.log(`${tag(link)} reporting again after ${silence}s`);
+    const alert: FarmAlert = {
+      alert_id: randomUUID(),
+      severity: AlertSeverity.INFO,
+      source: link.shelf.shelf_id,
+      source_type: "shelf",
+      message: `Sensor readings resumed after ${silence}s`,
+      metric: "silence_s",
+      value: silence,
+      threshold: Math.round(config.silence_timeout_ms / 1000),
+      timestamp: Date.now(),
+      resolves: link.silenceAlertId,
+    };
+    mqtt.publish(TOPICS.alerts, alert);
+    link.silenceAlertId = null;
   }
   link.lastSeq = reading.seq;
   link.lastReadingAt = now;
@@ -182,8 +197,7 @@ function checkSilence() {
     }
 
     const silence = now - link.lastReadingAt;
-    if (link.silent || silence <= config.silence_timeout_ms) continue;
-    link.silent = true;
+    if (link.silenceAlertId || silence <= config.silence_timeout_ms) continue;
 
     const port = link.port?.isOpen ? `${link.shelf.port} open` : `${link.shelf.port} not open`;
     const alert: FarmAlert = {
@@ -196,7 +210,9 @@ function checkSilence() {
       value: Math.round(silence / 1000),
       threshold: Math.round(config.silence_timeout_ms / 1000),
       timestamp: Date.now(),
+      resolves: null,
     };
+    link.silenceAlertId = alert.alert_id;
     mqtt.publish(TOPICS.alerts, alert);
     console.warn(`[ALERT] ${link.shelf.shelf_id}: ${alert.message}`);
   }

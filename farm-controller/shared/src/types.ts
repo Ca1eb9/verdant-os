@@ -190,6 +190,11 @@ export interface FarmAlert {
   value: number;
   threshold: number;
   timestamp: number;
+  /**
+   * The alert_id this one resolves, or null. An info alert with it set means
+   * the problem cleared; a warning with it set eased a critical alert.
+   */
+  resolves: string | null;
 }
 
 /** Published to farm/commands/remote by Supabase bridge */
@@ -310,6 +315,8 @@ export interface SensorThreshold {
   deadband: number;
   /** Placeholders: {source} {value} {limit} {direction} ("below"/"above") {severity} */
   message_template: string;
+  /** The message once the value is back in range. Placeholders: {source} {value} */
+  resolved_template: string;
 }
 
 /** The alert engine's config. Silence is the orchestrator's and shelf bridge's job */

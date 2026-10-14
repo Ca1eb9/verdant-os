@@ -107,7 +107,8 @@ function isAlert(v: unknown): v is FarmAlert {
   return isRecord(v) && typeof v.alert_id === "string" && v.alert_id.length > 0 &&
     SEVERITIES.includes(v.severity as AlertSeverity) && typeof v.source === "string" &&
     ALERT_SOURCES.includes(v.source_type as string) && typeof v.message === "string" &&
-    typeof v.metric === "string" && isNum(v.value) && isNum(v.threshold) && isNum(v.timestamp);
+    typeof v.metric === "string" && isNum(v.value) && isNum(v.threshold) && isNum(v.timestamp) &&
+    (v.resolves === null || (typeof v.resolves === "string" && v.resolves.length > 0));
 }
 
 function isShelfData(v: unknown): v is ShelfSensorData {

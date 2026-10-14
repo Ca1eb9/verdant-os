@@ -65,5 +65,6 @@ export function isFarmAlert(value: unknown): value is FarmAlert {
     typeof value.metric === "string" &&
     isFiniteNumber(value.value) &&
     isFiniteNumber(value.threshold) &&
-    isFiniteNumber(value.timestamp);
+    isFiniteNumber(value.timestamp) &&
+    (value.resolves === null || (typeof value.resolves === "string" && value.resolves.length > 0));
 }

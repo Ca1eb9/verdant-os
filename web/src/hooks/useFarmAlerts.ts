@@ -32,3 +32,35 @@ export function currentAlertsByReading(alerts: FarmAlert[]) {
   }
   return current;
 }
+
+export interface ListedAlert {
+  alert: FarmAlert;
+  /** When a later alert resolved it (FarmAlert.timestamp), or null while it's open */
+  resolvedAt: number | null;
+}
+
+/**
+ * The alerts to list, from a list newest first, each marked with when it
+ * resolved. An alert is resolved by one naming it in `resolves`, or by a
+ * resolved newer alert about the same reading (a reminder or an escalation
+ * of the same problem). An info alert that only resolves another is folded
+ * into it, unless that one isn't in the list.
+ */
+export function listAlerts(alerts: FarmAlert[]): ListedAlert[] {
+  const ids = new Set(alerts.map((alert) => alert.alert_id));
+  const resolvedBy = new Map<string, number>();
+  /** Per reading: whether its newer alerts were resolved, and when */
+  const readingResolvedAt = new Map<string, number | null>();
+  const listed: ListedAlert[] = [];
+
+  for (const alert of alerts) {
+    const key = alert.metric ? alertKey(alert.source_type, alert.source, alert.metric) : null;
+    const clears = alert.severity === "info" && alert.resolves !== null;
+    const resolvedAt = resolvedBy.get(alert.alert_id) ?? (key ? readingResolvedAt.get(key) ?? null : null);
+
+    if (alert.resolves) resolvedBy.set(alert.resolves, alert.timestamp);
+    if (key) readingResolvedAt.set(key, clears ? alert.timestamp : resolvedAt);
+    if (!clears || !ids.has(alert.resolves as string)) listed.push({ alert, resolvedAt });
+  }
+  return listed;
+}

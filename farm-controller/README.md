@@ -198,6 +198,9 @@ npm run alert
   the value is back inside its limit by the deadband, so a value sitting on a
   limit doesn't flap. While a metric stays in the same band, it repeats at most
   every `cooldown_ms`.
+- Easing from critical to warning publishes a warning, and clearing publishes
+  an info alert (`resolved_template`), each with `resolves` set to the
+  metric's last alert. The dashboard shows that alert as resolved.
 - Optional email: with `RESEND_API_KEY`, `ALERT_EMAIL_FROM` and
   `ALERT_EMAIL_TO` set, every critical alert on `farm/alerts` (from any
   service, e.g. a lost robot) is emailed through [Resend](https://resend.com),

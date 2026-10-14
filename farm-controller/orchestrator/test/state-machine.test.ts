@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { type RobotState, type RobotTelemetry, RobotStatus } from "@farm/shared";
 import { loadConfig } from "../src/config.js";
-import { processTelemetry } from "../src/state-machine.js";
+import { processTelemetry, processWatchdog } from "../src/state-machine.js";
 
 const config = loadConfig();
 const NOW = 1_000_000;
@@ -78,5 +78,17 @@ describe("critical battery alert", () => {
       alerts(state, RobotStatus.EN_ROUTE, config.battery_critical_pct - 2, NOW + config.command_ack_timeout_ms + 1).length,
       0,
     );
+  });
+});
+
+describe("lost robot alerts", () => {
+  it("raises the lost problem and resolves it on recovery", () => {
+    const state = robot();
+    const lost = processWatchdog(state, NOW + config.heartbeat_timeout_ms + 1, config).effects
+      .find((e) => e.type === "publish_alert");
+    assert.ok(lost && lost.type === "publish_alert" && lost.problem === "lost");
+
+    const [recovered] = alerts(state, RobotStatus.IDLE, 100);
+    assert.ok(recovered && recovered.type === "publish_alert" && recovered.resolves === "lost");
   });
 });

@@ -11,6 +11,7 @@ const threshold: SensorThreshold = {
   critical_max: 30,
   deadband: 1,
   message_template: "{source} {value} is {direction} the {severity} limit of {limit}",
+  resolved_template: "{source} is back at {value}",
 };
 
 const HOLD = 30_000;
@@ -48,6 +49,7 @@ describe("ThresholdEvaluator", () => {
       value: 29,
       threshold: 28,
       timestamp: 1_234,
+      resolves: null,
     });
   });
 
@@ -72,14 +74,46 @@ describe("ThresholdEvaluator", () => {
     assert.deepEqual(run(evaluator, [[0, temp(29)], [1, temp(28)], [2, temp(29)], [3, temp(27.5)], [4, temp(29)]]),
       ["0:warning"]);
     // Past the deadband: clears, so the next violation is a new alert
-    assert.deepEqual(run(evaluator, [[5, temp(27)], [6, temp(29)]]), ["6:warning"]);
+    assert.deepEqual(run(evaluator, [[5, temp(27)], [6, temp(29)]]), ["5:info", "6:warning"]);
   });
 
-  it("eases critical to warning at once, without publishing", () => {
+  it("eases critical to warning at once, resolving the critical alert", () => {
     const evaluator = new ThresholdEvaluator([threshold], HOLD, COOLDOWN);
-    assert.deepEqual(run(evaluator, [[0, temp(31)], [30_000, temp(31)], [30_001, temp(28.5)]]), ["30000:critical"]);
+    evaluator.evaluate(temp(31), 0);
+    const [{ alert: critical }] = evaluator.evaluate(temp(31), 30_000);
+    const [{ alert: eased }] = evaluator.evaluate(temp(28.5), 30_001);
+    assert.equal(eased.severity, AlertSeverity.WARNING);
+    assert.equal(eased.resolves, critical.alert_id);
+    assert.equal(eased.threshold, 28);
     // Raised at warning now, so going back to critical needs the hold again
     assert.deepEqual(run(evaluator, [[30_002, temp(31)], [60_001, temp(31)], [60_002, temp(31)]]), ["60002:critical"]);
+  });
+
+  it("resolves the last alert, reminder included, when back in range", () => {
+    const evaluator = new ThresholdEvaluator([threshold], 0, COOLDOWN);
+    evaluator.evaluate(temp(29), 0);
+    const [{ alert: reminder }] = evaluator.evaluate(temp(29), COOLDOWN);
+    const [{ alert: cleared, reminder: isReminder }] = evaluator.evaluate(temp(22.004), COOLDOWN + 1);
+    assert.equal(isReminder, false);
+    assert.deepEqual({ ...cleared, alert_id: "" }, {
+      alert_id: "",
+      severity: AlertSeverity.INFO,
+      source: "shelf-1",
+      source_type: "shelf",
+      message: "shelf-1 is back at 22",
+      metric: "temperature_c",
+      value: 22.004,
+      threshold: 28,
+      timestamp: cleared.timestamp,
+      resolves: reminder.alert_id,
+    });
+    // Only once: staying in range publishes nothing more
+    assert.equal(evaluator.evaluate(temp(22), COOLDOWN * 3).length, 0);
+  });
+
+  it("doesn't resolve a spike that never raised", () => {
+    const evaluator = new ThresholdEvaluator([threshold], HOLD, COOLDOWN);
+    assert.deepEqual(run(evaluator, [[0, temp(31)], [10_000, temp(22)]]), []);
   });
 
   it("reminds once per cooldown while the band holds", () => {
@@ -115,12 +149,17 @@ describe("ThresholdEvaluator", () => {
     evaluator.evaluate(level(false), 30_000);
     const [{ alert }] = evaluator.evaluate(level(false), 60_000);
     assert.equal(alert.severity, AlertSeverity.CRITICAL);
+    assert.equal(alert.resolves, null);
     assert.equal(alert.metric, "water_level_ok");
     assert.equal(alert.value, 0);
     assert.equal(alert.threshold, 1);
     assert.equal(alert.message, "shelf-1 reservoir is below the level sensor. Refill it.");
-    // Refilled clears at once; the next drop is a new alert after the hold
-    assert.deepEqual(run(evaluator, [[61_000, level(true)], [62_000, level(false)], [92_000, level(false)]]),
-      ["92000:critical"]);
+    // Refilled clears at once, resolving it; the next drop is a new alert after the hold
+    const [{ alert: refilled }] = evaluator.evaluate(level(true), 61_000);
+    assert.equal(refilled.severity, AlertSeverity.INFO);
+    assert.equal(refilled.resolves, alert.alert_id);
+    assert.equal(refilled.value, 1);
+    assert.equal(refilled.message, "shelf-1 reservoir is back above the level sensor");
+    assert.deepEqual(run(evaluator, [[62_000, level(false)], [92_000, level(false)]]), ["92000:critical"]);
   });
 });

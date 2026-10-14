@@ -26,9 +26,21 @@ import {
 // --- Side effect types ---------------------------------------
 // The orchestrator loop reads these and performs the actual I/O.
 
+/** Problems whose alert a later INFO alert marks resolved */
+export type AlertProblem = "lost" | "error";
+
 export type SideEffect =
   | { type: "send_command"; robotId: string; command: RobotCommand }
-  | { type: "publish_alert"; robotId: string; severity: AlertSeverity; message: string }
+  | {
+      type: "publish_alert";
+      robotId: string;
+      severity: AlertSeverity;
+      message: string;
+      /** The problem this alert raises, for a later recovery alert to resolve */
+      problem?: AlertProblem;
+      /** The problem this alert resolves: the robot's open alert of that kind */
+      resolves?: AlertProblem;
+    }
   | { type: "complete_task" }
   | { type: "fail_task"; error: string }
   | { type: "requeue_task" }
@@ -94,6 +106,7 @@ export function processTelemetry(
       robotId: state.id,
       severity: AlertSeverity.INFO,
       message: `Robot recovered at ${state.current_node ?? "unknown node"}`,
+      resolves: "lost",
     });
   }
 
@@ -372,6 +385,7 @@ function handleErrorEvent(state: RobotState, event: RobotEvent): Result {
     robotId: state.id,
     severity: AlertSeverity.CRITICAL,
     message: `Robot error (was ${prevStatus}): ${event.details ?? "unknown"}`,
+    problem: "error",
   });
 
   return { state, effects };
@@ -385,6 +399,7 @@ function handleRecovery(state: RobotState, event: RobotEvent): Result {
     robotId: state.id,
     severity: AlertSeverity.INFO,
     message: `Robot recovered from error at ${event.node_id}`,
+    resolves: "error",
   });
   effects.push({ type: "request_next_task" });
 
@@ -420,6 +435,7 @@ export function processWatchdog(
       robotId: state.id,
       severity: AlertSeverity.CRITICAL,
       message: `No heartbeat for ${Math.round(silence / 1000)}s (was ${prevStatus})`,
+      problem: "lost",
     });
   }
 

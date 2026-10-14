@@ -10,13 +10,14 @@ function isFiniteNumber(value: unknown): value is number {
 }
 
 const LIMITS = ["critical_min", "warning_min", "warning_max", "critical_max"] as const;
+const TEMPLATES = ["message_template", "resolved_template"] as const;
 
 function parseThreshold(value: unknown, index: number): SensorThreshold {
   if (!isRecord(value)) {
     throw new Error(`thresholds[${index}] must be an object`);
   }
 
-  const { metric, deadband, message_template: template } = value;
+  const { metric, deadband } = value;
   if (typeof metric !== "string" || metric.trim() === "") {
     throw new Error(`thresholds[${index}].metric must be a non-empty string`);
   }
@@ -33,8 +34,10 @@ function parseThreshold(value: unknown, index: number): SensorThreshold {
   if (!isFiniteNumber(deadband) || deadband < 0) {
     throw new Error(`thresholds[${index}].deadband must be a non-negative finite number`);
   }
-  if (typeof template !== "string" || template.trim() === "") {
-    throw new Error(`thresholds[${index}].message_template must be a non-empty string`);
+  for (const key of TEMPLATES) {
+    if (typeof value[key] !== "string" || (value[key] as string).trim() === "") {
+      throw new Error(`thresholds[${index}].${key} must be a non-empty string`);
+    }
   }
 
   return {
@@ -44,7 +47,8 @@ function parseThreshold(value: unknown, index: number): SensorThreshold {
     critical_min: criticalMin,
     critical_max: criticalMax,
     deadband,
-    message_template: template,
+    message_template: value.message_template as string,
+    resolved_template: value.resolved_template as string,
   };
 }
 

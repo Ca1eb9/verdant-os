@@ -101,6 +101,7 @@ export function isAlert(v: unknown): v is FarmAlert {
     typeof v.metric === "string" &&
     isNum(v.value) &&
     isNum(v.threshold) &&
-    isNum(v.timestamp)
+    isNum(v.timestamp) &&
+    (v.resolves === null || isStr(v.resolves))
   );
 }

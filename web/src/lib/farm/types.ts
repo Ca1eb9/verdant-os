@@ -170,6 +170,11 @@ export interface FarmAlert {
   value: number;
   threshold: number;
   timestamp: number;
+  /**
+   * The alert_id this one resolves, or null. An info alert with it set means
+   * the problem cleared; a warning with it set eased a critical alert.
+   */
+  resolves: string | null;
 }
 
 export interface PlantRecord {

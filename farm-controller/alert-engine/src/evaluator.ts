@@ -24,13 +24,27 @@ const WATER_LEVEL_METRIC = "water_level_ok";
 
 /**
  * Per device and metric: the band its alert is raised at, the band the
- * readings are in now and since when, and when it last alerted.
+ * readings are in now and since when, and its last alert and when.
  */
 interface MetricState {
   raised: Band;
   candidate: Band;
   since: number;
   lastAlertedAt: number;
+  lastAlertId: string | null;
+}
+
+/**
+ * What to publish for a metric: a raise (new or escalated band), a reminder,
+ * an ease to a milder band or a clear back to ok. The last two resolve
+ * `resolves`, the metric's previous alert.
+ */
+interface Outcome {
+  kind: "raise" | "reminder" | "ease" | "clear";
+  band: Band;
+  /** The band before this outcome, whose limit a clear reports */
+  prior: Band;
+  resolves: string | null;
 }
 
 /**
@@ -59,52 +73,55 @@ export class ThresholdEvaluator {
 
       const key = this.key(reading, threshold.metric);
       const prior = this.states.get(key)?.raised ?? "ok";
-      const result = this.settle(key, bandWithDeadband(value, threshold, prior), now);
-      if (!result) continue;
+      const outcome = this.settle(key, bandWithDeadband(value, threshold, prior), now);
+      if (!outcome) continue;
 
-      const severity = RANK[result.band] === 2 ? AlertSeverity.CRITICAL : AlertSeverity.WARNING;
-      const limit = limitOf(result.band, threshold);
-      raised.push({
-        reminder: result.reminder,
-        alert: {
-          alert_id: randomUUID(),
-          severity,
+      const base = { source: reading.source, source_type: reading.sourceType, metric: threshold.metric, value, timestamp };
+      if (outcome.kind === "clear") {
+        raised.push(this.publish(key, outcome, {
+          ...base,
+          severity: AlertSeverity.INFO,
+          message: renderMessage(threshold.resolved_template, { source: reading.source, value: formatNumber(value) }),
+          threshold: limitOf(outcome.prior, threshold),
+        }));
+        continue;
+      }
+
+      const severity = RANK[outcome.band] === 2 ? AlertSeverity.CRITICAL : AlertSeverity.WARNING;
+      const limit = limitOf(outcome.band, threshold);
+      raised.push(this.publish(key, outcome, {
+        ...base,
+        severity,
+        message: renderMessage(threshold.message_template, {
           source: reading.source,
-          source_type: reading.sourceType,
-          message: renderMessage(threshold.message_template, {
-            source: reading.source,
-            value: formatNumber(value),
-            limit: String(limit),
-            direction: result.band.endsWith("Low") ? "below" : "above",
-            severity,
-          }),
-          metric: threshold.metric,
-          value,
-          threshold: limit,
-          timestamp,
-        },
-      });
+          value: formatNumber(value),
+          limit: String(limit),
+          direction: outcome.band.endsWith("Low") ? "below" : "above",
+          severity,
+        }),
+        threshold: limit,
+      }));
     }
 
     const level = reading.values[WATER_LEVEL_METRIC];
     if (typeof level === "boolean") {
-      const result = this.settle(this.key(reading, WATER_LEVEL_METRIC), level ? "ok" : "criticalLow", now);
-      if (result) {
-        raised.push({
-          reminder: result.reminder,
-          alert: {
-            alert_id: randomUUID(),
-            severity: AlertSeverity.CRITICAL,
-            source: reading.source,
-            source_type: reading.sourceType,
-            message: `${reading.source} reservoir is below the level sensor. Refill it.`,
-            metric: WATER_LEVEL_METRIC,
-            // FarmAlert carries numbers: 0 is false (low), 1 is true (ok)
-            value: 0,
-            threshold: 1,
-            timestamp,
-          },
-        });
+      const key = this.key(reading, WATER_LEVEL_METRIC);
+      const outcome = this.settle(key, level ? "ok" : "criticalLow", now);
+      if (outcome) {
+        const cleared = outcome.kind === "clear";
+        raised.push(this.publish(key, outcome, {
+          severity: cleared ? AlertSeverity.INFO : AlertSeverity.CRITICAL,
+          source: reading.source,
+          source_type: reading.sourceType,
+          message: cleared
+            ? `${reading.source} reservoir is back above the level sensor`
+            : `${reading.source} reservoir is below the level sensor. Refill it.`,
+          metric: WATER_LEVEL_METRIC,
+          // FarmAlert carries numbers: 0 is false (low), 1 is true (ok)
+          value: cleared ? 1 : 0,
+          threshold: 1,
+          timestamp,
+        }));
       }
     }
 
@@ -115,13 +132,22 @@ export class ThresholdEvaluator {
     return `${reading.sourceType}:${reading.source}:${metric}`;
   }
 
+  /** Builds the alert and remembers it as the metric's last, for the next ease or clear to resolve */
+  private publish(key: string, outcome: Outcome, fields: Omit<FarmAlert, "alert_id" | "resolves">): RaisedAlert {
+    const alert: FarmAlert = { alert_id: randomUUID(), ...fields, resolves: outcome.resolves };
+    const state = this.states.get(key);
+    if (state) state.lastAlertId = outcome.kind === "clear" ? null : alert.alert_id;
+    return { alert, reminder: outcome.kind === "reminder" };
+  }
+
   /**
-   * Moves the metric's raised band towards `band` and says whether to publish:
-   * on raising or escalating, and as a reminder once the cooldown has passed
-   * while the band holds. Easing to a milder band publishes nothing.
+   * Moves the metric's raised band towards `band` and says what to publish:
+   * on raising or escalating, as a reminder once the cooldown has passed
+   * while the band holds, and on easing or clearing, resolving the last alert.
    */
-  private settle(key: string, band: Band, now: number): { band: Band; reminder: boolean } | null {
-    const state = this.states.get(key) ?? { raised: "ok", candidate: "ok", since: now, lastAlertedAt: 0 };
+  private settle(key: string, band: Band, now: number): Outcome | null {
+    const state = this.states.get(key)
+      ?? { raised: "ok", candidate: "ok", since: now, lastAlertedAt: 0, lastAlertId: null };
     this.states.set(key, state);
     if (band !== state.candidate) {
       state.candidate = band;
@@ -132,17 +158,16 @@ export class ThresholdEvaluator {
     if (RANK[band] < RANK[prior] || (band !== prior && now - state.since >= this.holdMs)) {
       state.raised = band;
     }
-    if (state.raised === "ok") return null;
+    const outcome = (kind: Outcome["kind"], resolves: string | null = null): Outcome => {
+      state.lastAlertedAt = now;
+      return { kind, band: state.raised, prior, resolves };
+    };
 
+    if (state.raised === "ok") return prior === "ok" ? null : outcome("clear", state.lastAlertId);
+    if (RANK[state.raised] < RANK[prior]) return outcome("ease", state.lastAlertId);
     // A new band at least as bad as the old one: low to high counts as new
-    if (state.raised !== prior && RANK[state.raised] >= RANK[prior]) {
-      state.lastAlertedAt = now;
-      return { band: state.raised, reminder: false };
-    }
-    if (now - state.lastAlertedAt >= this.cooldownMs) {
-      state.lastAlertedAt = now;
-      return { band: state.raised, reminder: true };
-    }
+    if (state.raised !== prior) return outcome("raise");
+    if (now - state.lastAlertedAt >= this.cooldownMs) return outcome("reminder");
     return null;
   }
 }

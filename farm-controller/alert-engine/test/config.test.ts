@@ -11,6 +11,7 @@ const validThreshold = {
   critical_max: 80,
   deadband: 3,
   message_template: "Humidity is {value}",
+  resolved_template: "Humidity is back at {value}",
 };
 
 const config = (thresholds: unknown[]) => ({ hold_ms: 30_000, cooldown_ms: 1_000, thresholds });
@@ -33,6 +34,7 @@ describe("parseConfig", () => {
   it("rejects missing limits, a negative deadband and a missing hold time", () => {
     assert.throws(() => parseConfig(config([{ ...validThreshold, critical_max: undefined }])), /critical_max/);
     assert.throws(() => parseConfig(config([{ ...validThreshold, deadband: -1 }])), /deadband/);
+    assert.throws(() => parseConfig(config([{ ...validThreshold, resolved_template: "" }])), /resolved_template/);
     assert.throws(() => parseConfig({ cooldown_ms: 1_000, thresholds: [validThreshold] }), /hold_ms/);
   });
 

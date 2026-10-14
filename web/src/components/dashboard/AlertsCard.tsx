@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
-import { useFarmAlerts } from "@/hooks/useFarmAlerts";
+import { listAlerts, useFarmAlerts } from "@/hooks/useFarmAlerts";
 import styles from "@/components/dashboard/DashboardView.module.css";
 
 const SHOWN_ALERTS = 4;
@@ -14,6 +14,7 @@ interface AlertRow {
   severity: "info" | "warning" | "critical";
   source: string;
   at: number;
+  resolved: boolean;
 }
 
 /** The newest alerts from the farm's services (orchestrator, alert engine) */
@@ -23,12 +24,13 @@ export function AlertsCard() {
 
   const rows = useMemo<AlertRow[]>(
     () =>
-      (farmAlerts ?? []).slice(0, SHOWN_ALERTS).map((alert) => ({
+      listAlerts(farmAlerts ?? []).slice(0, SHOWN_ALERTS).map(({ alert, resolvedAt }) => ({
         key: alert.alert_id,
         title: alert.message,
         severity: alert.severity,
         source: alert.source,
         at: alert.timestamp,
+        resolved: resolvedAt !== null,
       })),
     [farmAlerts],
   );
@@ -52,6 +54,7 @@ export function AlertsCard() {
               </div>
               <span className={styles.metricLabel} suppressHydrationWarning>
                 {row.source} · {fmt.time(row.at)}
+                {row.resolved ? " · resolved" : ""}
               </span>
             </li>
           ))}

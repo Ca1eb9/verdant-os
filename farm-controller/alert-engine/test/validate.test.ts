@@ -56,9 +56,12 @@ describe("telemetry validation", () => {
   it("validates alerts", () => {
     const alert = {
       alert_id: "a1", severity: "critical", source: "robot-1", source_type: "robot",
-      message: "lost", metric: "", value: 0, threshold: 0, timestamp: 1,
+      message: "lost", metric: "", value: 0, threshold: 0, timestamp: 1, resolves: null,
     };
     assert.equal(isFarmAlert(alert), true);
+    assert.equal(isFarmAlert({ ...alert, severity: "info", resolves: "a0" }), true);
+    assert.equal(isFarmAlert({ ...alert, resolves: undefined }), false);
+    assert.equal(isFarmAlert({ ...alert, resolves: "" }), false);
     assert.equal(isFarmAlert({ ...alert, severity: "urgent" }), false);
     assert.equal(isFarmAlert({ ...alert, value: null }), false);
   });
