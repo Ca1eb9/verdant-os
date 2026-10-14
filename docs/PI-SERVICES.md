@@ -168,7 +168,10 @@ After it's back:
 | Update to the latest code | `sudo bash /opt/verdant-os/scripts/pi-deploy.sh` |
 | Try a branch | `sudo bash /opt/verdant-os/scripts/pi-deploy.sh <branch>` |
 | Watch MQTT traffic | `mosquitto_sub -t 'farm/#' -v` |
+| Clear all alerts (e.g. before a demo) | `cd /opt/verdant-os && npm run clear-alerts` |
 | Turn the Pi off | `sudo poweroff`, then wait for the green LED to stop before unplugging |
+
+Clearing alerts deletes them from the Pi's database and from Supabase (through the Supabase bridge), empties the Alerts page in every open dashboard, and makes the services forget their open alerts: a problem that's still there is raised again (a sensor reading after the alert engine's hold time, a silent shelf after the shelf bridge's timeout). A robot that's still lost isn't raised again until it reconnects and goes silent again. A service that's stopped at the time misses it and keeps its alerts.
 
 The deploy script stops the services while it installs (a few minutes). That's safe: the robots keep working without the Pi and report their real state when it's back.
 

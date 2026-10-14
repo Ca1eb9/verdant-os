@@ -45,7 +45,7 @@ import {
   type AlertProblem,
   type SideEffect,
 } from "./state-machine.js";
-import { isRobotTelemetry, isRobotEvent, isRemoteCommand } from "./validate.js";
+import { isAlertsCleared, isRobotTelemetry, isRobotEvent, isRemoteCommand } from "./validate.js";
 import { loadTasks, saveTasks } from "./persistence.js";
 import { validatePlants, nextTask } from "./scheduler.js";
 
@@ -738,6 +738,14 @@ async function main() {
 
   // Subscribe to local commands (from dashboard)
   mqtt.subscribe<unknown>(TOPICS.commands.local, persisting(onRemoteCommand));
+
+  // npm run clear-alerts: forget open alerts, so a recovery resolves nothing.
+  // A robot still lost stays lost without a new alert.
+  mqtt.subscribe<unknown>(TOPICS.alertsClear, persisting((msg: unknown) => {
+    if (!isAlertsCleared(msg)) return;
+    problemAlerts.clear();
+    console.log("[ORCH] Alerts cleared");
+  }));
 
   // Start watchdog timer
   setInterval(persisting(runWatchdog), config.watchdog_interval_ms);

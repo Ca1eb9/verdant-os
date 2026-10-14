@@ -10,7 +10,7 @@
 
 import Database from "better-sqlite3";
 import { TOPICS, extractIdFromTopic, createMqttClient } from "@farm/shared";
-import { isAlert, isCommand, isElevatorTelemetry, isRobotTelemetry, isShelfSensorData } from "./validate.js";
+import { isAlert, isAlertsCleared, isCommand, isElevatorTelemetry, isRobotTelemetry, isShelfSensorData } from "./validate.js";
 
 // --- Config --------------------------------------------------
 
@@ -188,6 +188,8 @@ const insertAlert = db.prepare(`
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
+const deleteAlerts = db.prepare(`DELETE FROM alerts`);
+
 // --- Counters for logging ------------------------------------
 
 let counts = { robot: 0, shelf: 0, elevator: 0, command: 0, alert: 0 };
@@ -312,6 +314,16 @@ async function main() {
     if (!changes) return; // already stored
     counts.alert++;
     console.log(`Alert: ${msg.severity} | ${msg.source} | ${msg.message}`);
+  });
+
+  // npm run clear-alerts: the alert history starts over
+  mqtt.subscribe<unknown>(TOPICS.alertsClear, (msg, topic) => {
+    if (!isAlertsCleared(msg)) {
+      console.warn(`Ignoring malformed clear on ${topic}`);
+      return;
+    }
+    const { changes } = deleteAlerts.run();
+    console.log(`Alerts cleared: deleted ${changes} stored alerts`);
   });
 
   // --- Stats logging ---

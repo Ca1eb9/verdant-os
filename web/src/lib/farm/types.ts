@@ -178,6 +178,14 @@ export interface FarmAlert {
   resolves: string | null;
 }
 
+/**
+ * Published to farm/alerts/clear by `npm run clear-alerts`: every service
+ * forgets its alerts, stored and open, and dashboards empty their lists
+ */
+export interface AlertsCleared {
+  timestamp: number;
+}
+
 export interface PlantRecord {
   robot_id: string;
   plant_type: PlantType;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isFarmAlert, isRobotTelemetry, isShelfSensorData } from "../src/validate.js";
+import { isAlertsCleared, isFarmAlert, isRobotTelemetry, isShelfSensorData } from "../src/validate.js";
 
 const shelf = {
   shelf_id: "shelf-1",
@@ -64,5 +64,11 @@ describe("telemetry validation", () => {
     assert.equal(isFarmAlert({ ...alert, resolves: "" }), false);
     assert.equal(isFarmAlert({ ...alert, severity: "urgent" }), false);
     assert.equal(isFarmAlert({ ...alert, value: null }), false);
+  });
+
+  it("validates a clear", () => {
+    assert.equal(isAlertsCleared({ timestamp: 1 }), true);
+    assert.equal(isAlertsCleared({}), false);
+    assert.equal(isAlertsCleared(null), false);
   });
 });

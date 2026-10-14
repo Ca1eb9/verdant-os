@@ -160,6 +160,11 @@ export class ThresholdEvaluator {
     }
   }
 
+  /** Forgets every metric's state: a reading still out of range raises a new alert after the hold */
+  clear() {
+    this.states.clear();
+  }
+
   private key(reading: Reading, metric: string) {
     return `${reading.sourceType}:${reading.source}:${metric}`;
   }

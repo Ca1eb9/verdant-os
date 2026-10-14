@@ -1,4 +1,4 @@
-import { AlertSeverity, RobotStatus, type FarmAlert } from "@farm/shared";
+import { AlertSeverity, RobotStatus, type AlertsCleared, type FarmAlert } from "@farm/shared";
 
 type Telemetry = Record<string, unknown>;
 
@@ -67,4 +67,8 @@ export function isFarmAlert(value: unknown): value is FarmAlert {
     isFiniteNumber(value.threshold) &&
     isFiniteNumber(value.timestamp) &&
     (value.resolves === null || (typeof value.resolves === "string" && value.resolves.length > 0));
+}
+
+export function isAlertsCleared(value: unknown): value is AlertsCleared {
+  return isRecord(value) && isFiniteNumber(value.timestamp);
 }

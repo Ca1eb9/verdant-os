@@ -10,6 +10,7 @@ import {
   type ShelfSensorData,
   type RemoteCommand,
   type FarmAlert,
+  type AlertsCleared,
   AlertSeverity,
   RobotStatus,
   Heading,
@@ -104,4 +105,8 @@ export function isAlert(v: unknown): v is FarmAlert {
     isNum(v.timestamp) &&
     (v.resolves === null || isStr(v.resolves))
   );
+}
+
+export function isAlertsCleared(v: unknown): v is AlertsCleared {
+  return isObj(v) && isNum(v.timestamp);
 }

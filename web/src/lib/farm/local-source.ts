@@ -223,6 +223,12 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       updateConnection();
       return;
     }
+    if (topic === TOPICS.alertsClear) {
+      if (!isRecord(msg) || !isNum(msg.timestamp)) return ignore(topic);
+      alerts = [];
+      alertListeners.forEach((listener) => listener(alerts));
+      return;
+    }
     if (topic === TOPICS.alerts) {
       if (!isAlert(msg)) return ignore(topic);
       if (alerts.some((a) => a.alert_id === msg.alert_id)) return;
@@ -279,7 +285,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       client.on("error", (err) => console.warn(`[local-source] ${err.message}`));
       client.subscribe([
         TOPICS.robot.telemetryAll, TOPICS.robot.stateAll, TOPICS.system.topology, TOPICS.commands.all, TOPICS.alerts,
-        TOPICS.shelf.sensorsAll,
+        TOPICS.alertsClear, TOPICS.shelf.sensorsAll,
       ]);
     } else if (!needed && client) {
       client.end(true);

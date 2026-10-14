@@ -24,7 +24,7 @@ import {
 import { loadConfig } from "./config.js";
 import { emailConfigFromEnv, sendAlertEmail, type EmailConfig } from "./email.js";
 import { ThresholdEvaluator, type AlertSourceType } from "./evaluator.js";
-import { isFarmAlert, isRobotTelemetry, isShelfSensorData } from "./validate.js";
+import { isAlertsCleared, isFarmAlert, isRobotTelemetry, isShelfSensorData } from "./validate.js";
 
 const BROKER_URL = process.env.BROKER_URL ?? "mqtt://localhost:1883";
 const CONFIG_PATH = process.env.CONFIG_PATH ?? "../../alert-engine-config.json";
@@ -66,6 +66,13 @@ async function main() {
 
   subscribe(mqtt, TOPICS.robot.telemetryAll, "robot", "robot_id", isRobotTelemetry, evaluator);
   subscribe(mqtt, TOPICS.shelf.sensorsAll, "shelf", "shelf_id", isShelfSensorData, evaluator);
+
+  mqtt.subscribe<unknown>(TOPICS.alertsClear, (payload) => {
+    if (!isAlertsCleared(payload)) return;
+    evaluator.clear();
+    writeStateFile(STATE_PATH, evaluator.openAlerts());
+    console.log("[ALERT] Alerts cleared: readings still out of range raise new alerts after the hold");
+  });
 
   if (email) {
     const emailConfig = email;

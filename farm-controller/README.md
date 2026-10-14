@@ -213,6 +213,10 @@ npm run alert
   except this service's repeats. Without all three, or without internet, it
   runs the same and sends nothing; a failed send is logged and dropped. See
   `deploy/env/alert-engine.env.example`.
+- `npm run clear-alerts` (`src/clear.ts`) publishes `farm/alerts/clear`:
+  the ingester deletes its stored alerts, this service, the orchestrator and
+  the shelf bridge forget their open ones, and open dashboards empty their
+  lists. See "Common tasks" in [docs/PI-SERVICES.md](../docs/PI-SERVICES.md).
 - Raised metrics and their last alert are saved to
   `farm-controller/alert-engine-state.json` (gitignored) and restored on
   restart, so a reading back in range after a restart or reboot still resolves

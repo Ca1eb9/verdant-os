@@ -177,4 +177,12 @@ describe("ThresholdEvaluator", () => {
     assert.equal(cleared.resolves, alert.alert_id);
     assert.deepEqual(after.openAlerts(), {});
   });
+
+  it("forgets everything on clear, raising a still-bad reading again after the hold", () => {
+    const evaluator = new ThresholdEvaluator([threshold], HOLD, COOLDOWN);
+    assert.deepEqual(run(evaluator, [[0, temp(31)], [30_000, temp(31)]]), ["30000:critical"]);
+    evaluator.clear();
+    assert.deepEqual(evaluator.openAlerts(), {});
+    assert.deepEqual(run(evaluator, [[30_001, temp(31)], [60_000, temp(31)], [60_001, temp(31)]]), ["60001:critical"]);
+  });
 });

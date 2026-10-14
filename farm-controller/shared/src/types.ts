@@ -198,6 +198,14 @@ export interface FarmAlert {
   resolves: string | null;
 }
 
+/**
+ * Published to farm/alerts/clear by `npm run clear-alerts`: every service
+ * forgets its alerts, stored and open, and dashboards empty their lists
+ */
+export interface AlertsCleared {
+  timestamp: number;
+}
+
 /** Published to farm/commands/remote by Supabase bridge */
 export interface RemoteCommand {
   id: string;

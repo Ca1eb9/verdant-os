@@ -13,6 +13,7 @@ import { randomUUID } from "crypto";
 import { performance } from "perf_hooks";
 import { SerialPort } from "serialport";
 import {
+  type AlertsCleared,
   type FarmAlert,
   AlertSeverity,
   TOPICS,
@@ -261,6 +262,13 @@ async function main() {
   const stillSilent = links.filter((link) => link.silenceAlertId).length;
   console.log(`[SHELF]   state:   ${STATE_PATH} (${stillSilent} silent before the restart)`);
   for (const link of links) openPort(link);
+  // npm run clear-alerts: forget open silence alerts; a shelf still silent alerts again
+  mqtt.subscribe<unknown>(TOPICS.alertsClear, (msg) => {
+    if (!Number.isFinite((msg as Partial<AlertsCleared> | null)?.timestamp)) return;
+    for (const link of links) link.silenceAlertId = null;
+    saveSilenceAlerts();
+    console.log("[SHELF] Alerts cleared");
+  });
   setInterval(checkSilence, config.watchdog_interval_ms);
 
   const shutdown = async () => {
