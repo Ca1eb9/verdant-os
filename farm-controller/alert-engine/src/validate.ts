@@ -14,6 +14,10 @@ function isOptionalNumber(value: unknown): boolean {
   return value === undefined || value === null || isFiniteNumber(value);
 }
 
+function isNullableNumber(value: unknown): boolean {
+  return value === null || isFiniteNumber(value);
+}
+
 function isNullableString(value: unknown): boolean {
   return value === null || typeof value === "string";
 }
@@ -35,24 +39,16 @@ export function isRobotTelemetry(value: unknown): value is Telemetry {
     isFiniteNumber(value.timestamp);
 }
 
+/** Each reading is null when its sensor failed to read */
 export function isShelfSensorData(value: unknown): value is Telemetry {
   if (!isRecord(value)) return false;
   return typeof value.shelf_id === "string" && value.shelf_id.length > 0 &&
-    isFiniteNumber(value.level) &&
-    isFiniteNumber(value.temperature_c) &&
-    isFiniteNumber(value.humidity_pct) &&
-    isFiniteNumber(value.light_lux) &&
-    isFiniteNumber(value.soil_moisture_pct) &&
-    isFiniteNumber(value.ph) &&
-    isFiniteNumber(value.timestamp);
-}
-
-export function isElevatorTelemetry(value: unknown): value is Telemetry {
-  if (!isRecord(value)) return false;
-  return typeof value.elevator_id === "string" && value.elevator_id.length > 0 &&
-    isFiniteNumber(value.current_level) &&
-    ["idle", "moving", "loading", "error"].includes(value.status as string) &&
-    isFiniteNumber(value.target_level) &&
-    typeof value.load_detected === "boolean" &&
+    Number.isInteger(value.level) &&
+    isNullableNumber(value.temperature_c) &&
+    isNullableNumber(value.humidity_pct) &&
+    isNullableNumber(value.light_lux) &&
+    isNullableNumber(value.water_temp_c) &&
+    (value.water_level_ok === null || typeof value.water_level_ok === "boolean") &&
+    isNullableNumber(value.ph) &&
     isFiniteNumber(value.timestamp);
 }

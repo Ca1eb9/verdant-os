@@ -1,47 +1,59 @@
 import { readFileSync } from "node:fs";
-import { AlertSeverity, type SensorThreshold } from "@farm/shared";
-
-export interface AlertEngineConfig {
-  cooldown_ms: number;
-  thresholds: SensorThreshold[];
-}
+import type { AlertConfig, SensorThreshold } from "@farm/shared";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+const LIMITS = ["critical_min", "warning_min", "warning_max", "critical_max"] as const;
 
 function parseThreshold(value: unknown, index: number): SensorThreshold {
   if (!isRecord(value)) {
     throw new Error(`thresholds[${index}] must be an object`);
   }
 
-  const { metric, min, max, severity, message_template: template } = value;
+  const { metric, deadband, message_template: template } = value;
   if (typeof metric !== "string" || metric.trim() === "") {
     throw new Error(`thresholds[${index}].metric must be a non-empty string`);
   }
-  if (typeof min !== "number" || !Number.isFinite(min)) {
-    throw new Error(`thresholds[${index}].min must be a finite number`);
+  for (const key of LIMITS) {
+    if (!isFiniteNumber(value[key])) {
+      throw new Error(`thresholds[${index}].${key} must be a finite number`);
+    }
   }
-  if (typeof max !== "number" || !Number.isFinite(max)) {
-    throw new Error(`thresholds[${index}].max must be a finite number`);
+  const [criticalMin, warningMin, warningMax, criticalMax] = LIMITS.map((key) => value[key] as number);
+  // The warning band sits inside the critical one
+  if (!(criticalMin <= warningMin && warningMin < warningMax && warningMax <= criticalMax)) {
+    throw new Error(`thresholds[${index}] must have critical_min <= warning_min < warning_max <= critical_max`);
   }
-  if (min > max) {
-    throw new Error(`thresholds[${index}].min cannot exceed max`);
-  }
-  if (!Object.values(AlertSeverity).includes(severity as AlertSeverity)) {
-    throw new Error(`thresholds[${index}].severity is invalid`);
+  if (!isFiniteNumber(deadband) || deadband < 0) {
+    throw new Error(`thresholds[${index}].deadband must be a non-negative finite number`);
   }
   if (typeof template !== "string" || template.trim() === "") {
     throw new Error(`thresholds[${index}].message_template must be a non-empty string`);
   }
 
-  return { metric, min, max, severity: severity as AlertSeverity, message_template: template };
+  return {
+    metric,
+    warning_min: warningMin,
+    warning_max: warningMax,
+    critical_min: criticalMin,
+    critical_max: criticalMax,
+    deadband,
+    message_template: template,
+  };
 }
 
-export function parseConfig(value: unknown): AlertEngineConfig {
+export function parseConfig(value: unknown): AlertConfig {
   if (!isRecord(value)) throw new Error("config must be a JSON object");
-  if (typeof value.cooldown_ms !== "number" || !Number.isFinite(value.cooldown_ms) || value.cooldown_ms < 0) {
-    throw new Error("cooldown_ms must be a non-negative finite number");
+  for (const key of ["hold_ms", "cooldown_ms"]) {
+    if (!isFiniteNumber(value[key]) || (value[key] as number) < 0) {
+      throw new Error(`${key} must be a non-negative finite number`);
+    }
   }
   if (!Array.isArray(value.thresholds) || value.thresholds.length === 0) {
     throw new Error("thresholds must be a non-empty array");
@@ -56,10 +68,10 @@ export function parseConfig(value: unknown): AlertEngineConfig {
     metrics.add(threshold.metric);
   }
 
-  return { cooldown_ms: value.cooldown_ms, thresholds };
+  return { hold_ms: value.hold_ms as number, cooldown_ms: value.cooldown_ms as number, thresholds };
 }
 
-export function loadConfig(path: string): AlertEngineConfig {
+export function loadConfig(path: string): AlertConfig {
   let value: unknown;
   try {
     value = JSON.parse(readFileSync(path, "utf8"));

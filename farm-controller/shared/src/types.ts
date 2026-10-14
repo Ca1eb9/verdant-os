@@ -299,18 +299,26 @@ export interface PlantRecord {
 
 // --- Alert threshold config ---------
 
+/** Acceptable range of one telemetry field, by its name in the payload */
 export interface SensorThreshold {
   metric: string;
-  min: number;
-  max: number;
-  severity: AlertSeverity;
+  warning_min: number;
+  warning_max: number;
+  critical_min: number;
+  critical_max: number;
+  /** Once raised, an alert clears only when the value is back inside its limit by this much */
+  deadband: number;
+  /** Placeholders: {source} {value} {limit} {direction} ("below"/"above") {severity} */
   message_template: string;
 }
 
+/** The alert engine's config. Silence is the orchestrator's and shelf bridge's job */
 export interface AlertConfig {
+  /** A reading must stay out of range this long before it raises (or escalates) an alert */
+  hold_ms: number;
+  /** While a metric stays in the same band, it re-alerts at most this often */
+  cooldown_ms: number;
   thresholds: SensorThreshold[];
-  robot_heartbeat_timeout_ms: number;
-  elevator_heartbeat_timeout_ms: number;
 }
 
 export interface PlantSchedule {

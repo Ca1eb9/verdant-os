@@ -1,3 +1,14 @@
+// ============================================================
+// Alert engine
+//
+// Watches robot and shelf sensor readings and publishes a FarmAlert
+// to farm/alerts when one stays outside its configured range.
+//
+// Run:  npx tsx src/index.ts
+// ============================================================
+
+import { performance } from "node:perf_hooks";
+import { fileURLToPath } from "node:url";
 import {
   TOPICS,
   createMqttClient,
@@ -5,37 +16,47 @@ import {
   type FarmAlert,
   type TypedMqttClient,
 } from "@farm/shared";
-import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
 import { ThresholdEvaluator, type AlertSourceType } from "./evaluator.js";
-import { isElevatorTelemetry, isRobotTelemetry, isShelfSensorData } from "./validate.js";
+import { isRobotTelemetry, isShelfSensorData } from "./validate.js";
 
 const BROKER_URL = process.env.BROKER_URL ?? "mqtt://localhost:1883";
-const CONFIG_PATH = process.env.CONFIG_PATH ?? fileURLToPath(new URL("../config.json", import.meta.url));
+const CONFIG_PATH = process.env.CONFIG_PATH ?? "../../alert-engine-config.json";
+
+/** Topics whose last payload was invalid, so a bad sender logs once, not on every message */
+const invalidTopics = new Set<string>();
 
 async function main() {
-  const config = loadConfig(CONFIG_PATH);
-  const evaluator = new ThresholdEvaluator(config.thresholds, config.cooldown_ms);
+  let config;
+  try {
+    config = loadConfig(fileURLToPath(new URL(CONFIG_PATH, import.meta.url)));
+  } catch (error) {
+    console.error(`[FATAL] Bad alert engine config: ${(error as Error).message}`);
+    process.exit(1);
+  }
+
+  const evaluator = new ThresholdEvaluator(config.thresholds, config.hold_ms, config.cooldown_ms);
   const mqtt = await createMqttClient({ serviceName: "alert-engine", brokerUrl: BROKER_URL });
 
-  console.log("\nAlert engine running");
-  console.log(`   Broker: ${BROKER_URL}`);
-  console.log(`   Config: ${CONFIG_PATH}`);
-  console.log(`   Thresholds: ${config.thresholds.length}`);
-  console.log(`   Cooldown: ${config.cooldown_ms}ms\n`);
+  console.log("[ALERT] Alert engine running");
+  console.log(`[ALERT]   broker:     ${BROKER_URL}`);
+  console.log(`[ALERT]   config:     ${CONFIG_PATH}`);
+  console.log(`[ALERT]   metrics:    ${config.thresholds.map((t) => t.metric).join(", ")}, water_level_ok`);
+  console.log(`[ALERT]   hold:       ${config.hold_ms}ms, cooldown ${config.cooldown_ms}ms`);
 
   subscribe(mqtt, TOPICS.robot.telemetryAll, "robot", "robot_id", isRobotTelemetry, evaluator);
   subscribe(mqtt, TOPICS.shelf.sensorsAll, "shelf", "shelf_id", isShelfSensorData, evaluator);
-  subscribe(mqtt, TOPICS.elevator.telemetryAll, "elevator", "elevator_id", isElevatorTelemetry, evaluator);
+
 
   let stopping = false;
   const shutdown = async () => {
     if (stopping) return;
     stopping = true;
-    console.log("\nAlert engine shutting down");
+    console.log("[ALERT] Shutting down");
     await mqtt.disconnect();
     process.exit(0);
   };
+  // systemd stops services with SIGINT (see the unit's KillSignal)
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 }
@@ -44,31 +65,32 @@ function subscribe(
   mqtt: TypedMqttClient,
   topic: string,
   sourceType: AlertSourceType,
-  idField: "robot_id" | "shelf_id" | "elevator_id",
+  idField: "robot_id" | "shelf_id",
   validator: (value: unknown) => value is Record<string, unknown>,
   evaluator: ThresholdEvaluator,
 ) {
   mqtt.subscribe<unknown>(topic, (payload, receivedTopic) => {
-    if (!validator(payload)) {
-      console.warn(`[ALERT] Ignoring invalid ${sourceType} telemetry on ${receivedTopic}`);
-      return;
-    }
-
     const topicId = extractIdFromTopic(receivedTopic);
-    const payloadId = payload[idField] as string;
-    if (!topicId || topicId !== payloadId) {
-      console.warn(`[ALERT] Ignoring ${sourceType} telemetry with mismatched topic and payload ids`);
+    const valid = validator(payload) && topicId !== null && payload[idField] === topicId;
+    if (!valid) {
+      if (!invalidTopics.has(receivedTopic)) {
+        console.warn(`[ALERT] Ignoring invalid ${sourceType} telemetry on ${receivedTopic} (logged once until it's valid again)`);
+        invalidTopics.add(receivedTopic);
+      }
       return;
     }
+    if (invalidTopics.delete(receivedTopic)) {
+      console.log(`[ALERT] Valid ${sourceType} telemetry on ${receivedTopic} again`);
+    }
 
-    for (const alert of evaluator.evaluate({ source: topicId, sourceType, values: payload })) {
+    for (const { alert, reminder } of evaluator.evaluate({ source: topicId, sourceType, values: payload }, performance.now())) {
       mqtt.publish<FarmAlert>(TOPICS.alerts, alert);
-      console.log(`[ALERT] ${alert.severity.toUpperCase()} ${alert.message}`);
+      console.log(`[ALERT] ${alert.severity.toUpperCase()}${reminder ? " (still)" : ""}: ${alert.message}`);
     }
   });
 }
 
 main().catch((error) => {
-  console.error("Alert engine failed:", error);
+  console.error("[FATAL] Alert engine failed:", error);
   process.exit(1);
 });
