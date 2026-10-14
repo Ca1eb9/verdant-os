@@ -1,0 +1,29 @@
+# Dashboard API: serves the ingester's database to the dashboard, read-only.
+# See docs/PI-SERVICES.md.
+[Unit]
+Description=VerdantOS dashboard API
+# Works without the ingester running: it answers 503 until the database exists
+After=network.target farm-ingester.service
+StartLimitIntervalSec=0
+
+[Service]
+User=farm
+Group=farm
+WorkingDirectory=/opt/verdant-os/farm-controller/dashboard-api
+EnvironmentFile=/etc/verdant/dashboard-api.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /opt/verdant-os/node_modules/tsx/dist/cli.mjs src/index.ts
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+
+# farm_telemetry.db lives here (DB_PATH). Read-only, but SQLite still writes
+# the WAL index (farm_telemetry.db-shm) next to it.
+StateDirectory=verdant
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

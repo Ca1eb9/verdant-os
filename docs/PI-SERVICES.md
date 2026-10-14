@@ -16,6 +16,7 @@ Every service is a **systemd** unit. systemd is built into the OS, so there's no
 | Shelf bridge | `farm-shelf-bridge` | Reads the shelf sensor node over USB serial and publishes its readings ([shelf-sensors.md](shelf-sensors.md)) | `/var/lib/verdant/shelf-bridge-state.json` |
 | Alert engine | `farm-alert-engine` | Publishes an alert when a robot's or shelf's sensor reading stays out of range; optionally emails critical alerts ([farm-controller/README.md](../farm-controller/README.md#alert-engine)) | `/var/lib/verdant/alert-engine-state.json` |
 | Dashboard | `farm-dashboard` | Web app on `http://farmnet.local:3000` | — |
+| Dashboard API | `farm-dashboard-api` | Serves the ingester's database to the dashboard on port 3001, read-only | reads `/var/lib/verdant/farm_telemetry.db` |
 
 Networks (set up in [WIFI-SETUP.md](WIFI-SETUP.md)):
 
@@ -70,7 +71,7 @@ The services run as `farm`, which can't log in and can only write to its own fol
 
 ```bash
 sudo install -d -m 750 -o root -g farm /etc/verdant
-for f in orchestrator ingester shelf-bridge alert-engine dashboard; do
+for f in orchestrator ingester shelf-bridge alert-engine dashboard dashboard-api; do
   sudo install -m 640 -o root -g farm /opt/verdant-os/deploy/env/$f.env.example /etc/verdant/$f.env
 done
 sudo install -m 640 -o root -g farm /opt/verdant-os/farm-controller/shelf-bridge-config.json /etc/verdant/shelf-bridge-config.json
@@ -78,11 +79,11 @@ sudo nano /etc/verdant/dashboard.env
 sudo nano /etc/verdant/shelf-bridge-config.json
 ```
 
-In `dashboard.env`, set the Supabase values (the URL and the publishable key, never the secret key: [SUPABASE-SETUP.md](SUPABASE-SETUP.md) step 5). It needs no `OPERATOR_KEY`: on FarmNet the dashboard sends commands straight over MQTT. `NEXT_PUBLIC_MQTT_WS_URL` (the broker's WebSocket listener) gives the dashboard live farm data on FarmNet; the example's `ws://192.168.4.1:9001` is right for the setup in [WIFI-SETUP.md](WIFI-SETUP.md). Set `NEXT_PUBLIC_FARM_ID` and `NEXT_PUBLIC_FARM_NAME` to this farm's row in Supabase's `farms` table ([SUPABASE-SETUP.md](SUPABASE-SETUP.md)): the dashboard shows only this farm. These are fixed when the dashboard is built, so after changing them run the deploy script, not just a restart. Leave `NEXT_PUBLIC_DASHBOARD_API_URL` unset until the Dashboard API exists. The deploy script reads this file with bash, so quote any value with spaces: `NEXT_PUBLIC_FARM_NAME="North Farm"`.
+In `dashboard.env`, set the Supabase values (the URL and the publishable key, never the secret key: [SUPABASE-SETUP.md](SUPABASE-SETUP.md) step 5). It needs no `OPERATOR_KEY`: on FarmNet the dashboard sends commands straight over MQTT. `NEXT_PUBLIC_MQTT_WS_URL` (the broker's WebSocket listener) gives the dashboard live farm data on FarmNet; the example's `ws://192.168.4.1:9001` is right for the setup in [WIFI-SETUP.md](WIFI-SETUP.md). Set `NEXT_PUBLIC_FARM_ID` and `NEXT_PUBLIC_FARM_NAME` to this farm's row in Supabase's `farms` table ([SUPABASE-SETUP.md](SUPABASE-SETUP.md)): the dashboard shows only this farm. These are fixed when the dashboard is built, so after changing them run the deploy script, not just a restart. `NEXT_PUBLIC_DASHBOARD_API_URL` is the Dashboard API (its port is `PORT` in `dashboard-api.env`); the example is right unless you change that port. The deploy script reads this file with bash, so quote any value with spaces: `NEXT_PUBLIC_FARM_NAME="North Farm"`.
 
 In `shelf-bridge-config.json`, set each shelf's `port` to its node's stable path (plug the Uno in, then `ls /dev/serial/by-id/`) and its pH calibration ([shelf-sensors.md](shelf-sensors.md#ph-calibration)). This copy belongs to this Pi; the repo's file is only the template, and a deploy never touches this one. The service can open serial ports through the `dialout` group (set in its unit).
 
-The orchestrator, ingester and shelf bridge `.env` files work as they are. So does the alert engine's; to have it email critical alerts, `sudo nano /etc/verdant/alert-engine.env` and set the three Resend values described there (an API key from [resend.com](https://resend.com), the sender and the recipients). Without them it only publishes alerts. On a Pi set up before the shelf bridge and alert engine kept state files, add the `STATE_PATH` line from each one's example to its `.env`; without it they log `Could not write` and forget open alerts on a restart.
+The orchestrator, ingester, shelf bridge and Dashboard API `.env` files work as they are (if you open the dashboard from another address, add it to `CORS_ORIGINS` in `dashboard-api.env`). So does the alert engine's; to have it email critical alerts, `sudo nano /etc/verdant/alert-engine.env` and set the three Resend values described there (an API key from [resend.com](https://resend.com), the sender and the recipients). Without them it only publishes alerts. On a Pi set up before the shelf bridge and alert engine kept state files, add the `STATE_PATH` line from each one's example to its `.env`; without it they log `Could not write` and forget open alerts on a restart.
 
 These files are readable by root and the `farm` user only. Never copy them into the repo; it's public.
 
@@ -105,11 +106,11 @@ sudo systemctl restart systemd-journald
 sudo bash /opt/verdant-os/scripts/pi-deploy.sh
 ```
 
-The first run takes several minutes, mostly the dashboard build. It installs the unit files, enables them at boot and starts them. It ends by printing each service's status; all five should be `active (running)`.
+The first run takes several minutes, mostly the dashboard build. It installs the unit files, enables them at boot and starts them. It ends by printing each service's status; all six should be `active (running)`.
 
 ### 7. Firewall
 
-Mosquitto and the dashboard listen on every network interface. Allow everything on FarmNet (`wlan0`), but only SSH and mDNS (`farmnet.local`) on the uplink, so nothing on your home or school network can reach the broker:
+Mosquitto, the dashboard and the Dashboard API listen on every network interface. Allow everything on FarmNet (`wlan0`), but only SSH and mDNS (`farmnet.local`) on the uplink, so nothing on your home or school network can reach the broker:
 
 ```bash
 sudo ufw default deny incoming
@@ -147,9 +148,9 @@ sudo reboot
 
 After it's back:
 
-1. `systemctl status mosquitto farm-orchestrator farm-ingester farm-shelf-bridge farm-alert-engine farm-dashboard`: all `active (running)`
+1. `systemctl status mosquitto farm-orchestrator farm-ingester farm-shelf-bridge farm-alert-engine farm-dashboard farm-dashboard-api`: all `active (running)`
 2. `journalctl -u farm-orchestrator -n 20`: connected to the broker
-3. `curl -sI http://localhost:3000 | head -1`: `HTTP/1.1 200 OK`
+3. `curl -sI http://localhost:3000 | head -1`: `HTTP/1.1 200 OK`; `curl -s http://localhost:3001/health`: `{"ok":true,"database":true}`
 4. `systemctl show -p RuntimeWatchdogUSec`: `14s`
 5. `vcgencmd get_throttled`: `throttled=0x0` (anything else means the power supply is too weak)
 6. `timedatectl`: `System clock synchronized: yes`
@@ -187,8 +188,6 @@ sudo -u farm -H bash -c 'cd /opt/verdant-os/farm-controller/orchestrator && set 
 `Ctrl+C` stops it; `sudo systemctl start farm-orchestrator` puts it back.
 
 ### Adding a service (e.g. the Supabase bridge)
-
-The Dashboard API is added the same way, as `farm-dashboard-api` on its own port. It serves data only; the dashboard stays on `farm-dashboard`. Once it runs, set `NEXT_PUBLIC_DASHBOARD_API_URL` in `dashboard.env` to `http://192.168.4.1:<its port>` and deploy.
 
 1. Copy `deploy/systemd/farm-ingester.service` to `farm-<name>.service` and change the description, `WorkingDirectory` and `EnvironmentFile`.
 2. Add `deploy/env/<name>.env.example`, and create `/etc/verdant/<name>.env` from it on the Pi (step 4).
@@ -232,6 +231,8 @@ SD cards fail from sudden power loss during a write and from wear. With this set
 | Dashboard still shows the old farm id or name after editing `dashboard.env` | `NEXT_PUBLIC_*` values are fixed at build time: rerun the deploy script (a restart isn't enough), then hard-refresh the page. |
 | Dashboard says "No farm to show" on FarmNet | `NEXT_PUBLIC_FARM_ID` is empty or not a valid id (lowercase letters, digits, dashes) in `/etc/verdant/dashboard.env`. Set it and rerun the deploy script. |
 | Dashboard says "Disconnected" on FarmNet | Mosquitto is down or its port 9001 listener is missing ([WIFI-SETUP.md](WIFI-SETUP.md) step 5), or `NEXT_PUBLIC_MQTT_WS_URL` is wrong in `/etc/verdant/dashboard.env`; fix it and rerun the deploy script (it's fixed at build time). |
+| `farm-dashboard-api` fails with `Failed to load environment files` | `/etc/verdant/dashboard-api.env` is missing (a Pi set up before the Dashboard API): create it as in step 4 and rerun the deploy script. |
+| Dashboard shows no earlier commands; the browser console says CORS or "no command history from the Dashboard API" | Check `curl http://192.168.4.1:3001/health` from the laptop. If that works, add the address the dashboard is opened from to `CORS_ORIGINS` in `/etc/verdant/dashboard-api.env` and `sudo systemctl restart farm-dashboard-api`. `"database":false` means the ingester hasn't created its database yet (`journalctl -u farm-ingester`). |
 | Dashboard map shows "Default farm layout" | The orchestrator isn't running, or Mosquitto lost its retained messages (persistence off): restart the orchestrator. |
 
 ## TBD

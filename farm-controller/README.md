@@ -115,18 +115,44 @@ Subscribes to all telemetry topics, to operator commands
 them to a local SQLite database.
 
 The `alerts` table holds every `FarmAlert` (stored once per `alert_id`) with
-its `received_at`, for the Dashboard API's `GET /alerts` (see the Dashboard
-API task in `docs/dev-team-timeline.html`).
-
-The `commands` table is the dashboard's command history on FarmNet. The
-Dashboard API (to be built) should serve it as `GET /commands?robot_id=` (the
-filter optional), returning `{ "commands": [...] }`, newest `received_at`
-first, at most 10. Each entry is `{ id, robot_id, command, issued_by,
-issued_at, status: "sent" }`, with `command` parsed from its JSON column: the
-same shape as the dashboard's own `/api/commands`.
+its `received_at`, and the `commands` table is the dashboard's command history
+on FarmNet. The Dashboard API serves both.
 
 ```bash
 npm run ingest
+```
+
+### Dashboard API (stored data for the dashboard)
+
+Serves the ingester's database to the dashboard over HTTP, read-only. On
+FarmNet the dashboard sends commands straight over MQTT, so there is no
+command endpoint.
+
+```bash
+npm run api          # port 3001, reads ingester/farm_telemetry.db
+```
+
+| Route | Returns |
+|---|---|
+| `GET /health` | `{ ok, database }`: `database` is false until the ingester has created it (the data routes answer 503 until then) |
+| `GET /robots` | `{ robots }`: each robot's newest telemetry |
+| `GET /telemetry?robot_id=&from=&to=&limit=` | `{ telemetry }`: robot telemetry received between `from` and `to` (default: the last hour), oldest first. `robot_id` optional; `limit` default 1000, at most 10000 (the newest rows are kept) |
+| `GET /alerts?severity=&source=&limit=` | `{ alerts }`: `FarmAlert`s, newest first. Filters optional; `limit` default 50, at most 500 |
+| `GET /commands?robot_id=` | `{ commands }`: the last 10 operator commands, newest first, each `{ id, robot_id, command, issued_by, issued_at, status: "sent" }` (the dashboard's own `/api/commands` shape). `robot_id` optional |
+
+Times are milliseconds since 1970. Everything sorts and filters on
+`received_at` (the Pi's clock), which telemetry rows include; a payload's own
+`timestamp` is the sender's clock. Bad query values get a 400 with an `error`.
+
+Settings: `PORT` (3001), `DB_PATH` (`../ingester/farm_telemetry.db`) and
+`CORS_ORIGINS`, the comma-separated pages allowed to call it (default
+`http://localhost:3000`). On the Pi they're in
+`/etc/verdant/dashboard-api.env` (`deploy/env/dashboard-api.env.example`).
+Point the dashboard at it with `NEXT_PUBLIC_DASHBOARD_API_URL`
+(`http://localhost:3001` locally).
+
+```bash
+npm -w @farm/dashboard-api test
 ```
 
 The database file is created at `farm-controller/ingester/farm_telemetry.db`.
@@ -247,7 +273,7 @@ farm-controller/
 ├── shelf-bridge/        # Shelf sensor node (USB serial) → MQTT
 ├── alert-engine/        # Sensor readings out of range → alerts
 ├── supabase-bridge/     # (to be built) Cloud sync
-├── dashboard-api/       # (to be built) REST API for dashboard
+├── dashboard-api/       # Stored data → dashboard (HTTP, read-only)
 ├── topology.json        # Farm layout (nodes + edges)
 ├── orchestrator-config.json  # Tunable orchestrator settings
 ├── shelf-bridge-config.json  # Shelf serial ports and pH calibration

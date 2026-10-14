@@ -128,6 +128,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_robot_ts ON robot_telemetry(timestamp);
   CREATE INDEX IF NOT EXISTS idx_shelf_ts ON shelf_sensors(timestamp);
   CREATE INDEX IF NOT EXISTS idx_robot_id ON robot_telemetry(robot_id, timestamp);
+  -- For the Dashboard API: latest state and history by arrival time
+  CREATE INDEX IF NOT EXISTS idx_robot_received ON robot_telemetry(robot_id, received_at);
+  CREATE INDEX IF NOT EXISTS idx_robot_received_all ON robot_telemetry(received_at);
   CREATE INDEX IF NOT EXISTS idx_shelf_id ON shelf_sensors(shelf_id, timestamp);
 `);
 
