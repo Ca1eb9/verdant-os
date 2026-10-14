@@ -9,7 +9,7 @@
 
 bool TofSensor::begin() {
   if (!wire_started_) {
-    bus_.begin(sda_, scl_, 400000);
+    bus_.begin(sda_, scl_, hz_);
     wire_started_ = true;
   }
   dev_.begin();

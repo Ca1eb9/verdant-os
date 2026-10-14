@@ -41,7 +41,7 @@ Decisions worth knowing:
 
 ## Wiring
 
-The team's boards are **ESP32-S3-WROOM-1** DevKitC; pins are in `config.h`. Diagrams, parts and the reasons for each resistor are in [docs/wiring/robot.md](../../docs/wiring/robot.md). The VL53L4CX XSHUT pins are optional: wire them to a free GPIO and set `PIN_TOF_FRONT_XSHUT` / `PIN_TOF_REAR_XSHUT`. The AHT20 (address 0x38) shares `Wire1` (GPIO 17/18) with the rear ToF (0x29).
+The team's boards are **ESP32-S3-WROOM-1** DevKitC; pins are in `config.h`. Diagrams, parts and the reasons for each resistor are in [docs/wiring/robot.md](../../docs/wiring/robot.md). The VL53L4CX XSHUT pins are optional: wire them to a free GPIO and set `PIN_TOF_FRONT_XSHUT` / `PIN_TOF_REAR_XSHUT`. The AHT20 (address 0x38) shares `Wire1` (GPIO 17/18) with the rear ToF (0x29). Each bus has its own clock: the front at 100 kHz for its 400 mm cable, the rear at 400 kHz (`I2C_FRONT_HZ`, `I2C_REAR_HZ`).
 
 **S3 pins to leave alone:** 0, 3, 45 and 46 (boot strapping); 19/20 (USB); 26–32 (flash); 33–37 (PSRAM on R8 modules); 43/44 (UART0). Only ADC1 pins (GPIO1–10) can read voltages while WiFi is on.
 

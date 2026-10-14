@@ -74,8 +74,9 @@ constexpr int PIN_MOTOR_IN1 = 5;
 constexpr int PIN_MOTOR_IN2 = 6;
 
 // Charge contact sense: the dock pad's voltage through a 100k/22k divider,
+// with a 10k from the pad to ground for the charging diode's leakage,
 // 1.8-2.3 V while docked (the charger's output follows the pack while it
-// charges), 0 V off the dock. ADC1, so it reads with WiFi on.
+// charges), under 0.5 V off the dock. ADC1, so it reads with WiFi on.
 constexpr int PIN_CHARGE_SENSE = 1;
 
 // Onboard NeoPixel (GPIO38 on DevKitC-1 v1.1 boards)
@@ -95,6 +96,12 @@ constexpr float OBSTACLE_STOP_CM = 15.0f;       // set that side's obstacle flag
 constexpr float OBSTACLE_CLEAR_CM = 20.0f;
 constexpr uint8_t OBSTACLE_CLEAR_COUNT = 3;     // consecutive clear readings needed
 constexpr uint32_t TOF_TIMING_BUDGET_US = 33000;
+// I2C clock for each sensor's bus. Every signal edge must rise within the
+// speed's limit, and longer wires slow the edges: the front sensor's 400 mm
+// STEMMA QT cable is too long for 400 kHz. The rear bus (short cables) also
+// carries the AHT20, which takes 400 kHz at most.
+constexpr uint32_t I2C_FRONT_HZ = 100000;
+constexpr uint32_t I2C_REAR_HZ = 400000;
 constexpr uint32_t TOF_TIMEOUT_MS = 500;        // no data this long = sensor fault
 constexpr uint32_t TOF_REINIT_MS = 5000;
 // If the ToF sensor stops responding, hold the obstacle flag (motors stay

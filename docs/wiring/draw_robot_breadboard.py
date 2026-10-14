@@ -9,6 +9,7 @@ Plain Python, no packages. The DevKit straddles the channel with one free
 hole per side (hole a below J1, hole j above J3). Keep robot.md's tables in
 step with it.
 """
+import math
 import sys
 
 from wiring_svg import add, finish, resistor, text, wire
@@ -91,9 +92,29 @@ BROWN_BLACK_YELLOW = ["#7a4a1e", "#111", "#e6b800", "#c9a227"]   # 100 kΩ
 RED_RED_ORANGE = ["#d62728", "#d62728", "#ff7f0e", "#c9a227"]     # 22 kΩ
 resistor(rx(B_IN), rx(B_TAP), HOLE["b"], BROWN_BLACK_YELLOW, "")
 resistor(rx(B_TAP), rx(B_GND), HOLE["d"], RED_RED_ORANGE, "")
-# Charge contact (top half): pad + in at row 4, 100k rows 4-8, tap row 8 -> GPIO 1, 22k + 0.1 uF rows 8-12
+# Charge contact (top half): pad + in at row 4, 100k rows 4-8, tap row 8 -> GPIO 1, 22k + 0.1 uF rows 8-12,
+# and a 10k from row 4 hole j to the top - rail that holds pad + at 0 V off the dock
 resistor(rx(B_IN), rx(B_TAP), HOLE["i"], BROWN_BLACK_YELLOW, "")
 resistor(rx(B_TAP), rx(B_GND), HOLE["g"], RED_RED_ORANGE, "")
+BROWN_BLACK_ORANGE = ["#7a4a1e", "#111", "#ff7f0e", "#c9a227"]    # 10 kΩ
+
+
+def slant_resistor(a, b, bands):
+    """A resistor bent across from a hole to a rail hole a couple of rows along."""
+    (x1, y1), (x2, y2) = a, b
+    mx, my = (x1 + x2) / 2, (y1 + y2) / 2
+    angle = math.degrees(math.atan2(y2 - y1, x2 - x1))
+    add(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="#888" stroke-width="2"/>')
+    add(f'<g transform="rotate({angle:.1f} {mx} {my})">')
+    add(f'<rect x="{mx - 15}" y="{my - 6}" width="30" height="12" rx="5" fill="#e8d3a6" stroke="#8a6d3b"/>')
+    for i, c in enumerate(bands):
+        add(f'<rect x="{mx - 10 + i * 6 + (3 if i == 3 else 0)}" y="{my - 6}" width="3" height="12" fill="{c}"/>')
+    add('</g>')
+    for px, py in (a, b):
+        add(f'<circle cx="{px}" cy="{py}" r="3" fill="#888"/>')
+
+
+slant_resistor((rx(B_IN), HOLE["j"]), (rx(B_IN + 3), RAIL_T["-"]), BROWN_BLACK_ORANGE)
 
 
 def capacitor(r1, r2, y, label):  # label: unused, parts are listed beside the board
@@ -109,7 +130,8 @@ def capacitor(r1, r2, y, label):  # label: unused, parts are listed beside the b
 capacitor(B_TAP, B_GND, HOLE["c"], "")
 capacitor(B_TAP, B_GND, HOLE["h"], "")
 for y0, title, parts in ((HOLE["j"] - 4, "Charge contact divider", ["(docking only)", "100 kΩ: rows 4–8, hole i", "22 kΩ: rows 8–12, hole g",
-                                                                     "0.1 µF (optional): rows 8–12, hole h", "pad + in: row 4, hole f"]),
+                                                                     "0.1 µF (optional): rows 8–12, hole h", "10 kΩ: row 4 hole j → − rail",
+                                                                     "pad + in: row 4, hole f"]),
                          (HOLE["e"] - 4, "Battery divider", ["100 kΩ: rows 4–8, hole b", "22 kΩ: rows 8–12, hole d",
                                                              "0.1 µF (optional): rows 8–12, hole c", "BATT+ in: row 4, hole e"])):
     text(BX - 12, y0, title, 11, "end", "bold")

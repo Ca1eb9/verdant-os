@@ -61,12 +61,21 @@
 <line x1="554" y1="290" x2="576" y2="290" stroke="#222222" stroke-width="2"/>
 <line x1="558" y1="294" x2="572" y2="294" stroke="#222222" stroke-width="2"/>
 <line x1="562" y1="298" x2="568" y2="298" stroke="#222222" stroke-width="2"/>
-<path d="M 770,255 L 800,255" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M 770,255 L 800,255" fill="none" stroke="#d62728" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 770,255 L 802,255" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 770,255 L 802,255" fill="none" stroke="#d62728" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="770" cy="255" r="3.2" fill="#d62728" stroke="#fff" stroke-width="1"/>
-<circle cx="800" cy="255" r="3.2" fill="#d62728" stroke="#fff" stroke-width="1"/>
-<path d="M 800,245 L 895,245 L 903,255 L 895,265 L 800,265 L 800,255 Z" fill="#fff" stroke="#d62728" stroke-width="1.5"/>
-<text x="847.5" y="259" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="bold" fill="#d62728">to ESP32 5V</text>
+<circle cx="802" cy="255" r="3.2" fill="#d62728" stroke="#fff" stroke-width="1"/>
+<circle cx="806" cy="255" r="4" fill="#fff" stroke="#444" stroke-width="1.5"/>
+<line x1="809" y1="253" x2="836" y2="240" stroke="#444" stroke-width="2.5"/>
+<circle cx="840" cy="255" r="4" fill="#fff" stroke="#444" stroke-width="1.5"/>
+<text x="823" y="231" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" font-weight="bold" fill="#222">5 V switch</text>
+<text x="823" y="275" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" font-weight="normal" fill="#555">off for USB</text>
+<path d="M 844,255 L 856,255" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 844,255 L 856,255" fill="none" stroke="#d62728" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="844" cy="255" r="3.2" fill="#d62728" stroke="#fff" stroke-width="1"/>
+<circle cx="856" cy="255" r="3.2" fill="#d62728" stroke="#fff" stroke-width="1"/>
+<path d="M 856,245 L 951,245 L 959,255 L 951,265 L 856,265 L 856,255 Z" fill="#fff" stroke="#d62728" stroke-width="1.5"/>
+<text x="903.5" y="259" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="bold" fill="#d62728">to ESP32 5V</text>
 <path d="M 770,282 L 790,282" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M 770,282 L 790,282" fill="none" stroke="#222222" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="770" cy="282" r="3.2" fill="#222222" stroke="#fff" stroke-width="1"/>
@@ -122,6 +131,25 @@
 <path d="M 770,470 L 790,470 L 790,570 L 820,570" fill="none" stroke="#6d4c41" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="770" cy="470" r="3.2" fill="#6d4c41" stroke="#fff" stroke-width="1"/>
 <circle cx="820" cy="570" r="3.2" fill="#6d4c41" stroke="#fff" stroke-width="1"/>
+<path d="M 870,530 L 870,512" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 870,530 L 870,512" fill="none" stroke="#888" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="870" cy="530" r="3.2" fill="#888" stroke="#fff" stroke-width="1"/>
+<circle cx="870" cy="512" r="3.2" fill="#888" stroke="#fff" stroke-width="1"/>
+<path d="M 920,530 L 920,512" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 920,530 L 920,512" fill="none" stroke="#888" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="920" cy="530" r="3.2" fill="#888" stroke="#fff" stroke-width="1"/>
+<circle cx="920" cy="512" r="3.2" fill="#888" stroke="#fff" stroke-width="1"/>
+<path d="M 870,512 L 891,512" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 870,512 L 891,512" fill="none" stroke="#888" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="870" cy="512" r="3.2" fill="#888" stroke="#fff" stroke-width="1"/>
+<circle cx="891" cy="512" r="3.2" fill="#888" stroke="#fff" stroke-width="1"/>
+<path d="M 899,512 L 920,512" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 899,512 L 920,512" fill="none" stroke="#888" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="899" cy="512" r="3.2" fill="#888" stroke="#fff" stroke-width="1"/>
+<circle cx="920" cy="512" r="3.2" fill="#888" stroke="#fff" stroke-width="1"/>
+<line x1="891" y1="503" x2="891" y2="521" stroke="#444" stroke-width="2.5"/>
+<line x1="899" y1="503" x2="899" y2="521" stroke="#444" stroke-width="2.5"/>
+<text x="895" y="498" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" font-weight="normal" fill="#555">0.1 µF ceramic across its terminals (optional)</text>
 <text x="895" y="650" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" font-weight="normal" fill="#777">its 4 encoder wires: insulate</text>
 <text x="895" y="663" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" font-weight="normal" fill="#777">and leave unconnected</text>
 <circle cx="1000" cy="150" r="4.5" fill="#c2185b"/>
@@ -163,7 +191,7 @@
 <text x="986" y="200" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="end" font-weight="bold" fill="#1f77b4">battery voltage</text>
 <rect x="1000" y="560" width="210" height="150" rx="8" fill="#e3f1f3" stroke="#0f7c8c" stroke-width="1.5"/>
 <text x="1105.0" y="582" font-family="Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle" font-weight="bold" fill="#222">ESP32-S3 DevKitC-1</text>
-<text x="1105.0" y="602" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#555">5V: from the converter</text>
+<text x="1105.0" y="602" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#555">5V: converter, via 5 V switch</text>
 <text x="1105.0" y="618" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#555">GND: shared ground</text>
 <text x="1105.0" y="634" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#555">GPIO 5, 6: motor IN1, IN2</text>
 <text x="1105.0" y="650" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#555">GPIO 4: battery voltage</text>
@@ -194,12 +222,22 @@
 <line x1="328" y1="324" x2="352" y2="324" stroke="#444" stroke-width="3"/>
 <text x="322" y="332" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="end" font-weight="bold" fill="#222">Schottky diode</text>
 <text x="322" y="347" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#555">1N5822, band up</text>
+<text x="322" y="361" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#b03a2e">hot while charging:</text>
+<text x="322" y="374" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#b03a2e">keep off plastic</text>
 <path d="M 340,324 L 340,150" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M 340,324 L 340,150" fill="none" stroke="#c2185b" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="340" cy="324" r="3.2" fill="#c2185b" stroke="#fff" stroke-width="1"/>
 <circle cx="340" cy="150" r="3.2" fill="#c2185b" stroke="#fff" stroke-width="1"/>
 <text x="348" y="190" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="start" font-weight="normal" fill="#555">joins before the switch:</text>
 <text x="348" y="203" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="start" font-weight="normal" fill="#555">charges even when off</text>
+<circle cx="300" cy="500" r="4.5" fill="#ef6c00"/>
+<line x1="300" y1="500" x2="300" y2="610" stroke="#888" stroke-width="2"/>
+<rect x="293" y="535.0" width="14" height="40" rx="5" fill="#e8d3a6" stroke="#8a6d3b"/>
+<text x="287" y="559.0" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="end" font-weight="bold" fill="#5a4320">10 kΩ</text>
+<line x1="300" y1="610" x2="300" y2="618" stroke="#222222" stroke-width="3"/>
+<line x1="289" y1="618" x2="311" y2="618" stroke="#222222" stroke-width="2"/>
+<line x1="293" y1="622" x2="307" y2="622" stroke="#222222" stroke-width="2"/>
+<line x1="297" y1="626" x2="303" y2="626" stroke="#222222" stroke-width="2"/>
 <circle cx="340" cy="500" r="4.5" fill="#ef6c00"/>
 <path d="M 340,500 L 400,500" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M 340,500 L 400,500" fill="none" stroke="#ef6c00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>

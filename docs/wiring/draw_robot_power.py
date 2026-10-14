@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Draws robot-power.svg: the robot's 12 V side (battery, fuse, switch, buck
-converter, motor driver, charging pads) and the two voltage dividers.
+converter and its 5 V switch, motor driver, charging pads) and the two voltage
+dividers.
 
     python3 draw_robot_power.py > robot-power.svg
 
@@ -128,8 +129,16 @@ dot(550, BUS_Y, C["batt"])
 wire([(550, BUS_Y), (550, UY + 55), (UX, UY + 55)], C["batt"], 3)
 wire([(UX, UY + 82), (565, UY + 82)], C["gnd"], 3)
 ground(565, UY + 82)
-wire([(UX + 190, UY + 55), (800, UY + 55)], C["5v"], 3)
-flag(800, UY + 55, "to ESP32 5V", C["5v"])
+# 5 V switch: off whenever USB powers the ESP32, so the two never meet
+SW5 = 806
+wire([(UX + 190, UY + 55), (SW5 - 4, UY + 55)], C["5v"], 3)
+add(f'<circle cx="{SW5}" cy="{UY + 55}" r="4" fill="#fff" stroke="#444" stroke-width="1.5"/>')
+add(f'<line x1="{SW5 + 3}" y1="{UY + 53}" x2="{SW5 + 30}" y2="{UY + 40}" stroke="#444" stroke-width="2.5"/>')
+add(f'<circle cx="{SW5 + 34}" cy="{UY + 55}" r="4" fill="#fff" stroke="#444" stroke-width="1.5"/>')
+text(SW5 + 17, UY + 31, "5 V switch", 10, weight="bold")
+text(SW5 + 17, UY + 75, "off for USB", 10, fill="#555")
+wire([(SW5 + 38, UY + 55), (SW5 + 50, UY + 55)], C["5v"], 3)
+flag(SW5 + 50, UY + 55, "to ESP32 5V", C["5v"])
 wire([(UX + 190, UY + 82), (790, UY + 82)], C["gnd"], 3)
 ground(790, UY + 82)
 
@@ -151,6 +160,15 @@ for y, gpio in ((MY + 55, "GPIO 5"), (MY + 80, "GPIO 6")):
 box(820, 530, 150, 100, "Motor", ["Pololu 4845, 12 V", "red to OUT1", "black to OUT2"], fill="#efe6e1",
     stroke=C["motor"])
 wire([(MX + 190, MY + 110), (790, MY + 110), (790, 570), (820, 570)], C["motor"], 3)
+# Optional: a small ceramic capacitor right across the motor's two terminals
+CAP_Y = 512
+for cx in (870, 920):
+    wire([(cx, 530), (cx, CAP_Y)], "#888", 2)
+wire([(870, CAP_Y), (891, CAP_Y)], "#888", 2)
+wire([(899, CAP_Y), (920, CAP_Y)], "#888", 2)
+for dx in (-4, 4):
+    add(f'<line x1="{895 + dx}" y1="{CAP_Y - 9}" x2="{895 + dx}" y2="{CAP_Y + 9}" stroke="#444" stroke-width="2.5"/>')
+text(895, CAP_Y - 14, "0.1 µF ceramic across its terminals (optional)", 10, fill="#555")
 text(895, 650, "its 4 encoder wires: insulate", 10, fill="#777")
 text(895, 663, "and leave unconnected", 10, fill="#777")
 
@@ -162,7 +180,7 @@ text(BUS_END - 14, 200, "battery voltage", 11, "end", "bold", C["sig"])
 
 # ---- ESP32: what arrives where
 EX, EY = 1000, 560
-box(EX, EY, 210, 150, "ESP32-S3 DevKitC-1", ["5V: from the converter", "GND: shared ground", "GPIO 5, 6: motor IN1, IN2",
+box(EX, EY, 210, 150, "ESP32-S3 DevKitC-1", ["5V: converter, via 5 V switch", "GND: shared ground", "GPIO 5, 6: motor IN1, IN2",
                                              "GPIO 4: battery voltage", "GPIO 1: charge contact", "sensors: breadboard diagram"],
     fill="#e3f1f3", stroke="#0f7c8c")
 
@@ -181,10 +199,17 @@ add(f'<path d="M {NODE_X - 12},{DY + 16} L {NODE_X + 12},{DY + 16} L {NODE_X},{D
 add(f'<line x1="{NODE_X - 12}" y1="{DY - 6}" x2="{NODE_X + 12}" y2="{DY - 6}" stroke="#444" stroke-width="3"/>')
 text(NODE_X - 18, DY + 2, "Schottky diode", 11, "end", "bold")
 text(NODE_X - 18, DY + 17, "1N5822, band up", 10, "end", fill="#555")
+text(NODE_X - 18, DY + 31, "hot while charging:", 10, "end", fill="#b03a2e")
+text(NODE_X - 18, DY + 44, "keep off plastic", 10, "end", fill="#b03a2e")
 wire([(NODE_X, DY - 6), (NODE_X, BUS_Y)], C["batt"], 3)
 text(NODE_X + 8, BUS_Y + 40, "joins before the switch:", 10, "start", fill="#555")
 text(NODE_X + 8, BUS_Y + 53, "charges even when off", 10, "start", fill="#555")
 SENSE_X = 400
+# 10 k pull-down on pad +: soaks up the diode's reverse leakage off the dock
+BLEED_X = 300
+dot(BLEED_X, PAD_P[1], C["pad"])
+v_resistor(BLEED_X, PAD_P[1], PAD_P[1] + 110, "10 kΩ")
+ground(BLEED_X, PAD_P[1] + 110)
 dot(NODE_X, PAD_P[1], C["pad"])
 wire([(NODE_X, PAD_P[1]), (SENSE_X, PAD_P[1])], C["pad"], 3)
 divider(SENSE_X, PAD_P[1], "GPIO 1")
