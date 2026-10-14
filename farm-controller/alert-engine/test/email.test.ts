@@ -30,8 +30,10 @@ describe("emailConfigFromEnv", () => {
     }), config);
   });
 
-  it("rejects a partial setup", () => {
-    assert.throws(() => emailConfigFromEnv({ RESEND_API_KEY: "re_test" }), /together/);
+  it("is off, with a warning, when the setup is partial", () => {
+    const warnings: string[] = [];
+    assert.equal(emailConfigFromEnv({ RESEND_API_KEY: "re_test" }, (message) => warnings.push(message)), null);
+    assert.deepEqual(warnings, ["email is off: ALERT_EMAIL_FROM, ALERT_EMAIL_TO not set"]);
   });
 });
 

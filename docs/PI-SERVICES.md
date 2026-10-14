@@ -230,3 +230,10 @@ SD cards fail from sudden power loss during a write and from wear. With this set
 | Dashboard says "No farm to show" on FarmNet | `NEXT_PUBLIC_FARM_ID` is empty or not a valid id (lowercase letters, digits, dashes) in `/etc/verdant/dashboard.env`. Set it and rerun the deploy script. |
 | Dashboard says "Disconnected" on FarmNet | Mosquitto is down or its port 9001 listener is missing ([WIFI-SETUP.md](WIFI-SETUP.md) step 5), or `NEXT_PUBLIC_MQTT_WS_URL` is wrong in `/etc/verdant/dashboard.env`; fix it and rerun the deploy script (it's fixed at build time). |
 | Dashboard map shows "Default farm layout" | The orchestrator isn't running, or Mosquitto lost its retained messages (persistence off): restart the orchestrator. |
+
+## TBD
+
+Known problems, not fixed yet:
+
+- **The shared MQTT client logs every message that isn't JSON** (`farm-controller/shared`), with no rate limit, so one bad sender can flood a service's journal. It should log once per topic until that topic is valid again, as the alert engine does.
+- **After a reconnect, the shared MQTT client resubscribes at QoS 0**, not the QoS 1 its subscriptions were made with, so messages can be lost after a broker restart.

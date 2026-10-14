@@ -10,14 +10,21 @@ export interface EmailConfig {
   to: string[];
 }
 
-/** Off when none of the variables are set; throws when only some are */
-export function emailConfigFromEnv(env: NodeJS.ProcessEnv): EmailConfig | null {
+/**
+ * Email is optional, so a missing or partial setup turns it off instead of
+ * stopping the service. `warn` names what's missing when only some are set.
+ */
+export function emailConfigFromEnv(env: NodeJS.ProcessEnv, warn: (message: string) => void = () => {}): EmailConfig | null {
   const apiKey = env.RESEND_API_KEY?.trim() ?? "";
   const from = env.ALERT_EMAIL_FROM?.trim() ?? "";
   const to = (env.ALERT_EMAIL_TO ?? "").split(",").map((address) => address.trim()).filter(Boolean);
   if (!apiKey && !from && to.length === 0) return null;
-  if (!apiKey || !from || to.length === 0) {
-    throw new Error("email needs RESEND_API_KEY, ALERT_EMAIL_FROM and ALERT_EMAIL_TO together");
+  const missing = [
+    !apiKey && "RESEND_API_KEY", !from && "ALERT_EMAIL_FROM", to.length === 0 && "ALERT_EMAIL_TO",
+  ].filter(Boolean);
+  if (missing.length > 0) {
+    warn(`email is off: ${missing.join(", ")} not set`);
+    return null;
   }
   return { apiKey, from, to };
 }

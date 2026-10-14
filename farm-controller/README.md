@@ -200,7 +200,8 @@ npm run alert
 - Optional email: with `RESEND_API_KEY`, `ALERT_EMAIL_FROM` and
   `ALERT_EMAIL_TO` set, every critical alert on `farm/alerts` (from any
   service, e.g. a lost robot) is emailed through [Resend](https://resend.com),
-  except this service's repeats. A failed send is logged and dropped. See
+  except this service's repeats. Without all three, or without internet, it
+  runs the same and sends nothing; a failed send is logged and dropped. See
   `deploy/env/alert-engine.env.example`.
 - State is in memory: after a restart, an out-of-range reading waits out the
   hold time again.

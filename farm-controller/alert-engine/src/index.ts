@@ -40,12 +40,12 @@ async function main() {
   let config;
   try {
     config = loadConfig(fileURLToPath(new URL(CONFIG_PATH, import.meta.url)));
-    email = emailConfigFromEnv(process.env);
   } catch (error) {
     console.error(`[FATAL] Bad alert engine config: ${(error as Error).message}`);
     process.exit(1);
   }
 
+  email = emailConfigFromEnv(process.env, (message) => console.warn(`[ALERT] ${message}`));
   const evaluator = new ThresholdEvaluator(config.thresholds, config.hold_ms, config.cooldown_ms);
   const mqtt = await createMqttClient({ serviceName: "alert-engine", brokerUrl: BROKER_URL });
 
