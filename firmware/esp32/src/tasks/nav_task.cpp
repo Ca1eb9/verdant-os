@@ -40,6 +40,7 @@ class QueueOutput : public NavOutput {
   }
 
   void halt() override { motion.halt(); }
+  void brake() override { motion.brake(); }
 
   void jog(JogDirection direction) override {
     last_jog_ms = millis();

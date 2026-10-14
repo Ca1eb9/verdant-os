@@ -52,8 +52,10 @@ class NavOutput {
   // ---- Motion hooks ----
   // Each call replaces whatever the robot was doing.
 
-  // Stop the motors now.
+  // Stop the motors now, slowing over STOP_RAMP_MS.
   virtual void halt() = 0;
+  // Stop the motors at once, no ramp: the dock's contacts have touched.
+  virtual void brake() = 0;
   // Drive along the edge from `from` to `to`, as `drive` says, until the
   // next tag. It may be called while the robot is already between `from` and
   // `to` (e.g. resuming after a stop). For an elevator ride, `to` is the
@@ -63,7 +65,7 @@ class NavOutput {
   virtual void creep() = 0;
   // Drive one JOG_PULSE_MS pulse. Backward reverses without turning.
   virtual void jog(JogDirection direction) = 0;
-  // Back onto the dock; report contact with on_charge_contact(), which halts.
+  // Back onto the dock; report contact with on_charge_contact(), which brakes.
   virtual void start_docking() = 0;
 
   // Why a command or input was ignored, for the serial log.

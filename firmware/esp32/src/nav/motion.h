@@ -42,6 +42,7 @@ class Motion {
 
   // Each call replaces whatever the robot was doing (NavOutput motion hooks).
   void halt();
+  void brake();
   void jog(JogDirection direction);
   // An elevator ride first creeps onto the platform, the opposite way to the
   // way off, then waits ELEVATOR_WAIT_MS per level ridden.
