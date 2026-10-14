@@ -5,8 +5,9 @@
 // The newest command replaces the last. A timed Drive stops by itself. The
 // kill flag, or the obstacle flag on the side the motor is turning toward,
 // stops it for as long as the flag is set; the command carries on when the
-// flag clears. Nothing stops it dead: slowing to 0 takes STOP_RAMP_MS,
-// whatever the reason, and reversing slows to 0 over REVERSE_RAMP_MS first.
+// flag clears. Slowing to 0 takes STOP_RAMP_MS, whatever the reason, except a
+// Stop with `brake`, which stops it at once. Reversing slows to 0 over
+// REVERSE_RAMP_MS first.
 //
 // Single drive motor: left_speed and right_speed are always equal, so only
 // left_speed is read. A Turn stops the motor (the robot can't turn).

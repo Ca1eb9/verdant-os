@@ -14,9 +14,10 @@
 // ToF approach: driving an edge, it slows to APPROACH_SPEED once anything
 // ahead is inside SLOW_ZONE_CM (until the next edge). After the elevator or
 // dock tag it creeps in until the end wall is ELEVATOR_STOP_CM / DOCK_STOP_CM
-// away, lowering that side's stop distance (stop_cm()) so the obstacle flag
-// doesn't stop it at OBSTACLE_STOP_CM first. Only after the tag: before it,
-// anything inside OBSTACLE_STOP_CM is a real obstruction.
+// away and brakes there at once (every other stop eases off), lowering that
+// side's stop distance (stop_cm()) so the obstacle flag doesn't stop it at
+// OBSTACLE_STOP_CM first. Only after the tag: before it, anything inside
+// OBSTACLE_STOP_CM is a real obstruction.
 //
 // Pure C++ (no Arduino or FreeRTOS calls), so test_host can drive it.
 
@@ -62,7 +63,7 @@ class Motion {
  private:
   enum class Phase : uint8_t { Idle, Driving, Creeping, Entering, Riding, Docking, Failed };
 
-  void send(DriveMode mode, int16_t speed, uint32_t duration_ms);
+  void send(DriveMode mode, int16_t speed, uint32_t duration_ms, bool brake = false);
   void start_driving(Phase phase, bool backward, int16_t speed, uint32_t now);
   bool approaching() const { return phase_ == Phase::Entering || phase_ == Phase::Docking; }
 

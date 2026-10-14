@@ -25,6 +25,11 @@ void MotorCore::command(const DriveCommand& c, uint32_t now) {
   seq_ = c.seq;
   received_ms_ = now;
   duration_ms_ = c.mode == DriveMode::Drive ? c.duration_ms : 0;
+  if (c.mode == DriveMode::Stop && c.brake) {
+    ramping_ = false;
+    output_ = 0;  // stopped: update() has no ramp to start
+    return;
+  }
   // From receipt, so a ramp's length doesn't depend on the motor cycle.
   start_ramp(speed, now);
 }

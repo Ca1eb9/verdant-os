@@ -31,10 +31,11 @@ static DriveCommand drive(int16_t speed, uint32_t duration_ms = 0) {
   c.duration_ms = duration_ms;
   return c;
 }
-static DriveCommand stop() {
+static DriveCommand stop(bool brake = false) {
   DriveCommand c = {};
   c.seq = ++g_seq;
   c.mode = DriveMode::Stop;
+  c.brake = brake;
   return c;
 }
 
@@ -176,6 +177,23 @@ static void test_stop_ramp() {
   m.command(drive(-APPROACH_SPEED), now + STOP_RAMP_MS / 2);
   CHECK(run(m, now + STOP_RAMP_MS / 2) > 0);
   CHECK(run(m, now + STOP_RAMP_MS) == -APPROACH_SPEED);
+
+  // A Stop with `brake` stops at once, even mid-ramp, and the next Drive
+  // starts from rest.
+  now = 15000;
+  halt(m, now);
+  m.command(drive(APPROACH_SPEED), now);
+  run(m, now);
+  m.command(stop(true), now);
+  CHECK(run(m, now) == 0 && run(m, now + 5) == 0);
+  m.command(drive(APPROACH_SPEED), now);
+  run(m, now);
+  m.command(stop(), now);
+  CHECK(run(m, now + 10) > 0);
+  m.command(stop(true), now + 20);
+  CHECK(run(m, now + 20) == 0);
+  m.command(drive(-APPROACH_SPEED), now + 20);
+  CHECK(run(m, now + 20) == -APPROACH_SPEED);
 
   // A second stop doesn't restart the ramp.
   now = 20000;

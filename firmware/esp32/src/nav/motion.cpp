@@ -77,7 +77,8 @@ const char* Motion::check(uint32_t now, const SensorData& s, bool motors_killed)
   if (approaching()) {
     bool entering = phase_ == Phase::Entering;
     if (!isnan(ahead_cm) && ahead_cm <= (entering ? ELEVATOR_STOP_CM : DOCK_STOP_CM)) {
-      send(DriveMode::Stop, 0, 0);
+      // Already at APPROACH_SPEED, and easing off would run into the wall.
+      send(DriveMode::Stop, 0, 0, true);
       phase_ = entering ? Phase::Riding : Phase::Idle;
       ride_started_ms_ = now;
       return nullptr;
@@ -102,13 +103,14 @@ float Motion::stop_cm(bool rear) const {
   return phase_ == Phase::Entering ? ELEVATOR_STOP_CM : DOCK_STOP_CM;
 }
 
-void Motion::send(DriveMode mode, int16_t speed, uint32_t duration_ms) {
+void Motion::send(DriveMode mode, int16_t speed, uint32_t duration_ms, bool brake) {
   DriveCommand c = {};
   c.seq = ++seq_;
   c.mode = mode;
   c.left_speed = speed;
   c.right_speed = speed;
   c.duration_ms = duration_ms;
+  c.brake = brake;
   sink_.send(c);
 }
 

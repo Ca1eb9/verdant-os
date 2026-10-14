@@ -70,6 +70,8 @@ class Sink : public DriveSink {
     return last().mode == DriveMode::Drive && last().left_speed == speed &&
            last().right_speed == speed && last().duration_ms == 0;
   }
+  // Reaching the elevator or dock wall brakes at once; every other stop eases off.
+  bool last_is_stop(bool brake) const { return last().mode == DriveMode::Stop && last().brake == brake; }
 };
 
 static void test_follow_edge() {
@@ -137,7 +139,7 @@ static void test_elevator() {
   CHECK(m.check(now += 100, front(10), false) == nullptr);
   CHECK(s.last_is_drive(APPROACH_SPEED));
   CHECK(m.check(now += 100, front(ELEVATOR_STOP_CM), false) == nullptr);
-  CHECK(s.last().mode == DriveMode::Stop);
+  CHECK(s.last_is_stop(true));
   CHECK(m.stop_cm(false) == OBSTACLE_STOP_CM);
   // Then the ride: stays put, then backs off. No missed tag while waiting.
   size_t sent = s.sent.size();
@@ -153,7 +155,7 @@ static void test_elevator() {
   m.follow_edge(N("elev-1-L1"), N("elev-1-L0"), EdgeDrive::ElevatorForward, now);
   CHECK(s.last_is_drive(-APPROACH_SPEED) && m.stop_cm(true) == ELEVATOR_STOP_CM);
   m.check(now += 20, rear(ELEVATOR_STOP_CM - 1, true), false);
-  CHECK(s.last().mode == DriveMode::Stop);
+  CHECK(s.last_is_stop(true));
   m.check(now += ELEVATOR_WAIT_MS, open_road(), false);
   CHECK(s.last_is_drive(CRUISE_SPEED));
 
@@ -197,7 +199,7 @@ static void test_docking() {
   CHECK(m.check(now += 100, front(DOCK_STOP_CM), false) == nullptr);  // wrong side
   CHECK(s.last_is_drive(-APPROACH_SPEED));
   CHECK(m.check(now += 100, rear(DOCK_STOP_CM), false) == nullptr);
-  CHECK(s.last().mode == DriveMode::Stop && m.stop_cm(true) == OBSTACLE_STOP_CM);
+  CHECK(s.last_is_stop(true) && m.stop_cm(true) == OBSTACLE_STOP_CM);
   // Then it waits for the charger contact: nothing times out.
   CHECK(m.check(now += APPROACH_TIMEOUT_MS * 2, rear(1, true), false) == nullptr);
 
@@ -213,7 +215,7 @@ static void test_other_hooks() {
   m.creep(1000);
   CHECK(s.last_is_drive(CREEP_SPEED));
   m.halt();
-  CHECK(s.last().mode == DriveMode::Stop);
+  CHECK(s.last_is_stop(false));
   // Halted: nothing left to time out.
   CHECK(m.check(1000 + CREEP_TIMEOUT_MS * 2, open_road(), false) == nullptr);
 
@@ -334,7 +336,7 @@ static void test_with_nav_core() {
   // level-1 tag and on to cp-11.
   CHECK(r.sink.last_is_drive(APPROACH_SPEED) && r.motion.stop_cm(false) == ELEVATOR_STOP_CM);
   r.loop(20, front(ELEVATOR_STOP_CM));
-  CHECK(r.sink.last().mode == DriveMode::Stop);
+  CHECK(r.sink.last_is_stop(true));
   r.loop(ELEVATOR_WAIT_MS);
   CHECK(r.sink.last_is_drive(-CRUISE_SPEED) && r.core.status() == RobotStatus::EnRoute);
   r.tag("elev-1-L1");
