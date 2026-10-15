@@ -4,7 +4,7 @@
 // Thin layer over mqtt.js that handles:
 //   - JSON serialization/deserialization
 //   - Typed publish and subscribe
-//   - Auto-reconnect with logging
+//   - Auto-reconnect with logging, resubscribing at the same QoS
 //   - Graceful shutdown
 //
 // Usage:
@@ -48,6 +48,9 @@ export async function createMqttClient(config: MqttConfig): Promise<TypedMqttCli
     clean: true,
     reconnectPeriod: 5000,
     connectTimeout: 10000,
+    // A clean session drops subscriptions on a reconnect: mqtt.js makes them
+    // again, each at the QoS it was made with
+    resubscribe: true,
   };
 
   const client = mqtt.connect(brokerUrl, options);
@@ -59,12 +62,6 @@ export async function createMqttClient(config: MqttConfig): Promise<TypedMqttCli
     client.on("connect", () => {
       console.log(`[mqtt] ${config.serviceName} connected to ${brokerUrl}`);
       config.onConnect?.();
-
-      // Re-subscribe to all registered topics on reconnect
-      for (const topic of handlers.keys()) {
-        client.subscribe(topic);
-      }
-
       resolve(buildClient());
     });
 
