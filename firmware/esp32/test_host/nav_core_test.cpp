@@ -124,6 +124,10 @@ class Rig : public NavOutput {
     core.on_charge_contact();
     after_step();
   }
+  void contact_lost() {
+    core.on_charge_lost(now);
+    after_step();
+  }
   // Drives the path by reading each tag in turn.
   void drive(std::initializer_list<const char*> nodes) {
     for (const char* n : nodes) tag(n);
@@ -607,6 +611,66 @@ static void test_dock_task() {
   CHECK(r2.status() == RobotStatus::Idle && r2.events.empty());
 }
 
+static void test_charge_lost() {
+  SCENARIO("knocked off the charger");
+  // Charged enough: done charging, and carries on with the kept task.
+  Rig r;
+  r.boot_at("water-01");
+  r.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  r.command(make(CommandType::ReturnToDock));
+  r.drive({"cp-01", "dock-1"});
+  r.contact();
+  r.clear();
+  r.battery(CHARGE_RESUME_PCT);
+  r.contact_lost();
+  CHECK(r.emitted({RobotEventType::ChargeComplete}));
+  CHECK(r.status() == RobotStatus::EnRoute && r.task() == "t1");
+  CHECK(r.last_motion() == "edge dock-1>cp-01");
+
+  // Too low: backs onto the dock again, keeping the task, and charges on.
+  Rig r2;
+  r2.boot_at("water-01");
+  r2.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  r2.command(make(CommandType::ReturnToDock));
+  r2.drive({"cp-01", "dock-1"});
+  r2.contact();
+  r2.clear();
+  r2.battery(CHARGE_RESUME_PCT - 0.1f);
+  r2.contact_lost();
+  CHECK(r2.events.empty() && r2.status() == RobotStatus::Docking);
+  CHECK(r2.last_motion() == "dock" && r2.task() == "t1");
+  r2.contact();
+  CHECK(r2.emitted({RobotEventType::DockConnected}) && r2.status() == RobotStatus::Charging);
+  // No reading yet counts as too low.
+  r2.battery(NAN);
+  r2.contact_lost();
+  CHECK(r2.status() == RobotStatus::Docking);
+
+  // A stop still holds; nothing is lost while not charging.
+  Rig r3;
+  r3.boot_at("dock-1");
+  r3.command(make(CommandType::ReturnToDock, "d1"));
+  r3.contact();
+  r3.command(make(CommandType::Stop));
+  r3.clear();
+  r3.contact_lost();  // stopped: not charging
+  CHECK(r3.status() == RobotStatus::Stopped && r3.events.empty());
+  r3.command(make(CommandType::Resume));  // still on the charger
+  CHECK(r3.status() == RobotStatus::Charging);
+  Rig r4;
+  r4.boot_at("cp-01");
+  r4.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  r4.command(make(CommandType::Stop));
+  r4.command(make(CommandType::ReturnToDock));  // latch kept
+  r4.tag("dock-1");
+  r4.contact();
+  r4.clear();
+  r4.battery(CHARGE_RESUME_PCT);
+  r4.contact_lost();
+  CHECK(r4.emitted({RobotEventType::ChargeComplete}) && r4.status() == RobotStatus::Stopped);
+  CHECK(r4.task() == "t1");
+}
+
 static void test_stop_latch_through_dock_trip() {
   SCENARIO("stop latch survives a dock trip");
   Rig r;
@@ -873,6 +937,7 @@ int main() {
   test_stop_resume();
   test_dock_trip_keeps_task();
   test_dock_task();
+  test_charge_lost();
   test_stop_latch_through_dock_trip();
   test_survival_return();
   test_cancel();

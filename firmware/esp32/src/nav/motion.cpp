@@ -67,6 +67,10 @@ const char* Motion::check(uint32_t now, const SensorData& s, bool motors_killed)
         start_driving(Phase::Driving, exit_backward_, CRUISE_SPEED, now);
       }
       return nullptr;
+    case Phase::AtDock:
+      if (now - ride_started_ms_ < CHARGE_CONTACT_TIMEOUT_MS) return nullptr;
+      phase_ = Phase::Idle;
+      return "can't charge: no charge contact on the dock";
     case Phase::Driving:
     case Phase::Creeping:
     case Phase::Entering:
@@ -84,7 +88,7 @@ const char* Motion::check(uint32_t now, const SensorData& s, bool motors_killed)
     if (!isnan(ahead_cm) && ahead_cm <= (entering ? ELEVATOR_STOP_CM : DOCK_STOP_CM)) {
       // Already at APPROACH_SPEED, and easing off would roll into the wall.
       send(DriveMode::Stop, 0, 0, true);
-      phase_ = entering ? Phase::Riding : Phase::Idle;
+      phase_ = entering ? Phase::Riding : Phase::AtDock;
       ride_started_ms_ = now;
       return nullptr;
     }

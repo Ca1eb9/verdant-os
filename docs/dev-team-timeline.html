@@ -550,12 +550,12 @@ gantt
 
 <div class="task">
   <div class="task-header"><h3>Battery monitoring + dock sequence + survival overrides</h3></div>
-  <p class="what">Final firmware integration: accurate battery measurement, automated docking and charging, and the safety override layer. The survival overrides (<code>nav/survival</code>) and backing onto the dock (<code>Motion::start_docking</code>) are already written; what's left is the battery calibration, the charge contact and testing on hardware with <span class="name-tag caleb">Caleb</span>.</p>
+  <p class="what">Final firmware integration: accurate battery measurement, automated docking and charging, and the safety override layer. The survival overrides (<code>nav/survival</code>) and backing onto the dock (<code>Motion::start_docking</code>) and the charge contact are already written; what's left is the battery calibration and testing on hardware with <span class="name-tag caleb">Caleb</span>.</p>
   <details>
     <summary>Requirements</summary>
     <ul>
       <li><strong>Battery:</strong> Calibrate the ADC-to-percentage conversion against the actual battery's discharge behavior. The percentage in published telemetry should reflect reality.</li>
-      <li><strong>Dock:</strong> the robot already backs onto the dock on the rear ToF sensor until <code>DOCK_STOP_CM</code>. Detect the charging contact through a voltage change on <code>PIN_CHARGE_SENSE</code> (GPIO 1: 1.8–2.3 V docked, under 0.5 V off the dock even with the charging diode hot, through a divider; <code>docs/wiring/robot.md</code>. A threshold around 1.2 V separates the two) and call <code>NavCore::on_charge_contact()</code>, which stops the motor and publishes <code>dock_connected</code>. Charge complete is published by nav at <code>CHARGE_COMPLETE_PCT</code>.</li>
+      <li><strong>Dock:</strong> done in code. The robot backs onto the dock on the rear ToF sensor until <code>DOCK_STOP_CM</code>, and while docking or charging reads the charge contact on <code>PIN_CHARGE_SENSE</code> (GPIO 1: 1.8–2.3 V docked, under 0.5 V off, <code>docs/wiring/robot.md</code>) against <code>CHARGE_CONTACT_V</code> (1.2 V). Contact brakes and publishes <code>dock_connected</code>; no contact at <code>DOCK_STOP_CM</code> is an <code>error</code> (can't charge), which the orchestrator alerts on. Knocked off the charger, it carries on at <code>CHARGE_RESUME_PCT</code> (40%) or more, else backs on again. Charge complete is published by nav at <code>CHARGE_COMPLETE_PCT</code>. Left: check the threshold and <code>CHARGE_CONTACT_TIMEOUT_MS</code> on the real dock.</li>
       <li><strong>Overrides:</strong> already in <code>nav/survival</code>, at the top of the nav loop: <code>battery_low</code> at 20%, a forced return at 15% that a stop still beats, the motor cutoff at 5% (<code>g_motor_kill_flag</code>), and the obstacle events. Verify them on hardware together, with the real battery readings.</li>
     </ul>
   </details>

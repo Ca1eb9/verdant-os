@@ -200,8 +200,16 @@ static void test_docking() {
   CHECK(s.last_is_drive(-APPROACH_SPEED));
   CHECK(m.check(now += 100, rear(DOCK_STOP_CM), false) == nullptr);
   CHECK(s.last_is_stop(true) && m.stop_cm(true) == OBSTACLE_STOP_CM);
-  // Then it waits for the charger contact: nothing times out.
+  // Then it waits for the charger contact, which brakes...
+  CHECK(m.check(now += CHARGE_CONTACT_TIMEOUT_MS - 1, rear(1, true), false) == nullptr);
+  m.brake();
   CHECK(m.check(now += APPROACH_TIMEOUT_MS * 2, rear(1, true), false) == nullptr);
+  // ...or, with no contact at the dock, it can't charge: reported once.
+  m.start_docking(now);
+  CHECK(m.check(now += 100, rear(DOCK_STOP_CM), false) == nullptr);
+  CHECK(m.check(now += CHARGE_CONTACT_TIMEOUT_MS - 1, rear(1, true), false) == nullptr);
+  CHECK(same(m.check(now += 1, rear(1, true), false), "can't charge: no charge contact on the dock"));
+  CHECK(m.check(now += 100, rear(1, true), false) == nullptr);
 
   m.start_docking(now);
   CHECK(m.check(now += APPROACH_TIMEOUT_MS - 1, open_road(), false) == nullptr);
@@ -363,6 +371,18 @@ static void test_with_nav_core() {
   CHECK(d.core.status() == RobotStatus::Charging && d.sink.last_is_stop(true));
   d.loop(APPROACH_TIMEOUT_MS * 2);
   CHECK(d.core.status() == RobotStatus::Charging);
+
+  // Knocked off the charger low: backs on again, and reports it can't charge
+  // when there's still no contact at the dock.
+  d.core.on_battery(CHARGE_RESUME_PCT - 1);
+  d.core.on_charge_lost(d.now);
+  CHECK(d.core.status() == RobotStatus::Docking && d.sink.last_is_drive(-APPROACH_SPEED));
+  d.loop(20, rear(DOCK_STOP_CM));
+  CHECK(d.sink.last_is_stop(true));
+  d.loop(CHARGE_CONTACT_TIMEOUT_MS - 20, rear(DOCK_STOP_CM));
+  CHECK(d.core.status() == RobotStatus::Docking);
+  d.loop(20, rear(DOCK_STOP_CM));
+  CHECK(d.core.status() == RobotStatus::Error && d.events.back() == RobotEventType::Error);
 }
 
 int main() {

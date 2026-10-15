@@ -49,7 +49,8 @@ class Motion {
   void follow_edge(NodeIndex from, NodeIndex to, EdgeDrive drive, uint32_t now);
   void creep(uint32_t now);
   // Backs onto the dock (the robot faces away from it) and stops there; the
-  // charger contact is reported separately.
+  // charger contact is reported separately, and brakes. Stopped at the dock
+  // for CHARGE_CONTACT_TIMEOUT_MS without that brake: it can't charge.
   void start_docking(uint32_t now);
 
   // Every nav loop, with the latest sensor reading. `motors_killed` is the
@@ -62,7 +63,7 @@ class Motion {
   float stop_cm(bool rear) const;
 
  private:
-  enum class Phase : uint8_t { Idle, Driving, Creeping, Entering, Riding, Docking, Failed };
+  enum class Phase : uint8_t { Idle, Driving, Creeping, Entering, Riding, Docking, AtDock, Failed };
 
   void send(DriveMode mode, int16_t speed, uint32_t duration_ms, bool brake = false);
   void start_driving(Phase phase, bool backward, int16_t speed, uint32_t now);
@@ -74,7 +75,8 @@ class Motion {
   const char* fault_ = nullptr;  // Failed: what check() reports
   bool backward_ = false;        // the way it's driving
   bool slowed_ = false;          // Driving: in the slow zone since the edge began
-  // Riding: on the elevator since, for how long, and the way off.
+  // Riding: on the elevator since, for how long, and the way off. AtDock: at
+  // the dock since (ride_started_ms_).
   uint32_t ride_started_ms_ = 0;
   uint32_t ride_ms_ = 0;
   bool exit_backward_ = false;

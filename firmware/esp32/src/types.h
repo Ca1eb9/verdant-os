@@ -104,6 +104,11 @@ struct SensorData {
   float battery_v;             // pack voltage (smoothed), NAN until first read
   float battery_pct;           // 0-100, NAN until first read
 
+  // Dock charge contact, debounced. Only read while g_charge_sense_on, and
+  // not known for the first few readings after: act only when charge_sensed.
+  bool charge_sensed;
+  bool charge_contact;
+
   // Air (AHT20). NAN until the first reading, and when none in ENV_STALE_MS.
   float temperature_c;
   float humidity_pct;
@@ -220,6 +225,9 @@ extern volatile bool g_motor_kill_flag;  // set by survival overrides (nav)
 // writes are atomic on the ESP32 too.
 extern volatile float g_obstacle_front_stop_cm;
 extern volatile float g_obstacle_rear_stop_cm;
+// Set by nav while docking or charging: only then does the sensor task read
+// the charge contact.
+extern volatile bool g_charge_sense_on;
 // seq of the last Turn or timed Drive the motor task finished.
 extern volatile uint32_t g_drive_done_seq;
 

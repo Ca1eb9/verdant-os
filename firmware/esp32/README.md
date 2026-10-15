@@ -79,6 +79,7 @@ ToF approach: while driving an edge it slows to `APPROACH_SPEED` once anything a
 | `missed tag` | `MISSED_TAG_TIMEOUT_MS` of driving with no tag. Time with the motors held off (obstacle ahead, motor cutoff) doesn't count |
 | `no tag found` | `CREEP_TIMEOUT_MS` of creeping after boot (the robot stays `initializing`) |
 | `couldn't get onto the elevator` / `the dock` | the end wall not reached after `APPROACH_TIMEOUT_MS` of driving |
+| `can't charge: no charge contact on the dock` | at `DOCK_STOP_CM` for `CHARGE_CONTACT_TIMEOUT_MS` with the contact still open (dead charger, dirty pads): something the robot can't fix, so the orchestrator raises an alert |
 | `turn needed: not supported yet` | the next node is to the side (placeholder) |
 
 `nav/survival` runs at the top of every nav loop, before anything else (thresholds in `config.h`, "Survival overrides"):
@@ -90,11 +91,14 @@ ToF approach: while driving an edge it slows to `APPROACH_SPEED` once anything a
 | battery at or below `BATTERY_CUTOFF_PCT` | `g_motor_kill_flag` set in every status, until the battery is back above `BATTERY_RETURN_PCT`. Whenever the robot is driving itself, `error` ("motor cutoff"), so it doesn't wait forever with the motors off. Not while charging |
 | obstacle flag ahead while `en_route`, `returning_to_dock` or a jog pulse in `manual` | `obstacle_detected` once, then `path_blocked` after `PATH_BLOCKED_TIMEOUT_MS`; status kept |
 
-Hooks and inputs still owned by later work (placeholders for now):
+Charge contact: while `docking` or `charging` (only then, `g_charge_sense_on`), the sensor task reads `PIN_CHARGE_SENSE` every loop against `CHARGE_CONTACT_V` (1.8–2.3 V docked, under 0.5 V off; [docs/wiring/robot.md](../../docs/wiring/robot.md)). The state is only known after `CHARGE_CONTACT_COUNT` readings agree, and changes only after as many, since the pogo pins bounce. The nav task acts on the state, not its change:
 
-| Hook / input | Owner |
-|---|---|
-| `on_charge_contact()` | Dock sequence |
+| Contact | Status | What happens |
+|---|---|---|
+| closed | `docking` | `on_charge_contact()`: brakes, `dock_connected` (and `task_complete` for a dock task), `charging` |
+| open | `charging` | `on_charge_lost()`, knocked off the charger: at or above `CHARGE_RESUME_PCT` (40%), `charge_complete` and on as after a full charge; below it, back to `docking`, backing on slowly until `DOCK_STOP_CM` |
+
+A robot built without the docking parts never closes the contact, so a dock trip ends in the `can't charge` fault.
 
 ## Motor driver
 

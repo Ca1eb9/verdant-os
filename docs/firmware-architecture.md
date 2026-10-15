@@ -122,6 +122,8 @@ pushed first, then the status changes.
 | `returning_to_dock` | Dock node reached | `arrived` | `docking` |
 | `docking` | Charge contact detected | `dock_connected`, then `task_complete` if on a dock task | `charging` |
 | `charging` | Battery ≥ `charge_complete_pct` (85) | `charge_complete` | `stopped` if latched; else `en_route` for a kept task; else `idle` |
+| `charging` | Charge contact lost (knocked off the charger), battery ≥ 40% (`CHARGE_RESUME_PCT`) | `charge_complete` | as at 85% |
+| `charging` | Charge contact lost, battery under 40% or not read yet | — | `docking` (backs on again) |
 | any | `stop` | — | `stopped` |
 | `stopped` | `resume` | — | paused status, or `en_route` for a kept task after charging |
 | any | Unrecoverable fault | `error` | `error` |
@@ -318,7 +320,8 @@ stops short of the tag.
 
 - **Elevator:** it creeps onto the platform the way it drove on, then rides.
 - **Dock:** it backs on (it faces away from the dock) until `DOCK_STOP_CM`,
-  then waits for the charger contact, which stops the motors.
+  then waits for the charger contact, which stops the motors. The robot only
+  reads the contact while docking or charging.
 - If the end wall isn't reached within `APPROACH_TIMEOUT_MS` of driving, the
   robot faults (see Faults).
 
@@ -366,6 +369,10 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
   continue.
 - **Approach not finished:** the elevator or dock end wall isn't reached
   within a timeout. The robot faults the same way.
+- **Can't charge:** at `DOCK_STOP_CM` with no charger contact after a short
+  wait (`CHARGE_CONTACT_TIMEOUT_MS`): the charger is off or the pads don't
+  touch, which the robot can't fix. It faults the same way, and the
+  orchestrator raises a critical alert for the `error`.
 - **Turn needed:** turns are a placeholder: an edge whose next node is to
   the side (neither ahead nor behind) faults the same way.
 - **Motor cutoff:** whenever the robot is driving itself with the motors cut
@@ -441,7 +448,6 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
 ## TBD
 
 - Missed-tag and path-blocked timeout values
-- Charge-contact detection
 - ToF approach distances and speeds, and where the elevator and dock tags go
 - Battery ADC calibration curve
 - Turns (single drive motor: an edge to the side faults for now)

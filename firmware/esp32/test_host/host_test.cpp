@@ -1,7 +1,8 @@
 // host_test.cpp
-// Runs the firmware's JSON, battery and AHT20 code on a laptop (no ESP32 needed).
+// Runs the firmware's JSON, battery, charge contact and AHT20 code on a laptop
+// (no ESP32 needed).
 //
-//   1. Asserts command parsing, battery math and AHT20 frames behave.
+//   1. Asserts command parsing, battery math, charge contact and AHT20 frames behave.
 //   2. Writes sample telemetry/event JSON to out/ so check_contract.mjs can
 //      validate it against the real TypeScript types in @farm/shared.
 //
@@ -14,7 +15,9 @@
 #include <string>
 
 #include "comms/comms_json.h"
+#include "config.h"
 #include "drivers/battery.h"
+#include "drivers/charge_contact.h"
 #include "drivers/env_sensor.h"
 
 static int failures = 0;
@@ -260,6 +263,37 @@ static void test_env() {
   printf("  aht20: %.1f C, %.1f %%RH\n", t, rh);
 }
 
+static void test_charge_contact() {
+  ChargeContact c;
+  CHECK(!c.known() && !c.closed() && isnan(c.volts()));
+  // Known after CHARGE_CONTACT_COUNT readings in a row on one side.
+  for (uint8_t i = 1; i < CHARGE_CONTACT_COUNT; i++) c.update(0.4f);
+  CHECK(!c.known());
+  c.update(0.4f);
+  CHECK(c.known() && !c.closed() && c.volts() == 0.4f);
+  // Closes only after as many at the threshold; a bounce starts the count again.
+  for (uint8_t i = 1; i < CHARGE_CONTACT_COUNT; i++) c.update(CHARGE_CONTACT_V);
+  c.update(0.3f);
+  for (uint8_t i = 1; i < CHARGE_CONTACT_COUNT; i++) c.update(2.0f);
+  CHECK(!c.closed());
+  c.update(2.0f);
+  CHECK(c.closed());
+  // Stays closed through a short dropout, opens on a real one.
+  for (uint8_t i = 1; i < CHARGE_CONTACT_COUNT; i++) c.update(0.4f);
+  c.update(2.1f);
+  for (uint8_t i = 1; i < CHARGE_CONTACT_COUNT; i++) c.update(0.4f);
+  CHECK(c.closed());
+  c.update(0.4f);
+  CHECK(c.known() && !c.closed());
+  // After reset() it isn't known until the readings agree again, closed included.
+  c.reset();
+  CHECK(!c.known() && !c.closed() && isnan(c.volts()));
+  for (uint8_t i = 1; i < CHARGE_CONTACT_COUNT; i++) c.update(2.0f);
+  CHECK(!c.known());
+  c.update(2.0f);
+  CHECK(c.known() && c.closed());
+}
+
 int main(int argc, char** argv) {
   std::string out_dir = argc > 1 ? argv[1] : "out";
   std::string in_dir = argc > 2 ? argv[2] : "in";
@@ -272,6 +306,8 @@ int main(int argc, char** argv) {
   test_tags_and_battery();
   printf("aht20\n");
   test_env();
+  printf("charge contact\n");
+  test_charge_contact();
 
   printf(failures ? "\n%d FAILURE(S)\n" : "\nall C++ checks passed\n", failures);
   return failures ? 1 : 0;

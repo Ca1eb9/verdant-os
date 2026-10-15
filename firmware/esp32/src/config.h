@@ -119,6 +119,16 @@ constexpr uint8_t BATTERY_SAMPLES = 16;         // ADC reads averaged per sample
 constexpr float BATTERY_EMA_ALPHA = 0.2f;       // smoothing, 0..1 (1 = none)
 constexpr uint32_t BATTERY_PERIOD_MS = 500;
 
+// ---- Charge contact (PIN_CHARGE_SENSE, docs/wiring/robot.md) ----------------------
+// Only read while docking or charging (g_charge_sense_on), every sensor loop:
+// the robot reaches the pads at APPROACH_SPEED and brakes on the contact.
+
+constexpr float CHARGE_CONTACT_V = 1.2f;        // at the pin: 1.8-2.3 V docked, under 0.5 V off
+constexpr uint8_t CHARGE_SAMPLES = 4;           // ADC reads averaged per reading
+constexpr uint8_t CHARGE_CONTACT_COUNT = 3;     // readings in a row to change state (pins bounce)
+// At DOCK_STOP_CM with no contact this long: error, it can't charge.
+constexpr uint32_t CHARGE_CONTACT_TIMEOUT_MS = 2000;
+
 // ---- Air temperature + humidity (AHT20, drivers/env_sensor.h) ----------------------
 
 // Measuring more often warms the chip and skews the temperature (datasheet).
@@ -192,6 +202,9 @@ constexpr bool BATTERY_FAILSAFE = true;
 // The charging diode (docs/wiring/robot.md) drops ~0.4 V, so the pack tops
 // out around 4.1 V a cell, not 4.2. Matches orchestrator charge_complete_pct.
 constexpr float CHARGE_COMPLETE_PCT = 85.0f;
+// Knocked off the charger at or above this: done charging, carry on as after
+// charge_complete. Below it, back onto the dock again.
+constexpr float CHARGE_RESUME_PCT = 40.0f;
 
 // ---- Manual control -----------------------------------------------------------------
 

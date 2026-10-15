@@ -237,12 +237,24 @@ void nav_task(void* /*param*/) {
     Command cmd;
     while (xQueueReceive(g_command_queue, &cmd, 0) == pdTRUE) core.on_command(cmd, now);
 
+    // The contact's state, not its change: a robot sent to dock again while
+    // still on the charger (e.g. resumed after an error) has it closed already.
+    if (!sensors.charge_sensed) {
+      // Not read yet since docking or charging began.
+    } else if (sensors.charge_contact) {
+      if (core.status() == RobotStatus::Docking) core.on_charge_contact();
+    } else if (core.status() == RobotStatus::Charging) {
+      core.on_charge_lost(now);
+    }
+
     core.tick(now);
     const char* fault = out.motion.check(now, sensors, g_motor_kill_flag);
     if (fault) core.fault(fault);
     // For the sensor task's obstacle flags: lowered while creeping in.
     g_obstacle_front_stop_cm = out.motion.stop_cm(false);
     g_obstacle_rear_stop_cm = out.motion.stop_cm(true);
+    g_charge_sense_on =
+        core.status() == RobotStatus::Docking || core.status() == RobotStatus::Charging;
 
     // After the step's events are queued: comms sends those first.
     bool changed = core.status() != sent_status || core.current_node() != sent_node;

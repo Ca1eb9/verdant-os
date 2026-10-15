@@ -155,17 +155,7 @@ void NavCore::tick(uint32_t now) {
       if (!isnan(battery_pct_) && battery_pct_ >= CHARGE_COMPLETE_PCT) {
         char details[EVENT_DETAILS_LEN];
         snprintf(details, sizeof(details), "%.1f%%", battery_pct_);
-        emit(RobotEventType::ChargeComplete, details);
-        // A stop that came in before or during the dock trip still holds.
-        if (ctx_.stop_latched) {
-          ctx_.has_paused_status = false;
-          out_.halt();
-          status_ = RobotStatus::Stopped;
-        } else if (ctx_.kept.target != NO_NODE) {
-          resume_kept(now);
-        } else {
-          go_idle("");
-        }
+        finish_charging(details, now);
       }
       break;
     default:
@@ -188,6 +178,37 @@ void NavCore::on_charge_contact() {
     ctx_.dock_task = false;
   }
   status_ = RobotStatus::Charging;
+}
+
+void NavCore::on_charge_lost(uint32_t now) {
+  if (status_ != RobotStatus::Charging) {
+    out_.note("ignored: charge contact lost while not charging");
+    return;
+  }
+  if (!isnan(battery_pct_) && battery_pct_ >= CHARGE_RESUME_PCT) {
+    char details[EVENT_DETAILS_LEN];
+    snprintf(details, sizeof(details), "%.1f%%, knocked off the charger", battery_pct_);
+    finish_charging(details, now);
+    return;
+  }
+  // Slowly, until DOCK_STOP_CM. No contact there either is a fault (nav/motion):
+  // something it can't fix, such as a dead charger.
+  out_.note("charge contact lost: backing onto the dock again");
+  redock();
+}
+
+void NavCore::finish_charging(const char* details, uint32_t now) {
+  emit(RobotEventType::ChargeComplete, details);
+  // A stop that came in before or during the dock trip still holds.
+  if (ctx_.stop_latched) {
+    ctx_.has_paused_status = false;
+    out_.halt();
+    status_ = RobotStatus::Stopped;
+  } else if (ctx_.kept.target != NO_NODE) {
+    resume_kept(now);
+  } else {
+    go_idle("");
+  }
 }
 
 void NavCore::fault(const char* details) {

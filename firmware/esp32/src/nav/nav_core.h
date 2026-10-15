@@ -17,7 +17,7 @@
 //   - battery and obstacle checks: survival overrides (survival_return(),
 //     report(), fault()), see nav/survival
 //   - backing onto the dock: see nav/motion (start_docking)
-//   - charge contact: dock sequence (on_charge_contact())
+//   - charge contact: dock sequence (on_charge_contact(), on_charge_lost())
 
 #pragma once
 
@@ -95,6 +95,10 @@ class NavCore {
 
   // Dock sequence: the charger contacts closed while `docking`.
   void on_charge_contact();
+  // Dock sequence: the contacts opened while `charging` (knocked off the
+  // charger). At or above CHARGE_RESUME_PCT it's done charging, as at
+  // charge_complete; below it, it backs onto the dock again.
+  void on_charge_lost(uint32_t now);
   // RFID navigation: can't continue (e.g. missed tag, or no tag found while
   // creeping after boot). Reports `error`, keeping the task, until a known
   // tag is read again. While initializing it only halts and publishes the
@@ -147,6 +151,7 @@ class NavCore {
   void follow_path(uint32_t now);
   void arrive(uint32_t now);
   void redock();
+  void finish_charging(const char* details, uint32_t now);
   void complete_task();
   void go_to_task(uint32_t now);
   void go_to_dock(uint32_t now);

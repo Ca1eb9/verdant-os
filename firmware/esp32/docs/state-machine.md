@@ -37,6 +37,9 @@ stateDiagram-v2
     docking --> idle : cancel dock task
     charging --> en_route : charged 85% [charge_complete]<br/>kept task - re-plan from the dock
     charging --> idle : charged 85% [charge_complete]<br/>nothing kept
+    charging --> en_route : knocked off the charger at 40% or more<br/>[charge_complete] - kept task
+    charging --> idle : knocked off the charger at 40% or more<br/>[charge_complete] - nothing kept
+    charging --> docking : knocked off the charger under 40%<br/>- back on slowly
 ```
 
 ## 2. Interrupts: stop, manual, faults
@@ -69,7 +72,7 @@ stateDiagram-v2
     manual --> idle : no task, or target<br/>unreachable [task_failed]
 
     OnTask --> error : missed tag or fault [error] - task kept
-    DockTrip --> error : fault [error]
+    DockTrip --> error : fault [error], e.g. no charge contact<br/>at the dock (can't charge)
     error --> OnTask : known tag read [recovery] - re-plan the task
     error --> idle : known tag read [recovery] - no task
 ```
