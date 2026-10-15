@@ -55,6 +55,8 @@ Restart the dev server after changing it; its startup output lists `Environments
 
 Also set `NEXT_PUBLIC_FARM_ID` and `NEXT_PUBLIC_FARM_NAME` to that Pi's farm (its row in Supabase's `farms` table). On FarmNet the dashboard belongs to that one farm, and the header's farm picker is locked to it.
 
+Manual control is hidden for a robot that hasn't read its first tag yet (`initializing`). Set `NEXT_PUBLIC_JOG_WHILE_INITIALIZING=true` to offer it there too, e.g. to drive a robot onto a tag; the robot accepts those jogs either way. It's read at build time.
+
 ## Farms
 
 One Supabase project serves every farm, and each farm has its own Pi. Every Supabase row has a `farm_id`, which the farm's Supabase bridge stamps on it; MQTT carries no farm id. Remotely (Vercel), the header's farm picker lists the `farms` table (`/api/farms`), and switching farms swaps the data source for that farm's (`selectFarm()` in `src/lib/farm/data-source.ts`). Readings and commands are scoped to the selected farm. The pages show why when there's no farm to show: the list is loading, empty or failed, or the Pi's `NEXT_PUBLIC_FARM_ID` is missing.

@@ -69,7 +69,7 @@ orchestrator uses it, for a robot that has gone silent.
 
 | Status | Meaning | `task_id` |
 |---|---|---|
-| `initializing` | Booted, position unknown: looking for a tag, or halted (search gave up, or after the controller drove it) | always `null` |
+| `initializing` | Booted, position unknown: looking for a tag, or halted (search gave up, or after it was driven by hand) | always `null` |
 | `idle` | Stopped with no task | always `null` |
 | `en_route` | Driving to its task's target | the task |
 | `working` | Doing the action at the target | the task |
@@ -130,6 +130,7 @@ pushed first, then the status changes.
 | `error` | Fault cleared (e.g. known tag read again) | `recovery` | re-plan and continue the task, else `idle` |
 | `idle`, `en_route`, `working`, `stopped`, `error` | `jog` | — | `manual` |
 | any | Bluetooth controller input (`initializing` included: no tag needed) | — | `manual` |
+| `initializing` | `jog` (no tag needed) | — | `manual` |
 | `manual` | `resume`, or manual timeout | `recovery` if it was in `error` | continue from `current_node` (see [Manual control](#manual-control)); from `initializing` with no tag read, back to `initializing` (search again on `resume`, halted after a timeout) |
 
 Battery events (`battery_low`, `battery_critical`) are published once per
@@ -241,7 +242,7 @@ The robot never queues commands: each one acts on the current state right away.
 | `stop` | Accepted in every status, `initializing` included (it halts the tag search). Pause in place: halt motors, hold the action timer, report `stopped`, keep `task_id`, set the stop latch. Ignored if already stopped. |
 | `resume` | In `manual`: leave manual control (see [Manual control](#manual-control)) and clear the stop latch. In `initializing`, halted after a manual timeout or a search that gave up: look for a tag again. Otherwise only acts if the stop latch is set: clear it and restore the paused status (the action timer continues with the remaining time). If it was on a task, re-plan from the current node first, since manual control may have moved it while stopped; a robot still at its target keeps working. If the robot is stopped at the dock with a kept task, re-plan and continue it. |
 | `return_to_dock` | Ignored if already returning, docking or charging. Otherwise head to the dock. A task in progress or paused is kept and resumed after charging. With no task and a `task_id` on the command, adopt it as a dock task and publish `task_complete` for it once connected to the charger. If already at the dock but not charging, run the dock sequence again (straight to `docking`, no `arrived`). No path to the dock: publish `task_failed` for a dock task's `task_id`, else ignore it. A latched stop stays latched. |
-| `jog` | Manual driving from the dashboard; `direction` is `forward` or `backward`. Accepted in `idle`, `en_route`, `working`, `stopped`, `error` and `manual`; ignored otherwise (dock trips, `initializing`) and below the motor cutoff. The Bluetooth controller's jogs (robot-only) are also accepted on a dock trip. The first jog enters `manual`. Each jog drives for a fixed **500 ms** from when it is received (`JOG_PULSE_MS` in `config.h`); a jog arriving while driving restarts the 500 ms. When the window runs out, the motors stop by themselves. `backward` reverses without turning; the heading doesn't change. |
+| `jog` | Manual driving from the dashboard; `direction` is `forward` or `backward`. Accepted in `idle`, `en_route`, `working`, `stopped`, `error`, `manual` and `initializing` (no tag needed: e.g. to drive it onto one); ignored on dock trips and below the motor cutoff. The dashboard only offers it before the first tag when `NEXT_PUBLIC_JOG_WHILE_INITIALIZING` is on. The Bluetooth controller's jogs (robot-only) are also accepted on a dock trip. The first jog enters `manual`. Each jog drives for a fixed **500 ms** from when it is received (`JOG_PULSE_MS` in `config.h`); a jog arriving while driving restarts the 500 ms. When the window runs out, the motors stop by themselves. `backward` reverses without turning; the heading doesn't change. |
 | `connect_controller` | Look for the Bluetooth controller for `PAD_CONNECT_WINDOW_MS` (10 s), in any status, `initializing` included. Otherwise the robot only looks while it can't reach the broker. No reply: whether a controller connected shows in the serial log only. Farm network only, like `jog`. |
 | `cancel` | Drop the task with this `task_id` if it is the current, paused or kept task: clear it without setting `last_completed_task_id` and without an event. A cancelled task that was moving or working goes to `idle` (or stays `stopped`). Cancelling a dock task stops the trip to the dock. Cancelling a kept task leaves the dock trip running, so the robot still charges. Ignore it if the id doesn't match. The orchestrator resends it whenever telemetry still shows the cancelled task, e.g. after the robot was offline. |
 

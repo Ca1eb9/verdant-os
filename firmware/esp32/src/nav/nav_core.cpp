@@ -78,12 +78,10 @@ void NavCore::on_command(const Command& cmd, uint32_t now) {
   // No position yet (initializing, or stopped or driven by hand before the
   // first tag): no path can be planned, and the orchestrator never gives
   // work to a robot without a node. Stop and resume still work, and so does
-  // the Bluetooth controller: its operator is at the robot, e.g. moving it
-  // off the farm, where there's no tag to find.
+  // driving by hand, e.g. onto a tag, or off the farm where there's none.
   if (node_ == NO_NODE) {
-    bool controller = cmd.source == CommandSource::Controller;
     bool allowed = cmd.type == CommandType::Stop || cmd.type == CommandType::Resume ||
-                   (cmd.type == CommandType::Jog && controller);
+                   cmd.type == CommandType::Jog;
     if (!allowed) {
       out_.note("ignored: no position yet (no tag read)");
       return;
@@ -411,11 +409,9 @@ void NavCore::jog(JogDirection direction, bool controller, uint32_t now) {
       out_.note("ignored: jog not allowed on a dock trip");
       return;
     case RobotStatus::Initializing:
-      // Looking for its first tag, or given up: the controller can still
-      // drive it, e.g. on a bench away from the farm's tags.
-      if (controller) break;
-      out_.note("ignored: still initializing");
-      return;
+      // Looking for its first tag, or given up: it can still be driven,
+      // e.g. onto a tag, or on a bench away from the farm's tags.
+      break;
     default:
       out_.note("ignored: jog not allowed now");
       return;

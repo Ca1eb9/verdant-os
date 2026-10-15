@@ -203,9 +203,8 @@ static void test_boot() {
   r.core.begin();
   CHECK(r.status() == RobotStatus::Initializing);
   CHECK(r.last_motion() == "creep");
-  // No work before the robot knows where it is, and no dashboard jog.
+  // No work before the robot knows where it is.
   r.command(navigate("t1", "water-01", TargetAction::Water, 1000));
-  r.command(jog(JogDirection::Forward));
   r.command(make(CommandType::ReturnToDock, "d1"));
   CHECK(r.status() == RobotStatus::Initializing && r.events.empty());
   CHECK(r.last_motion() == "creep");
@@ -228,7 +227,6 @@ static void test_before_first_tag() {
   r.command(make(CommandType::Stop));
   CHECK(r.status() == RobotStatus::Stopped && r.latched() && r.last_motion() == "halt");
   r.command(navigate("t1", "water-01", TargetAction::Water, 1000));
-  r.command(jog(JogDirection::Forward));
   CHECK(r.status() == RobotStatus::Stopped);
   r.command(make(CommandType::Resume));
   CHECK(r.status() == RobotStatus::Initializing && !r.latched() && r.last_motion() == "creep");
@@ -245,9 +243,8 @@ static void test_before_first_tag() {
   c.command(jog(JogDirection::Forward, CommandSource::Controller));
   CHECK(c.status() == RobotStatus::Manual && c.last_motion() == "jog f" && c.node() == "");
   CHECK(c.events.empty());
-  // Still no work from the dashboard, nor its jogs, while it has no node.
+  // Still no work from the dashboard while it has no node.
   c.command(navigate("t1", "water-01", TargetAction::Water, 1000));
-  c.command(jog(JogDirection::Backward));
   CHECK(c.status() == RobotStatus::Manual && c.last_motion() == "jog f");
   // Timeout with no tag: halted, still initializing; it doesn't drive off.
   c.advance(MANUAL_TIMEOUT_MS);
@@ -283,6 +280,23 @@ static void test_before_first_tag() {
   k.battery(BATTERY_CUTOFF_PCT);
   k.command(jog(JogDirection::Forward, CommandSource::Controller));
   CHECK(k.status() == RobotStatus::Initializing);
+
+  // The dashboard's jogs work before the first tag too, like the controller's.
+  Rig d;
+  d.core.begin();
+  d.command(jog(JogDirection::Backward));
+  CHECK(d.status() == RobotStatus::Manual && d.last_motion() == "jog b" && d.events.empty());
+  d.advance(MANUAL_TIMEOUT_MS);
+  CHECK(d.status() == RobotStatus::Initializing && d.last_motion() == "halt");
+  d.command(make(CommandType::Stop));
+  d.command(jog(JogDirection::Forward));
+  CHECK(d.status() == RobotStatus::Manual);
+  d.command(make(CommandType::Resume));
+  CHECK(d.status() == RobotStatus::Initializing && d.last_motion() == "creep");
+  d.command(jog(JogDirection::Forward));
+  d.tag("cp-01");
+  d.command(make(CommandType::Resume));
+  CHECK(d.status() == RobotStatus::Idle && d.node() == "cp-01");
 }
 
 static void test_task_cycle() {

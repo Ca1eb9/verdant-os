@@ -16,7 +16,7 @@ stateDiagram-v2
 
     initializing --> idle : first known tag read
     initializing --> stopped : stop - halts the tag search
-    initializing --> manual : Bluetooth controller input<br/>(creeping, or after the search gave up)
+    initializing --> manual : jog or Bluetooth controller input<br/>(creeping, or after the search gave up)
     stopped --> initializing : resume - no tag read yet,<br/>search again
     manual --> initializing : resume (search again) or timeout<br/>(halted) - no tag read yet
 
@@ -80,8 +80,8 @@ stateDiagram-v2
 ## Rules the diagram can't show
 
 - **Before the first tag** (`initializing`, or `stopped` / `manual` reached
-  from it) the robot only accepts `stop`, `resume` and the Bluetooth
-  controller's jogs; everything else, dashboard jogs included, is ignored.
+  from it) the robot only accepts `stop`, `resume` and jogs (the dashboard's
+  and the Bluetooth controller's); everything else is ignored.
   Leaving that `stopped` or `manual`, a robot that read a tag meanwhile goes
   `idle`; otherwise it goes back to `initializing`, searching again on
   `resume` and halted after a manual timeout (so it never drives off a bench
