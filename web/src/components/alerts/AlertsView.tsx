@@ -97,7 +97,7 @@ export function AlertsView() {
         ) : visibleFarmAlerts.length === 0 ? (
           <article className={`glassPanel ${styles.emptyState}`}>
             <strong>No alerts.</strong>
-            <span>Alerts raised since the dashboard opened show here.</span>
+            <span>Alerts from the farm&apos;s robots and sensors show here.</span>
           </article>
         ) : (
           visibleFarmAlerts.map(({ alert, resolvedAt }) => (

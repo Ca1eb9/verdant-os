@@ -37,8 +37,8 @@ export function HistoryView() {
   const color = SERIES_COLORS[theme];
   const DEGREE = fmt.tempUnit;
 
-  // On FarmNet: the shelf readings received since the dashboard opened. Stored
-  // history (Dashboard API / Supabase) comes with the dashboard data-flow work.
+  // On FarmNet: the Pi's stored shelf readings, then those received since the
+  // dashboard opened. Remote (Supabase) history comes with the remote source.
   const { points: livePoints, live } = useShelfHistory(range);
 
   // temperatures are stored in °C; convert once for display
@@ -157,7 +157,7 @@ export function HistoryView() {
             <h1 className="pageTitle">Sensor History</h1>
             <p className="pageLead">
               {live
-                ? `Readings from ${farm.name} since this dashboard opened. Earlier history isn't loaded yet.`
+                ? `Readings from ${farm.name}, updated as new ones arrive.`
                 : `Review time-series performance for ${farm.name}.`}
             </p>
           </div>

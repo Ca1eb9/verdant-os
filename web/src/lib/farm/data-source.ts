@@ -73,9 +73,10 @@ export interface FarmDataSource {
    */
   subscribeShelves(onShelves: (shelves: ShelfReading[] | null) => void): () => void;
   /**
-   * Streams every shelf reading received since the dashboard opened, oldest
-   * first, whenever one arrives; null when this source has no live shelf feed.
-   * Returns unsubscribe.
+   * Streams the farm's shelf readings, oldest first: those stored from before
+   * the dashboard opened (where the source has them, possibly as means over
+   * a few minutes), then every one received since. Again whenever one
+   * arrives; null when this source has no live shelf feed. Returns unsubscribe.
    */
   subscribeShelfHistory(onHistory: (readings: ShelfReading[] | null) => void): () => void;
 }
