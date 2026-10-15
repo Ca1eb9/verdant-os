@@ -18,7 +18,7 @@ The pins come from `firmware/esp32/src/config.h`; the firmware is in
 | Adafruit DRV8871 ([3190](https://www.adafruit.com/product/3190)) | Drives the motor | Limits motor current to about 2 A |
 | Pololu 47:1 gearmotor, 12 V ([4845](https://www.pololu.com/product/4845)) | Moves the robot | 0.3 A free-running, about 5 A if stalled |
 | UBEC buck converter, 5 V 3 A ([1385](https://www.adafruit.com/product/1385)) | Powers the ESP32 from the battery | Fixed 5 V. Bare input wires, 3-pin servo plug out |
-| 3S Li-ion pack, 10.8 V 6 Ah, BMS inside | Power | 12.6 V full, 9.6 V empty |
+| 3S Li-ion pack, 10.8 V 6 Ah, BMS inside | Power | 12.73 V full (measured), 9.6 V empty |
 | 3 A fuse in an inline holder | Battery protection | |
 | Power switch, rated 3 A DC or more | Turns the robot off | |
 | 5 V switch, rated 1 A DC or more | Between the converter's 5 V and the ESP32 | Off whenever USB is plugged in |
@@ -66,12 +66,12 @@ continues on the ESP32, and every ground symbol is the same shared ground.
 - **Fuse, then switch.** The fuse sits right at the battery's + wire, so a
   short anywhere after it blows the fuse instead of damaging the pack or the
   wiring. The switch turns everything after it off.
-- **Buck converter → ESP32 5V pin.** It turns 9.6–12.6 V into a steady 5 V; the
+- **Buck converter → ESP32 5V pin.** It turns 9.6–12.73 V into a steady 5 V; the
   DevKit makes its own 3.3 V from that. Its bare wires are the input (red +,
   black −); the 5 V comes out of its 3-pin servo plug. Before the plug goes
   near the ESP32, switch on and find the 5 V and GND pins with a multimeter;
   usually red is 5 V and black or brown is GND. Its label says "7–12 V input"
-  and a full pack is 12.6 V; Adafruit recommends 6–16 V, so it's fine.
+  and a full pack is 12.73 V; Adafruit recommends 6–16 V, so it's fine.
 - **5 V switch.** It sits on the converter's 5 V wire, between the converter
   and the ESP32's 5V pin; the converter's ground stays connected. Turn it off
   whenever USB is plugged in. Espressif's guide says to power the board from
@@ -159,7 +159,7 @@ two resistors that scale it down: `V_pin = V_in × 22k / (100k + 22k)`, about
 
 | Divider | In | Out | Pin |
 |---|---|---|---|
-| **Battery** | BATT+ after the switch: 9.6–12.6 V | 1.73–2.27 V | GPIO 4 |
+| **Battery** | BATT+ after the switch: 9.6–12.73 V | 1.73–2.30 V | GPIO 4 |
 | **Charge contact** | Pad +: 10–12.6 V docked, nothing off the dock | 1.8–2.3 V docked, under 0.5 V off | GPIO 1 |
 
 Docked, the pad reads below 12.6 V while the pack charges: the charger's

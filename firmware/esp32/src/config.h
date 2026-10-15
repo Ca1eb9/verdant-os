@@ -112,8 +112,12 @@ constexpr bool OBSTACLE_FAILSAFE = true;
 // Measure the real resistors with a multimeter and put the values here.
 
 constexpr float BATTERY_R1_OHMS = 100000.0f;
-constexpr float BATTERY_R2_OHMS = 22000.0f;     // full pack: 2.27 V at the pin, inside the ADC's accurate range
+constexpr float BATTERY_R2_OHMS = 22000.0f;     // full pack: 2.30 V at the pin, inside the ADC's accurate range
 constexpr int BATTERY_CELLS = 3;
+// The pack's voltage when full, measured with a multimeter on the real pack:
+// the 100% point of the charge curve (drivers/battery). Empty stays at 3.2 V
+// a cell.
+constexpr float BATTERY_FULL_V = 12.73f;
 constexpr float BATTERY_CAL_FACTOR = 1.0f;      // tweak after multimeter check
 constexpr uint8_t BATTERY_SAMPLES = 16;         // ADC reads averaged per sample
 constexpr float BATTERY_EMA_ALPHA = 0.2f;       // smoothing, 0..1 (1 = none)

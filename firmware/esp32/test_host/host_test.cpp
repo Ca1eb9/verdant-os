@@ -233,22 +233,28 @@ static void test_tags_and_battery() {
   CHECK(format_tag_uid(uid10, 10, tag, sizeof(tag)));  // longest UID fits
   CHECK(!format_tag_uid(uid10, 10, tag, 8));
 
-  CHECK(battery_pct_from_voltage(12.6f, 3) == 100.0f);
-  CHECK(battery_pct_from_voltage(13.0f, 3) == 100.0f);
-  CHECK(battery_pct_from_voltage(9.6f, 3) == 0.0f);
-  CHECK(battery_pct_from_voltage(8.0f, 3) == 0.0f);
-  CHECK(fabsf(battery_pct_from_voltage(3.79f * 3, 3) - 50.0f) < 0.01f);
-  CHECK(isnan(battery_pct_from_voltage(NAN, 3)));
+  const float FULL = BATTERY_FULL_V;
+  auto pct = [&](float v) { return battery_pct_from_voltage(v, 3, FULL); };
+  CHECK(pct(FULL) == 100.0f);
+  CHECK(pct(13.0f) == 100.0f);
+  CHECK(pct(9.6f) == 0.0f);
+  CHECK(pct(8.0f) == 0.0f);
+  // The curve's points move with full: 3.79 V a cell (50%) on a 4.20 V pack
+  CHECK(fabsf(pct(9.6f + (3.79f * 3 - 9.6f) * (FULL - 9.6f) / (12.6f - 9.6f)) - 50.0f) < 0.01f);
+  // A 12.6 V full pack reads the typical curve unchanged
+  CHECK(fabsf(battery_pct_from_voltage(3.79f * 3, 3, 12.6f) - 50.0f) < 0.01f);
+  CHECK(battery_pct_from_voltage(12.6f, 3, 12.6f) == 100.0f);
+  CHECK(pct(12.6f) < 100.0f);  // short of this pack's full
+  CHECK(isnan(pct(NAN)));
+  CHECK(isnan(battery_pct_from_voltage(11.0f, 3, 9.6f)));  // full at empty: no curve
   float prev = -1;  // monotonic from empty to full
-  for (float v = 9.6f; v <= 12.6f; v += 0.05f) {
-    float p = battery_pct_from_voltage(v, 3);
+  for (float v = 9.6f; v <= FULL; v += 0.05f) {
+    float p = pct(v);
     CHECK(p >= prev);
     prev = p;
   }
-  printf("  battery: 12.6V=%.0f%%  11.4V=%.0f%%  11.1V=%.0f%%  10.5V=%.0f%%  9.6V=%.0f%%\n",
-         battery_pct_from_voltage(12.6f, 3), battery_pct_from_voltage(11.4f, 3),
-         battery_pct_from_voltage(11.1f, 3), battery_pct_from_voltage(10.5f, 3),
-         battery_pct_from_voltage(9.6f, 3));
+  printf("  battery (full %.2fV): 12.73V=%.0f%%  12.6V=%.0f%%  12.3V=%.0f%%  12.2V=%.0f%%  11.4V=%.0f%%  10.5V=%.0f%%  9.6V=%.0f%%\n",
+         FULL, pct(12.73f), pct(12.6f), pct(12.3f), pct(12.2f), pct(11.4f), pct(10.5f), pct(9.6f));
 }
 
 static void test_env() {
