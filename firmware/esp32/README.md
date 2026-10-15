@@ -100,6 +100,8 @@ Charge contact: while `docking` or `charging` (only then, `g_charge_sense_on`), 
 
 A robot built without the docking parts never closes the contact, so a dock trip ends in the `can't charge` fault.
 
+To bench-test the contact, set `CHARGE_SENSE_ALWAYS` in `config.h`: the pin is then read in every status, and each change is logged with its voltage (`charge contact closed (2.21 V)`). Nothing else changes: the robot still only acts on it while docking or charging, and publishes `dock_connected` only then.
+
 ## Motor driver
 
 An Adafruit DRV8871 drives the one motor from `PIN_MOTOR_IN1` and `PIN_MOTOR_IN2` (GPIO 5 and 6). Wiring, power and the reasons for each part are in [docs/wiring/robot.md](../../docs/wiring/robot.md).

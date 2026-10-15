@@ -124,7 +124,8 @@ constexpr float BATTERY_EMA_ALPHA = 0.2f;       // smoothing, 0..1 (1 = none)
 constexpr uint32_t BATTERY_PERIOD_MS = 500;
 
 // ---- Charge contact (PIN_CHARGE_SENSE, docs/wiring/robot.md) ----------------------
-// Only read while docking or charging (g_charge_sense_on), every sensor loop:
+// Only read while docking or charging (g_charge_sense_on), or always with
+// CHARGE_SENSE_ALWAYS, every sensor loop:
 // the robot reaches the pads at APPROACH_SPEED and brakes on the contact.
 
 constexpr float CHARGE_CONTACT_V = 1.2f;        // at the pin: 1.8-2.3 V docked, under 0.5 V off
@@ -132,6 +133,10 @@ constexpr uint8_t CHARGE_SAMPLES = 4;           // ADC reads averaged per readin
 constexpr uint8_t CHARGE_CONTACT_COUNT = 3;     // readings in a row to change state (pins bounce)
 // At DOCK_STOP_CM with no contact this long: error, it can't charge.
 constexpr uint32_t CHARGE_CONTACT_TIMEOUT_MS = 2000;
+// Bench test: read the contact in every status and log each change with the
+// pin's voltage ("charge contact closed (2.21 V)"). Nav still only acts on it
+// while docking or charging. Logged at boot when on.
+constexpr bool CHARGE_SENSE_ALWAYS = false;
 
 // ---- Air temperature + humidity (AHT20, drivers/env_sensor.h) ----------------------
 

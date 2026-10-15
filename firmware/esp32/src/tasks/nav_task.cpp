@@ -258,8 +258,8 @@ void nav_task(void* /*param*/) {
     // For the sensor task's obstacle flags: lowered while creeping in.
     g_obstacle_front_stop_cm = out.motion.stop_cm(false);
     g_obstacle_rear_stop_cm = out.motion.stop_cm(true);
-    g_charge_sense_on =
-        core.status() == RobotStatus::Docking || core.status() == RobotStatus::Charging;
+    g_charge_sense_on = CHARGE_SENSE_ALWAYS || core.status() == RobotStatus::Docking ||
+                        core.status() == RobotStatus::Charging;
 
     // After the step's events are queued: comms sends those first.
     bool controller = g_pad_connected;
