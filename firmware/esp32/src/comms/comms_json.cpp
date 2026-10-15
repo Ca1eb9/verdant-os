@@ -52,6 +52,7 @@ const char* to_wire(CommandType c) {
     case CommandType::Cancel: return "cancel";
     case CommandType::Jog: return "jog";
     case CommandType::ConnectController: return "connect_controller";
+    case CommandType::Drive: return "drive";  // robot-only, for the log
   }
   return "stop";
 }

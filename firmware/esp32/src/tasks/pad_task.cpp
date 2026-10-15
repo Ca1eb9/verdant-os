@@ -49,10 +49,10 @@ void stop_scanning() {
   if (scan->isScanning()) scan->stop();
 }
 
-void send(CommandType type, JogDirection direction) {
+void send(CommandType type, int16_t speed = 0) {
   Command cmd = {};
   cmd.type = type;
-  cmd.direction = direction;
+  cmd.speed = speed;
   cmd.priority = TaskPriority::Critical;
   cmd.source = CommandSource::Controller;
   if (xQueueSend(g_command_queue, &cmd, 0) != pdTRUE) {
@@ -164,15 +164,17 @@ void pad_task(void* /*param*/) {
     PadAction action = core.update(stick, pad.xboxNotif.btnB, pad.xboxNotif.btnA, now);
     switch (action) {
       case PadAction::None: break;
-      case PadAction::JogForward: send(CommandType::Jog, JogDirection::Forward); break;
-      case PadAction::JogBackward: send(CommandType::Jog, JogDirection::Backward); break;
-      case PadAction::Stop: send(CommandType::Stop, JogDirection::None); break;
-      case PadAction::Resume: send(CommandType::Resume, JogDirection::None); break;
+      case PadAction::Drive: send(CommandType::Drive, core.speed()); break;
+      case PadAction::Stop: send(CommandType::Stop); break;
+      case PadAction::Resume: send(CommandType::Resume); break;
     }
-    // Jogs repeat while held: log the first of a run only.
+    // Drives repeat while held: log the first of a run only.
     if (action != PadAction::None && action != last_logged) {
-      static const char* const names[] = {"", "jog forward", "jog backward", "stop", "resume"};
-      LOG("pad", "%s", names[(int)action]);
+      if (action == PadAction::Drive) {
+        LOG("pad", "drive %s at %d", core.speed() < 0 ? "backward" : "forward", abs(core.speed()));
+      } else {
+        LOG("pad", "%s", action == PadAction::Stop ? "stop" : "resume");
+      }
     }
     bool centred = stick <= PAD_DEADZONE && stick >= -PAD_DEADZONE;
     if (action != PadAction::None || centred) last_logged = action;

@@ -101,9 +101,9 @@ stateDiagram-v2
   paused state, re-planning first if the robot was moved.
 - **`resume`** outside `manual` only acts if the stop latch is set. In `manual`
   it also clears the latch.
-- **Manual timeout:** each jog or Bluetooth input drives for 500 ms and restarts
-  a 5 s timer (`MANUAL_TIMEOUT_MS`); when it runs out the robot leaves manual as
-  shown.
+- **Manual timeout:** each jog drives for 500 ms, and each Bluetooth stick
+  input for 250 ms at a speed from the stick. Each restarts a 5 s timer
+  (`MANUAL_TIMEOUT_MS`); when it runs out the robot leaves manual as shown.
 - **Stop latch:** set by `stop`, cleared by `resume` or `navigate`. It survives
   dock trips and manual timeouts.
 - **`idle` never holds a task:** `task_id` is `null` in `idle`. In every other

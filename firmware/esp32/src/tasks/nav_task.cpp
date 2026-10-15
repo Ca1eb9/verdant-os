@@ -44,7 +44,11 @@ class QueueOutput : public NavOutput {
 
   void jog(JogDirection direction) override {
     last_jog_ms = millis();
-    motion.jog(direction);
+    motion.jog(direction, last_jog_ms);
+  }
+  void drive(int16_t speed) override {
+    last_jog_ms = millis();
+    motion.drive(speed, last_jog_ms);
   }
 
   void follow_edge(NodeIndex from, NodeIndex to, EdgeDrive drive) override {

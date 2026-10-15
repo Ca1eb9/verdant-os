@@ -63,8 +63,11 @@ class NavOutput {
   virtual void follow_edge(NodeIndex from, NodeIndex to, EdgeDrive drive) = 0;
   // Drive forward slowly until a tag is read (localizing).
   virtual void creep() = 0;
-  // Drive one JOG_PULSE_MS pulse. Backward reverses without turning.
+  // Drive one JOG_PULSE_MS pulse at JOG_SPEED. Backward reverses without turning.
   virtual void jog(JogDirection direction) = 0;
+  // Drive one PAD_PULSE_MS pulse at `speed` (backward below 0): the
+  // Bluetooth controller's stick.
+  virtual void drive(int16_t speed) = 0;
   // Back onto the dock; report contact with on_charge_contact(), which brakes.
   virtual void start_docking() = 0;
 
@@ -137,6 +140,11 @@ class NavCore {
   void cancel(const char* task_id);
   // `controller`: from the Bluetooth controller, which also overrides a dock trip.
   void jog(JogDirection direction, bool controller, uint32_t now);
+  // The controller's stick: a jog at a speed.
+  void drive(int16_t speed, uint32_t now);
+  // A jog or drive may start: enters manual if it isn't already. False (and
+  // noted) where driving by hand isn't allowed.
+  bool take_manual(bool controller, uint32_t now);
 
   // Transitions
   void emit(RobotEventType type, const char* details = "");

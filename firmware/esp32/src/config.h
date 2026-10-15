@@ -215,9 +215,19 @@ constexpr uint32_t NOTE_REPEAT_MS = 2000;       // the same nav note again withi
 
 // ---- Bluetooth controller (tasks/pad_task.h) ----------------------------------------
 
-constexpr float PAD_DEADZONE = 0.5f;            // fraction of full stick travel needed to drive
+constexpr float PAD_DEADZONE = 0.15f;           // fraction of full stick travel needed to drive
 constexpr uint32_t PAD_LOOP_MS = 40;            // controller task tick: one link check each
-constexpr uint32_t PAD_JOG_INTERVAL_MS = 200;   // held stick: jog this often (under JOG_PULSE_MS)
+// The stick drives at a speed from how far it's pushed: PAD_MIN_SPEED just past
+// the deadzone, up to PAD_MAX_SPEED fully pushed (0..255). TBD: tune on the robot.
+constexpr int16_t PAD_MIN_SPEED = 60;
+constexpr int16_t PAD_MAX_SPEED = 150;
+// Each drive lasts this long from receipt, shorter than a dashboard jog's
+// JOG_PULSE_MS, so the robot stops sooner when the stick is let go.
+constexpr uint32_t PAD_PULSE_MS = 250;
+// Held stick: drive again this often (with PAD_LOOP_MS, under PAD_PULSE_MS),
+// or straight away when the speed changes by PAD_SPEED_STEP.
+constexpr uint32_t PAD_DRIVE_INTERVAL_MS = 100;
+constexpr int16_t PAD_SPEED_STEP = 15;
 // A link check slower than this (they take about 20 ms): the stick has to be
 // centred again before it drives.
 constexpr uint32_t PAD_LINK_LOST_MS = 400;

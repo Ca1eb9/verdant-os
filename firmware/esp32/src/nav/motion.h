@@ -17,12 +17,14 @@
 // away and brakes there at once (every other stop eases off), lowering that
 // side's stop distance (stop_cm()) so the obstacle flag doesn't stop it at
 // OBSTACLE_STOP_CM first. Only after the tag: before it, anything inside
-// OBSTACLE_STOP_CM is a real obstruction.
+// OBSTACLE_STOP_CM is a real obstruction. Driving by hand (jog, the
+// controller's drive) it slows to APPROACH_SPEED inside SLOW_ZONE_CM too.
 //
 // Pure C++ (no Arduino or FreeRTOS calls), so test_host can drive it.
 
 #pragma once
 
+#include <math.h>
 #include <stdint.h>
 
 #include "../graph.h"
@@ -43,7 +45,10 @@ class Motion {
   // Each call replaces whatever the robot was doing (NavOutput motion hooks).
   void halt();
   void brake();
-  void jog(JogDirection direction);
+  // Timed pulses, driving by hand: a jog at JOG_SPEED for JOG_PULSE_MS, and
+  // the controller's drive at `speed` for PAD_PULSE_MS.
+  void jog(JogDirection direction, uint32_t now);
+  void drive(int16_t speed, uint32_t now);
   // An elevator ride first creeps onto the platform, the opposite way to the
   // way off, then waits ELEVATOR_WAIT_MS per level ridden.
   void follow_edge(NodeIndex from, NodeIndex to, EdgeDrive drive, uint32_t now);
@@ -63,10 +68,13 @@ class Motion {
   float stop_cm(bool rear) const;
 
  private:
-  enum class Phase : uint8_t { Idle, Driving, Creeping, Entering, Riding, Docking, AtDock, Failed };
+  enum class Phase : uint8_t { Idle, Driving, Creeping, Entering, Riding, Docking, AtDock, Manual, Failed };
 
   void send(DriveMode mode, int16_t speed, uint32_t duration_ms, bool brake = false);
   void start_driving(Phase phase, bool backward, int16_t speed, uint32_t now);
+  void start_manual(int16_t speed, uint32_t pulse_ms, uint32_t now);
+  // APPROACH_SPEED, the right way, if the last reading ahead is in the slow zone.
+  int16_t manual_speed() const;
   bool approaching() const { return phase_ == Phase::Entering || phase_ == Phase::Docking; }
 
   DriveSink& sink_;
@@ -83,4 +91,11 @@ class Motion {
   // Driving/Creeping/Entering/Docking: time spent with the motors free.
   uint32_t driven_ms_ = 0;
   uint32_t last_check_ms_ = 0;
+  // Manual: the speed asked for, the speed sent, and when the pulse ends.
+  int16_t manual_asked_ = 0;
+  int16_t manual_sent_ = 0;
+  uint32_t manual_until_ms_ = 0;
+  // The last readings check() saw, for a pulse starting between checks.
+  float front_cm_ = NAN;
+  float rear_cm_ = NAN;
 };

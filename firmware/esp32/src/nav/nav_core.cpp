@@ -81,7 +81,7 @@ void NavCore::on_command(const Command& cmd, uint32_t now) {
   // driving by hand, e.g. onto a tag, or off the farm where there's none.
   if (node_ == NO_NODE) {
     bool allowed = cmd.type == CommandType::Stop || cmd.type == CommandType::Resume ||
-                   cmd.type == CommandType::Jog;
+                   cmd.type == CommandType::Jog || cmd.type == CommandType::Drive;
     if (!allowed) {
       out_.note("ignored: no position yet (no tag read)");
       return;
@@ -95,6 +95,7 @@ void NavCore::on_command(const Command& cmd, uint32_t now) {
     case CommandType::Cancel: cancel(cmd.task_id); break;
     case CommandType::Jog: jog(cmd.direction, cmd.source == CommandSource::Controller, now); break;
     case CommandType::ConnectController: break;  // comms hands it to the pad task
+    case CommandType::Drive: drive(cmd.speed, now); break;
   }
 }
 
@@ -392,6 +393,19 @@ void NavCore::cancel(const char* task_id) {
 }
 
 void NavCore::jog(JogDirection direction, bool controller, uint32_t now) {
+  if (!take_manual(controller, now)) return;
+  reversing_ = direction == JogDirection::Backward;
+  out_.jog(direction);
+}
+
+void NavCore::drive(int16_t speed, uint32_t now) {
+  // Only the controller sends it.
+  if (!take_manual(true, now)) return;
+  reversing_ = speed < 0;
+  out_.drive(speed);
+}
+
+bool NavCore::take_manual(bool controller, uint32_t now) {
   switch (status_) {
     case RobotStatus::Idle:
     case RobotStatus::EnRoute:
@@ -407,26 +421,25 @@ void NavCore::jog(JogDirection direction, bool controller, uint32_t now) {
       // trip too. Leaving manual picks the trip back up.
       if (controller) break;
       out_.note("ignored: jog not allowed on a dock trip");
-      return;
+      return false;
     case RobotStatus::Initializing:
       // Looking for its first tag, or given up: it can still be driven,
       // e.g. onto a tag, or on a bench away from the farm's tags.
       break;
     default:
       out_.note("ignored: jog not allowed now");
-      return;
+      return false;
   }
   if (BATTERY_FAILSAFE && !isnan(battery_pct_) && battery_pct_ <= BATTERY_CUTOFF_PCT) {
     out_.note("ignored: battery below the motor cutoff");
-    return;
+    return false;
   }
   if (status_ != RobotStatus::Manual) {
     manual_from_ = status_;
     status_ = RobotStatus::Manual;
   }
   last_manual_input_ms_ = now;
-  reversing_ = direction == JogDirection::Backward;
-  out_.jog(direction);
+  return true;
 }
 
 // ---- Transitions ----------------------------------------------------------------------

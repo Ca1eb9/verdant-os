@@ -227,13 +227,60 @@ static void test_other_hooks() {
   // Halted: nothing left to time out.
   CHECK(m.check(1000 + CREEP_TIMEOUT_MS * 2, open_road(), false) == nullptr);
 
-  m.jog(JogDirection::Backward);
+  m.jog(JogDirection::Backward, 2000);
   CHECK(s.last().mode == DriveMode::Drive && s.last().left_speed == -JOG_SPEED &&
         s.last().duration_ms == JOG_PULSE_MS);
   CHECK(m.check(100000, open_road(), false) == nullptr);
+  m.drive(-100, 100000);
+  CHECK(s.last().mode == DriveMode::Drive && s.last().left_speed == -100 &&
+        s.last().duration_ms == PAD_PULSE_MS);
 
   // Every command gets the next seq, whichever hook sent it.
   for (size_t i = 0; i < s.sent.size(); i++) CHECK(s.sent[i].seq == i + 1);
+}
+
+static void test_manual_slow_zone() {
+  SCENARIO("manual slow zone");
+  Sink s;
+  Motion m(s);
+  uint32_t now = 1000;
+
+  // A jog slows to APPROACH_SPEED for the rest of its pulse in the slow zone
+  // ahead, and doesn't speed up again within the pulse.
+  m.jog(JogDirection::Forward, now);
+  CHECK(m.check(now += 20, front(SLOW_ZONE_CM + 1), false) == nullptr);
+  CHECK(s.last().left_speed == JOG_SPEED);
+  m.check(now += 20, rear(1), false);  // behind it: doesn't matter
+  CHECK(s.last().left_speed == JOG_SPEED);
+  size_t sent = s.sent.size();
+  m.check(now += 20, front(SLOW_ZONE_CM - 1), false);
+  CHECK(s.sent.size() == sent + 1 && s.last().left_speed == APPROACH_SPEED);
+  CHECK(s.last().duration_ms == JOG_PULSE_MS - 60);  // what's left of the pulse
+  m.check(now += 20, front(SLOW_ZONE_CM - 5), false);
+  m.check(now += 20, open_road(), false);
+  CHECK(s.sent.size() == sent + 1);
+  // The next jog starts slow while the last reading is still in the zone.
+  m.check(now += 20, front(SLOW_ZONE_CM - 5), false);
+  m.jog(JogDirection::Forward, now);
+  CHECK(s.last().left_speed == APPROACH_SPEED && s.last().duration_ms == JOG_PULSE_MS);
+  // The pulse ran out: nothing more is sent.
+  sent = s.sent.size();
+  m.check(now += JOG_PULSE_MS, front(SLOW_ZONE_CM - 5), false);
+  m.check(now += 20, front(1), false);
+  CHECK(s.sent.size() == sent);
+
+  // Backward: the rear sensor. Slower than APPROACH_SPEED already: unchanged.
+  m.drive(-PAD_MAX_SPEED, now);
+  m.check(now += 20, front(1), false);
+  CHECK(s.last().left_speed == -PAD_MAX_SPEED);
+  m.check(now += 20, rear(SLOW_ZONE_CM - 1), false);
+  CHECK(s.last().left_speed == -APPROACH_SPEED);
+  m.drive(-(APPROACH_SPEED - 10), now);
+  sent = s.sent.size();
+  m.check(now += 20, rear(SLOW_ZONE_CM - 1), false);
+  CHECK(s.sent.size() == sent && s.last().left_speed == -(APPROACH_SPEED - 10));
+  // Never a fault: the pulse ends by itself.
+  CHECK(m.check(now += 100000, open_road(), false) == nullptr);
 }
 
 static void test_timeouts() {
@@ -287,7 +334,8 @@ class Robot : public NavOutput {
     motion.follow_edge(from, to, drive, now);
   }
   void creep() override { motion.creep(now); }
-  void jog(JogDirection d) override { motion.jog(d); }
+  void jog(JogDirection d) override { motion.jog(d, now); }
+  void drive(int16_t speed) override { motion.drive(speed, now); }
   void start_docking() override { motion.start_docking(now); }
   void note(const char*) override {}
 
@@ -391,6 +439,7 @@ int main() {
   test_elevator();
   test_docking();
   test_other_hooks();
+  test_manual_slow_zone();
   test_timeouts();
   test_with_nav_core();
   printf("motion_test: %s\n", failures ? "FAILED" : "passed");

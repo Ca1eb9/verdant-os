@@ -3,12 +3,28 @@
 
 #include "pad_core.h"
 
+#include <math.h>
+#include <stdlib.h>
+
 #include "../config.h"
+
+namespace {
+
+// 0 inside the deadzone.
+int16_t stick_speed(float stick) {
+  float travel = fabsf(stick);
+  if (travel <= PAD_DEADZONE) return 0;
+  float share = fminf((travel - PAD_DEADZONE) / (1.0f - PAD_DEADZONE), 1.0f);
+  int16_t speed = (int16_t)lroundf(PAD_MIN_SPEED + share * (PAD_MAX_SPEED - PAD_MIN_SPEED));
+  return stick > 0 ? speed : -speed;
+}
+
+}  // namespace
 
 void PadCore::reset() {
   fresh_ = true;
   armed_ = false;
-  direction_ = Direction::None;
+  speed_ = 0;
 }
 
 PadAction PadCore::update(float stick, bool stop, bool resume, uint32_t now) {
@@ -19,23 +35,26 @@ PadAction PadCore::update(float stick, bool stop, bool resume, uint32_t now) {
   resume_held_ = resume;
   fresh_ = false;
 
-  bool centred = stick <= PAD_DEADZONE && stick >= -PAD_DEADZONE;
-  if (centred) armed_ = true;
+  int16_t speed = stick_speed(stick);
+  if (speed == 0) armed_ = true;
 
   if (stop_pressed) {
     armed_ = false;
-    direction_ = Direction::None;
+    speed_ = 0;
     return PadAction::Stop;
   }
 
-  Direction direction = centred || !armed_ ? Direction::None
-                        : stick > 0        ? Direction::Forward
-                                           : Direction::Backward;
-  bool changed = direction != direction_;
-  direction_ = direction;
-  if (direction != Direction::None && (changed || now - last_jog_ms_ >= PAD_JOG_INTERVAL_MS)) {
-    last_jog_ms_ = now;
-    return direction == Direction::Forward ? PadAction::JogForward : PadAction::JogBackward;
+  if (!armed_ || speed == 0) {
+    speed_ = 0;
+  } else {
+    // Starting, or the other way: at once, not after the interval.
+    bool turned = (speed > 0) != (speed_ > 0) || speed_ == 0;
+    if (turned || abs(speed - speed_) >= PAD_SPEED_STEP ||
+        now - last_drive_ms_ >= PAD_DRIVE_INTERVAL_MS) {
+      speed_ = speed;
+      last_drive_ms_ = now;
+      return PadAction::Drive;
+    }
   }
   // After the drive, so letting go of the stick onto Resume can't be missed.
   return resume_pressed ? PadAction::Resume : PadAction::None;

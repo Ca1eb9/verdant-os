@@ -406,10 +406,13 @@ deviations.
   `manual` from any state: a dock trip (the dashboard's `jog` can't take over
   one), and `initializing` too, creeping for its first tag or after giving up,
   so an operator can drive a robot that rebooted off the farm with no tag to
-  find. Until it reads a tag the robot accepts only `stop`, `resume` and the
-  controller's jogs. Each input only drives briefly, like a jog, so losing the
-  controller stops the robot. The obstacle stop and the motor cutoff still
-  apply.
+  find. Until it reads a tag the robot accepts only `stop`, `resume` and
+  driving by hand. The stick drives at a speed from how far it's pushed
+  (`PAD_MIN_SPEED` to `PAD_MAX_SPEED`), each input for only `PAD_PULSE_MS`
+  (250 ms), so letting go or losing the controller stops the robot quickly.
+  The obstacle stop and the motor cutoff still apply.
+- **Both:** anything ahead inside `SLOW_ZONE_CM` slows a jog or drive to
+  `APPROACH_SPEED` for the rest of its pulse, as when following an edge.
 
 **Timeout:** a manual session from either source ends by itself after
 `MANUAL_TIMEOUT_MS` (5 s, in `config.h`) without a `jog` or controller input;
@@ -453,15 +456,6 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
 - Battery ADC calibration curve
 - Turns (single drive motor: an edge to the side faults for now)
 - `harvest` action
-- Analog Bluetooth controller driving: speed from how far the stick is
-  pushed, with a shorter pulse than `JOG_PULSE_MS` so it stops sooner on
-  release. Today the stick past half way sends a fixed-speed `jog`
-  (`JOG_SPEED`). Needs its own nav entry point (a variable-speed timed drive),
-  not `jog`
-- Maybe: slow down near obstacles in `manual` too. Today a jog drives at
-  `JOG_SPEED` until it stops at `OBSTACLE_STOP_CM`; the `SLOW_ZONE_CM`
-  slow-down to `APPROACH_SPEED` only applies while following an edge. Would
-  fit with analog controller driving
 - Controller confirmation: tell the dashboard when a Bluetooth controller
   connects or drops (after **Connect to RC**, and later), e.g. as robot events
   or a telemetry field, and show it there; and confirm on the controller

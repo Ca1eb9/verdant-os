@@ -102,6 +102,7 @@ class Rig : public NavOutput {
   }
   void creep() override { motion.push_back("creep"); }
   void jog(JogDirection d) override { motion.push_back(d == JogDirection::Backward ? "jog b" : "jog f"); }
+  void drive(int16_t speed) override { motion.push_back("drive " + std::to_string(speed)); }
   void start_docking() override { motion.push_back("dock"); }
   void note(const char*) override {}
 
@@ -786,6 +787,53 @@ static void test_cancel() {
   CHECK(r.status() == RobotStatus::Idle && r.task().empty());
 }
 
+static Command drive(int16_t speed) {
+  Command c = make(CommandType::Drive);
+  c.speed = speed;
+  c.source = CommandSource::Controller;
+  return c;
+}
+
+static void test_drive() {
+  SCENARIO("the controller's drive");
+  // A jog at a speed: manual, the task kept, reversing below 0.
+  Rig r;
+  r.boot_at("cp-01");
+  r.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  r.clear();
+  r.command(drive(90));
+  CHECK(r.status() == RobotStatus::Manual && r.task() == "t1" && r.last_motion() == "drive 90");
+  CHECK(!r.core.reversing() && r.events.empty());
+  r.command(drive(-140));
+  CHECK(r.last_motion() == "drive -140" && r.core.reversing());
+  // Each drive restarts the manual timeout.
+  r.advance(MANUAL_TIMEOUT_MS - 1);
+  r.command(drive(-140));
+  r.advance(MANUAL_TIMEOUT_MS - 1);
+  CHECK(r.status() == RobotStatus::Manual);
+  r.advance(1);
+  CHECK(r.status() == RobotStatus::EnRoute && r.task() == "t1");
+
+  // Like the controller's jogs: it takes over a dock trip, and works before
+  // the first tag, but not below the motor cutoff.
+  Rig d;
+  d.boot_at("cp-01");
+  d.command(make(CommandType::ReturnToDock));
+  d.command(drive(-60));
+  CHECK(d.status() == RobotStatus::Manual && d.last_motion() == "drive -60");
+  d.advance(MANUAL_TIMEOUT_MS);
+  CHECK(d.status() == RobotStatus::ReturningToDock);
+  Rig b;
+  b.core.begin();
+  b.command(drive(60));
+  CHECK(b.status() == RobotStatus::Manual && b.node() == "");
+  Rig k;
+  k.boot_at("cp-01");
+  k.battery(BATTERY_CUTOFF_PCT);
+  k.command(drive(60));
+  CHECK(k.status() == RobotStatus::Idle && k.last_motion() != "drive 60");
+}
+
 static void test_manual() {
   SCENARIO("manual");
   Rig r;
@@ -956,6 +1004,7 @@ int main() {
   test_survival_return();
   test_cancel();
   test_manual();
+  test_drive();
   test_fault_recovery();
   printf("nav_core_test: %s\n", failures ? "FAILED" : "passed");
   return failures ? 1 : 0;

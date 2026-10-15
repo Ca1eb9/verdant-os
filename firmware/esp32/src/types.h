@@ -66,7 +66,8 @@ enum class Heading : uint8_t { North = 0, East = 1, South = 2, West = 3 };
 enum class Turn : uint8_t { Straight = 0, Right = 1, UTurn = 2, Left = 3 };
 
 // ConnectController goes to the pad task, not nav (g_pad_connect_requests).
-enum class CommandType : uint8_t { Navigate, ReturnToDock, Stop, Resume, Cancel, Jog, ConnectController };
+// Drive: the Bluetooth controller's stick, at a speed (robot-only, never on the wire).
+enum class CommandType : uint8_t { Navigate, ReturnToDock, Stop, Resume, Cancel, Jog, ConnectController, Drive };
 
 // jog only; None means the field was absent.
 enum class JogDirection : uint8_t { None, Forward, Backward };
@@ -164,6 +165,7 @@ struct Command {
   bool has_duration;
   uint32_t duration_ms;
   JogDirection direction;              // jog only
+  int16_t speed;                       // Drive only: -255..255, backward below 0
   TaskPriority priority;
   CommandSource source;
 };

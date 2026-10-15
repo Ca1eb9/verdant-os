@@ -1,6 +1,6 @@
 // pad_test.cpp
 // Drives the controller rules (src/pad/pad_core) on a laptop: the stick's
-// deadzone and jog repeat, the centre-first rule, and the two buttons.
+// deadzone, speed and drive repeat, the centre-first rule, and the two buttons.
 // Build + run with ./run.sh
 
 #include <stdio.h>
@@ -29,33 +29,56 @@ static PadCore centred(uint32_t now) {
   return p;
 }
 
+static bool drives(PadCore& p, float stick, uint32_t now, int16_t speed) {
+  return p.update(stick, false, false, now) == PadAction::Drive && p.speed() == speed;
+}
+
 static void test_stick() {
   SCENARIO("stick");
   uint32_t now = 1000;
   PadCore p = centred(now);
 
-  CHECK(p.update(PAD_DEADZONE - 0.1f, false, false, now += 40) == PadAction::None);
-  CHECK(p.update(UP, false, false, now += 40) == PadAction::JogForward);
-  // Held: a jog every PAD_JOG_INTERVAL_MS, nothing in between.
+  // Speed from how far it's pushed: nothing inside the deadzone, then from
+  // PAD_MIN_SPEED just past it to PAD_MAX_SPEED fully pushed.
+  CHECK(p.update(PAD_DEADZONE, false, false, now += 40) == PadAction::None);
+  CHECK(drives(p, PAD_DEADZONE + 0.001f, now += 40, PAD_MIN_SPEED));
+  CHECK(drives(p, UP, now += 40, PAD_MAX_SPEED));
+  CHECK(drives(p, 1.2f, now += PAD_DRIVE_INTERVAL_MS, PAD_MAX_SPEED));  // past full: clamped
+  CHECK(drives(p, (1 + PAD_DEADZONE) / 2, now += PAD_DRIVE_INTERVAL_MS,
+               (PAD_MIN_SPEED + PAD_MAX_SPEED) / 2));  // half way
+
+  // Held: a drive every PAD_DRIVE_INTERVAL_MS, nothing in between.
+  CHECK(drives(p, UP, now += 40, PAD_MAX_SPEED));
   uint32_t t0 = now;
-  int jogs = 0;
-  for (now += PAD_LOOP_MS; now - t0 <= PAD_JOG_INTERVAL_MS * 5; now += PAD_LOOP_MS) {
-    if (p.update(UP, false, false, now) == PadAction::JogForward) jogs++;
+  int sent = 0;
+  for (now += PAD_LOOP_MS; now - t0 <= PAD_DRIVE_INTERVAL_MS * 5; now += PAD_LOOP_MS) {
+    if (p.update(UP, false, false, now) == PadAction::Drive) sent++;
   }
-  CHECK(jogs == 5);
-  CHECK(PAD_JOG_INTERVAL_MS + PAD_LOOP_MS < JOG_PULSE_MS);  // or the robot stutters
+  CHECK(sent >= 4 && sent <= 5);  // the loop's ticks don't land on the interval
+  CHECK(PAD_DRIVE_INTERVAL_MS + PAD_LOOP_MS < PAD_PULSE_MS);  // or the robot stutters
+  CHECK(PAD_PULSE_MS < JOG_PULSE_MS);  // stops sooner than a dashboard jog
+
+  // A small change waits for the interval; PAD_SPEED_STEP or more goes at once.
+  float step = (float)PAD_SPEED_STEP / (PAD_MAX_SPEED - PAD_MIN_SPEED) * (1 - PAD_DEADZONE);
+  PadCore q = centred(now);
+  CHECK(q.update(0.6f, false, false, now += 40) == PadAction::Drive);
+  int16_t first = q.speed();
+  CHECK(q.update(0.6f + step / 2, false, false, now += 40) == PadAction::None);
+  CHECK(q.update(0.6f + step * 1.1f, false, false, now += 1) == PadAction::Drive);
+  CHECK(q.speed() - first >= PAD_SPEED_STEP);
+
+  // Centred: nothing. Straight through the centre to the other way: at once.
   CHECK(p.update(REST, false, false, now += 40) == PadAction::None);
   CHECK(p.update(REST, false, false, now += 1000) == PadAction::None);
-  CHECK(p.update(DOWN, false, false, now += 40) == PadAction::JogBackward);
-  // Straight through the centre to the other way: at once, not after the interval.
-  CHECK(p.update(UP, false, false, now += 40) == PadAction::JogForward);
-  CHECK(p.update(DOWN, false, false, now += 40) == PadAction::JogBackward);
+  CHECK(drives(p, DOWN, now += 40, -PAD_MAX_SPEED));
+  CHECK(drives(p, UP, now += 1, PAD_MAX_SPEED));
+  CHECK(drives(p, DOWN, now += 1, -PAD_MAX_SPEED));
 
-  // millis() wrapping while held doesn't stop the jogs.
+  // millis() wrapping while held doesn't stop the drives.
   now = UINT32_MAX - 50;
   PadCore w = centred(now);
-  CHECK(w.update(UP, false, false, now += 40) == PadAction::JogForward);
-  CHECK(w.update(UP, false, false, now += PAD_JOG_INTERVAL_MS) == PadAction::JogForward);
+  CHECK(drives(w, UP, now += 40, PAD_MAX_SPEED));
+  CHECK(drives(w, UP, now += PAD_DRIVE_INTERVAL_MS, PAD_MAX_SPEED));
 }
 
 static void test_centre_first() {
@@ -69,13 +92,13 @@ static void test_centre_first() {
   CHECK(p.update(UP, false, false, now += 1000) == PadAction::None);
   CHECK(p.update(DOWN, false, false, now += 40) == PadAction::None);
   CHECK(p.update(REST, false, false, now += 40) == PadAction::None);
-  CHECK(p.update(UP, false, false, now += 40) == PadAction::JogForward);
+  CHECK(p.update(UP, false, false, now += 40) == PadAction::Drive);
 
   // The link stalled while it was held (reset): same again.
   p.reset();
   CHECK(p.update(UP, false, false, now += 40) == PadAction::None);
   CHECK(p.update(REST, false, false, now += 40) == PadAction::None);
-  CHECK(p.update(UP, false, false, now += 40) == PadAction::JogForward);
+  CHECK(p.update(UP, false, false, now += 40) == PadAction::Drive);
 }
 
 static void test_buttons() {
@@ -95,12 +118,12 @@ static void test_buttons() {
   CHECK(p.update(REST, false, false, now += 40) == PadAction::None);
 
   // Stop while driving ends it until the stick is centred again.
-  CHECK(p.update(UP, false, false, now += 40) == PadAction::JogForward);
+  CHECK(p.update(UP, false, false, now += 40) == PadAction::Drive);
   CHECK(p.update(UP, true, false, now += 40) == PadAction::Stop);
-  CHECK(p.update(UP, false, false, now += PAD_JOG_INTERVAL_MS) == PadAction::None);
+  CHECK(p.update(UP, false, false, now += PAD_DRIVE_INTERVAL_MS) == PadAction::None);
   CHECK(p.update(DOWN, false, false, now += 40) == PadAction::None);
   CHECK(p.update(REST, false, false, now += 40) == PadAction::None);
-  CHECK(p.update(DOWN, false, false, now += 40) == PadAction::JogBackward);
+  CHECK(p.update(DOWN, false, false, now += 40) == PadAction::Drive);
 
   // A button already down when the controller connects isn't a press.
   PadCore held;
