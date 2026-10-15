@@ -150,7 +150,32 @@ describe("GET /shelves", () => {
     const limited = await get("/shelves?limit=2");
     assert.deepEqual(limited.body.readings.map((r: any) => r.received_at), [NOW - MIN, NOW]);
   });
-  for (const bad of ["limit=abc", `from=${NOW}&to=${NOW - 1}`]) {
+  it("averages each shelf over bucket_ms, a low water level anywhere in a bucket showing", async () => {
+    const { body } = await get(`/shelves?shelf_id=shelf-1&bucket_ms=${10 * MIN}`);
+    // the last hour: six buckets of ten readings, and the newest on its own
+    assert.equal(body.readings.length, 7);
+    assert.deepEqual(body.readings.map((r: any) => r.received_at), [60, 50, 40, 30, 20, 10, 0].map((m) => NOW - m * MIN));
+    assert.deepEqual(body.readings[0], {
+      shelf_id: "shelf-1",
+      level: 1,
+      temperature_c: 22.5,
+      humidity_pct: null,
+      light_lux: 400,
+      water_temp_c: 19,
+      water_level_ok: false,
+      ph: 6.1,
+      timestamp: NOW - 51 * MIN,
+      received_at: NOW - 60 * MIN,
+    });
+    assert.equal(body.readings.at(-1).water_level_ok, true);
+  });
+  it("buckets every shelf without shelf_id, newest `limit` buckets", async () => {
+    const all = await get(`/shelves?from=${NOW - 35 * MIN}&to=${NOW - 25 * MIN}&bucket_ms=${10 * MIN}`);
+    assert.deepEqual(all.body.readings.map((r: any) => r.shelf_id), ["shelf-1", "shelf-1", "shelf-2"]);  // the last two share a bucket
+    const limited = await get(`/shelves?bucket_ms=${10 * MIN}&limit=2`);
+    assert.deepEqual(limited.body.readings.map((r: any) => r.received_at), [NOW - 10 * MIN, NOW]);
+  });
+  for (const bad of ["limit=abc", `from=${NOW}&to=${NOW - 1}`, "bucket_ms=999", "bucket_ms=-5"]) {
     it(`rejects ${bad}`, async () => {
       assert.equal((await get(`/shelves?${bad}`)).status, 400);
     });

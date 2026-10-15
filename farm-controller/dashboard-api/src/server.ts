@@ -5,7 +5,7 @@
 //   GET /health                          { ok, database }
 //   GET /robots                          { robots: [newest telemetry per robot] }
 //   GET /telemetry?robot_id=&from=&to=&limit=   { telemetry: [...] } oldest first
-//   GET /shelves?shelf_id=&from=&to=&limit=     { readings: [...] } oldest first
+//   GET /shelves?shelf_id=&from=&to=&limit=&bucket_ms=   { readings: [...] } oldest first
 //   GET /alerts?severity=&source=&limit= { alerts: [...] } newest first
 //   GET /commands?robot_id=              { commands: [...] } newest first, at most 10
 //
@@ -101,9 +101,14 @@ export function createHandler(config: ApiConfig, getDb: DbProvider, now: () => n
         case "/telemetry":
           send(res, 200, { telemetry: telemetryHistory(db, historyQuery(q, "robot_id", now())) });
           return;
-        case "/shelves":
-          send(res, 200, { readings: shelfHistory(db, historyQuery(q, "shelf_id", now())) });
+        case "/shelves": {
+          const bucketMs = int(q, "bucket_ms", 0);
+          if (bucketMs && bucketMs < LIMITS.shelfBucketMinMs) {
+            throw new BadRequest(`bucket_ms must be at least ${LIMITS.shelfBucketMinMs}`);
+          }
+          send(res, 200, { readings: shelfHistory(db, historyQuery(q, "shelf_id", now()), bucketMs || undefined) });
           return;
+        }
         case "/alerts": {
           const severity = str(q, "severity");
           if (severity && !SEVERITIES.has(severity)) {
