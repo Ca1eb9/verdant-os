@@ -237,6 +237,9 @@ constexpr uint32_t PAD_LINK_LOST_MS = 400;
 constexpr uint32_t PAD_CONNECT_WINDOW_MS = 10000;
 constexpr uint16_t PAD_SCAN_MS = 97;            // scan interval = window: always listening
 constexpr uint32_t PAD_SCAN_CHUNK_MS = 10000;   // each scan this long, then a fresh one
+// On each connection the controller rumbles once, to confirm it at the robot.
+constexpr uint8_t PAD_RUMBLE_PCT = 30;          // motor power, 0-100
+constexpr uint32_t PAD_RUMBLE_MS = 300;         // in the controller's 10 ms steps
 
 // ---- Motor task (tasks/motor_task.h) ------------------------------------------------
 

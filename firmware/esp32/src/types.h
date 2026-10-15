@@ -189,6 +189,7 @@ struct TelemetryMsg {
   float temperature_c;            // NAN -> field omitted
   float humidity_pct;             // NAN -> field omitted
   float light_lux;                // NAN -> field omitted
+  bool controller_connected;      // the Bluetooth controller is connected (g_pad_connected)
 };
 
 // ---- nav task -> comms task (g_event_queue) ----------------------------------
@@ -241,7 +242,7 @@ extern volatile uint32_t g_last_command_ms;
 // connect_controller commands received (comms counts, the pad task watches):
 // each one opens a PAD_CONNECT_WINDOW_MS window to look for the controller.
 extern volatile uint32_t g_pad_connect_requests;
-// The Bluetooth controller's link (pad task writes, the status LED reads):
+// The Bluetooth controller's link (pad task writes, the status LED and telemetry read):
 // connected or not, and millis() of the last change. 0 = never.
 extern volatile bool g_pad_connected;
 extern volatile uint32_t g_pad_link_changed_ms;

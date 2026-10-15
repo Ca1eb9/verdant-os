@@ -154,7 +154,7 @@ An Xbox Wireless Controller (model 1914, firmware 5.x) pairs with the robot itse
 - while it can't reach the broker: it may be on its own (there's no Pi heartbeat, so this is the only sign), and the controller is then the only way to drive it;
 - for `PAD_CONNECT_WINDOW_MS` (10 s) after **Connect to RC** on the dashboard (the `connect_controller` command), in any status. Press it, then the controller's Xbox button.
 
-Otherwise it doesn't look, so with the Pi up a controller that turns on, or drops out, stays disconnected until **Connect to RC**. It stops looking once one connects. The boot log says `looking for a controller (...)` and `stopped looking for a controller`; a window that finds nothing logs `connect_controller: no controller found`.
+Otherwise it doesn't look, so with the Pi up a controller that turns on, or drops out, stays disconnected until **Connect to RC**. It stops looking once one connects. On each connection the controller rumbles once (`PAD_RUMBLE_PCT`, `PAD_RUMBLE_MS`), and telemetry's `controller_connected` turns `true` straight away, so the dashboard shows **Controller: Connected** and confirms **Connect to RC**. The boot log says `looking for a controller (...)` and `stopped looking for a controller`; a window that finds nothing logs `connect_controller: no controller found`.
 
 **One radio.** WiFi and Bluetooth share it, so WiFi modem sleep stays on (`comms_task`); commands from the Pi can arrive a little later than before.
 

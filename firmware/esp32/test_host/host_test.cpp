@@ -69,6 +69,7 @@ static void test_outbound(const std::string& out_dir) {
   CHECK(strstr(buf, "\"task_id\":\"3f2b8c1e"));
   CHECK(strstr(buf, "\"timestamp\":123456"));
   CHECK(!strstr(buf, "temperature_c"));
+  CHECK(strstr(buf, "\"controller_connected\":false"));
   printf("  telemetry: %s\n", buf);
   write_file(out_dir + "/telemetry_basic.json", buf);
 
@@ -78,9 +79,11 @@ static void test_outbound(const std::string& out_dir) {
   t.temperature_c = 23.44f;
   t.humidity_pct = 61.0f;
   t.light_lux = 412.6f;
+  t.controller_connected = true;
   n = build_telemetry_json(t, "robot-1", ts, buf, sizeof(buf));
   CHECK(n > 0);
   CHECK(strstr(buf, "\"obstacle_cm\":null"));
+  CHECK(strstr(buf, "\"controller_connected\":true"));
   CHECK(strstr(buf, "\"light_lux\":413"));
   printf("  telemetry: %s\n", buf);
   write_file(out_dir + "/telemetry_full.json", buf);

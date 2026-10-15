@@ -158,7 +158,7 @@ Telemetry:
   "robot_id": "robot-1", "status": "en_route", "current_node": "cp-01",
   "task_id": "3f2c…", "last_completed_task_id": "9a1b…",
   "battery_pct": 82.5, "heading": 1, "obstacle_cm": null,
-  "temperature_c": 24.1, "humidity_pct": 61.0,
+  "temperature_c": 24.1, "humidity_pct": 61.0, "controller_connected": false,
   "timestamp": 123456
 }
 ```
@@ -168,7 +168,10 @@ faces. It never changes (see "Driving" below). `battery_pct` is 0–100.
 `temperature_c` and `humidity_pct` come from the robot's AHT20 and are left
 out when it has no recent reading. They are for the dashboard: neither the
 robot nor the orchestrator acts on them. The robot has no light sensor, so it
-never sends `light_lux`.
+never sends `light_lux`. `controller_connected` says whether its Bluetooth
+controller is connected; telemetry goes out at once when it changes, so the
+dashboard can confirm **Connect to RC**. It's optional in the contract, for
+firmware that doesn't send it.
 
 Event:
 
@@ -243,7 +246,7 @@ The robot never queues commands: each one acts on the current state right away.
 | `resume` | In `manual`: leave manual control (see [Manual control](#manual-control)) and clear the stop latch. In `initializing`, halted after a manual timeout or a search that gave up: look for a tag again. Otherwise only acts if the stop latch is set: clear it and restore the paused status (the action timer continues with the remaining time). If it was on a task, re-plan from the current node first, since manual control may have moved it while stopped; a robot still at its target keeps working. If the robot is stopped at the dock with a kept task, re-plan and continue it. |
 | `return_to_dock` | Ignored if already returning, docking or charging. Otherwise head to the dock. A task in progress or paused is kept and resumed after charging. With no task and a `task_id` on the command, adopt it as a dock task and publish `task_complete` for it once connected to the charger. If already at the dock but not charging, run the dock sequence again (straight to `docking`, no `arrived`). No path to the dock: publish `task_failed` for a dock task's `task_id`, else ignore it. A latched stop stays latched. |
 | `jog` | Manual driving from the dashboard; `direction` is `forward` or `backward`. Accepted in `idle`, `en_route`, `working`, `stopped`, `error`, `manual` and `initializing` (no tag needed: e.g. to drive it onto one); ignored on dock trips and below the motor cutoff. The dashboard only offers it before the first tag when `NEXT_PUBLIC_JOG_WHILE_INITIALIZING` is on. The Bluetooth controller's jogs (robot-only) are also accepted on a dock trip. The first jog enters `manual`. Each jog drives for a fixed **500 ms** from when it is received (`JOG_PULSE_MS` in `config.h`); a jog arriving while driving restarts the 500 ms. When the window runs out, the motors stop by themselves. `backward` reverses without turning; the heading doesn't change. |
-| `connect_controller` | Look for the Bluetooth controller for `PAD_CONNECT_WINDOW_MS` (10 s), in any status, `initializing` included. Otherwise the robot only looks while it can't reach the broker. No reply: whether a controller connected shows in the serial log only. Farm network only, like `jog`. |
+| `connect_controller` | Look for the Bluetooth controller for `PAD_CONNECT_WINDOW_MS` (10 s), in any status, `initializing` included. Otherwise the robot only looks while it can't reach the broker. No reply: `controller_connected` in telemetry turns `true` when one connects, and the controller rumbles once. Farm network only, like `jog`. |
 | `cancel` | Drop the task with this `task_id` if it is the current, paused or kept task: clear it without setting `last_completed_task_id` and without an event. A cancelled task that was moving or working goes to `idle` (or stays `stopped`). Cancelling a dock task stops the trip to the dock. Cancelling a kept task leaves the dock trip running, so the robot still charges. Ignore it if the id doesn't match. The orchestrator resends it whenever telemetry still shows the cancelled task, e.g. after the robot was offline. |
 
 The orchestrator sends a queued `stop` only when the robot is idle, so it acts as
@@ -456,10 +459,5 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
 - Battery ADC calibration curve
 - Turns (single drive motor: an edge to the side faults for now)
 - `harvest` action
-- Controller confirmation: tell the dashboard when a Bluetooth controller
-  connects or drops (after **Connect to RC**, and later), e.g. as robot events
-  or a telemetry field, and show it there; and confirm on the controller
-  itself (a rumble). Today only the serial log says. New events or fields are
-  a contract change (`types.ts` and every copy)
 - Graph updates from the orchestrator (the only case where the robot would
   write to flash)

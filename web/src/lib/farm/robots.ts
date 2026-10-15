@@ -29,6 +29,8 @@ export interface RobotView {
   /** Air around the robot (its AHT20); missing when it has no recent reading */
   temperatureC?: number;
   humidityPct?: number;
+  /** Its Bluetooth controller is connected (FarmNet telemetry); missing when the robot doesn't say */
+  controllerConnected?: boolean;
 }
 
 /** Same as orchestrator-config.json heartbeat_timeout_ms */

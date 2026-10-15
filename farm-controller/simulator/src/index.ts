@@ -47,6 +47,8 @@ const BATTERY_CUTOFF_THRESHOLD = 5;
 const CHARGE_COMPLETE_THRESHOLD = 85;
 /** Each jog drives for this long from receipt; a newer jog restarts it */
 const JOG_PULSE_MS = 500;
+/** The simulated Bluetooth controller connects this long after connect_controller */
+const CONTROLLER_CONNECT_MS = 2000;
 const MANUAL_TICK_MS = 100;
 /** Manual control ends by itself after this long without a jog */
 const MANUAL_TIMEOUT_MS = 5000;
@@ -106,6 +108,8 @@ const robot = {
   jogDrivenMs: 0,
   /** Last jog received, for the manual timeout */
   lastJogAt: 0,
+  /** The simulated Bluetooth controller: connected after connect_controller, never drops */
+  controllerConnected: false,
 };
 
 /** Used when a navigate has no duration_ms (firmware config.h DEFAULT_*_MS) */
@@ -184,6 +188,7 @@ function buildTelemetry(): RobotTelemetry {
     temperature_c: Math.round(fakeTemperature() * 10) / 10,
     humidity_pct: Math.round(fakeHumidity() * 10) / 10,
     light_lux: Math.round(fakeLightLux()),
+    controller_connected: robot.controllerConnected,
     timestamp: Date.now(),
   };
 }
@@ -319,9 +324,19 @@ async function main() {
     (cmd) => {
       console.log(`[CMD] received: ${cmd.command} -> ${cmd.target_node ?? "n/a"}`);
 
-      // The simulated robot has no Bluetooth controller to look for
+      // As if the operator pressed the controller's Xbox button straight away.
+      // It drives nothing: jog stands in for it.
       if (cmd.command === "connect_controller") {
-        console.log(`[RC] connect_controller: no controller in the simulator`);
+        if (robot.controllerConnected) {
+          console.log(`[RC] connect_controller: a controller is already connected`);
+          return;
+        }
+        console.log(`[RC] connect_controller: looking for a controller`);
+        setTimeout(() => {
+          robot.controllerConnected = true;
+          console.log(`[RC] controller connected`);
+          publishTelemetry();
+        }, CONTROLLER_CONNECT_MS);
         return;
       }
 

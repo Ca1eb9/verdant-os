@@ -128,6 +128,8 @@ export function ControlPanel({
   const jogTimer = useRef<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  // After Connect to RC: the robot and when its search window ends, until it confirms
+  const [rcWait, setRcWait] = useState<{ robotId: string; until: number } | null>(null);
   const [recent, setRecent] = useState<CommandRecord[]>([]);
   // On FarmNet commands go straight to the broker, which only the farm network reaches
   const localMode = source.mode === "local";
@@ -247,15 +249,34 @@ export function ControlPanel({
     robot && send({ robot_id: robot.id, command: { command: "resume", priority: "critical", immediate: true } });
 
   // The robot only looks for its Bluetooth controller when asked (or when it
-  // can't reach the farm). It doesn't report back whether one connected.
+  // can't reach the farm). Its telemetry says when one connects.
   const sendConnectRc = () =>
     robot &&
-    send({ robot_id: robot.id, command: { command: "connect_controller", priority: "critical", immediate: true } }, () =>
+    send({ robot_id: robot.id, command: { command: "connect_controller", priority: "critical", immediate: true } }, () => {
       setMessage({
         tone: "ok",
         text: `${robot.id} is looking for its controller for ${RC_WINDOW_S} s: press the controller's Xbox button.`,
-      }),
-    );
+      });
+      setRcWait({ robotId: robot.id, until: Date.now() + RC_WINDOW_S * 1000 });
+    });
+
+  // The search ends when the controller connects, or with the robot's window
+  useEffect(() => {
+    if (!rcWait) return;
+    const waiting = robots.find((r) => r.id === rcWait.robotId);
+    if (waiting?.controllerConnected) {
+      setMessage({ tone: "ok", text: `Controller connected to ${rcWait.robotId}.` });
+      setRcWait(null);
+    } else if (now >= rcWait.until) {
+      setMessage({
+        tone: "error",
+        text: `${rcWait.robotId} didn't find its controller. Turn the controller on, press Connect to RC, then its Xbox button.`,
+      });
+      setRcWait(null);
+    }
+  }, [rcWait, robots, now]);
+  // another robot: its own search, if any, isn't this panel's to report
+  useEffect(() => setRcWait(null), [selectedRobotId]);
 
   // --- Manual control (farm network only) ---
   const inManual = status === "manual";
@@ -442,6 +463,12 @@ export function ControlPanel({
             <dt>Air humidity</dt>
             <dd>{robot?.humidityPct !== undefined ? `${Math.round(robot.humidityPct)}%` : "—"}</dd>
           </div>
+          <div>
+            <dt>Controller</dt>
+            <dd>
+              {robot?.controllerConnected === undefined ? "—" : robot.controllerConnected ? "Connected" : "Not connected"}
+            </dd>
+          </div>
         </dl>
       </section>
 
@@ -565,9 +592,23 @@ export function ControlPanel({
               </button>
             </span>
           )}
-          <span className={styles.tip} title={online ? `The robot looks for its controller for ${RC_WINDOW_S} s.` : "The robot is offline."}>
-            <button type="button" className={styles.btn} disabled={!online || busy} onClick={sendConnectRc}>
-              Connect to RC
+          <span
+            className={styles.tip}
+            title={
+              !online
+                ? "The robot is offline."
+                : robot?.controllerConnected
+                  ? "Its controller is already connected."
+                  : `The robot looks for its controller for ${RC_WINDOW_S} s.`
+            }
+          >
+            <button
+              type="button"
+              className={styles.btn}
+              disabled={!online || busy || Boolean(robot?.controllerConnected) || rcWait !== null}
+              onClick={sendConnectRc}
+            >
+              {rcWait ? "Looking for controller…" : "Connect to RC"}
             </button>
           </span>
         </section>

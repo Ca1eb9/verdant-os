@@ -206,6 +206,7 @@ void nav_task(void* /*param*/) {
 
   RobotStatus sent_status = RobotStatus::Initializing;
   NodeIndex sent_node = NO_NODE;
+  bool sent_controller = false;
   uint32_t last_telemetry = 0;
   bool telemetry_sent = false;
 
@@ -261,7 +262,9 @@ void nav_task(void* /*param*/) {
         core.status() == RobotStatus::Docking || core.status() == RobotStatus::Charging;
 
     // After the step's events are queued: comms sends those first.
-    bool changed = core.status() != sent_status || core.current_node() != sent_node;
+    bool controller = g_pad_connected;
+    bool changed = core.status() != sent_status || core.current_node() != sent_node ||
+                   controller != sent_controller;
     if (changed || !telemetry_sent || now - last_telemetry >= TELEMETRY_PERIOD_MS) {
       TelemetryMsg t = {};
       core.snapshot(t);
@@ -271,11 +274,13 @@ void nav_task(void* /*param*/) {
       t.temperature_c = sensors.temperature_c;  // NAN: comms leaves it out
       t.humidity_pct = sensors.humidity_pct;
       t.light_lux = NAN;  // no light sensor on the robot
+      t.controller_connected = controller;  // sent at once on a change: the dashboard confirms it
       // Full only while comms is offline, when telemetry is discarded anyway.
       xQueueSend(g_telemetry_queue, &t, 0);
       if (changed) LOG("nav", "%s at %s, task '%s'", to_wire(t.status), t.current_node, t.task_id);
       sent_status = core.status();
       sent_node = core.current_node();
+      sent_controller = controller;
       last_telemetry = now;
       telemetry_sent = true;
     }

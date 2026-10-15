@@ -108,6 +108,8 @@ The simulator runs in **autonomous mode** by default — it picks random targets
 AUTONOMOUS=false npm run sim
 ```
 
+**Connect to RC** (`connect_controller`) "connects" a pretend Bluetooth controller 2 s later (`controller_connected` in telemetry), so the dashboard's confirmation can be tried without a robot. It never drops.
+
 ### Ingester (telemetry recorder)
 
 Subscribes to all telemetry topics, to operator commands

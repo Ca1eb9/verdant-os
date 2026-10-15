@@ -80,6 +80,8 @@ export interface RobotTelemetry {
   temperature_c?: number;
   humidity_pct?: number;
   light_lux?: number;
+  /** Its Bluetooth controller is connected; missing from firmware that doesn't report it */
+  controller_connected?: boolean;
   timestamp: number;
 }
 

@@ -147,6 +147,7 @@ function toView(id: string, e: Entry): RobotView {
     task,
     temperatureC: optNum(t?.temperature_c),
     humidityPct: optNum(t?.humidity_pct),
+    controllerConnected: typeof t?.controller_connected === "boolean" ? t.controller_connected : undefined,
   };
 }
 

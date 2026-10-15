@@ -193,6 +193,7 @@ size_t build_telemetry_json(const TelemetryMsg& m, const char* robot_id,
   if (!isnan(m.temperature_c)) doc["temperature_c"] = round1(m.temperature_c);
   if (!isnan(m.humidity_pct)) doc["humidity_pct"] = round1(m.humidity_pct);
   if (!isnan(m.light_lux)) doc["light_lux"] = round(m.light_lux);
+  doc["controller_connected"] = m.controller_connected;
 
   doc["timestamp"] = timestamp_ms;
   return finish(doc, out, cap);

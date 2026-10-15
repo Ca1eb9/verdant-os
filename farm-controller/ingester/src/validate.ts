@@ -30,6 +30,7 @@ const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFin
 const isLevel = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0;
 const optNum = (v: unknown) => v === undefined || isNum(v);
 const nullableNum = (v: unknown) => v === null || isNum(v);
+const optBool = (v: unknown) => v === undefined || typeof v === "boolean";
 
 export function isRobotTelemetry(v: unknown): v is RobotTelemetry {
   return (
@@ -45,6 +46,7 @@ export function isRobotTelemetry(v: unknown): v is RobotTelemetry {
     optNum(v.temperature_c) &&
     optNum(v.humidity_pct) &&
     optNum(v.light_lux) &&
+    optBool(v.controller_connected) &&
     isNum(v.timestamp)
   );
 }
