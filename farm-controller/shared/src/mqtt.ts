@@ -52,6 +52,8 @@ export async function createMqttClient(config: MqttConfig): Promise<TypedMqttCli
 
   const client = mqtt.connect(brokerUrl, options);
   const handlers = new Map<string, Set<(payload: unknown, topic: string) => void>>();
+  /** Topics whose last message wasn't JSON, so a bad sender logs once, not on every message */
+  const nonJsonTopics = new Set<string>();
 
   return new Promise((resolve, reject) => {
     client.on("connect", () => {
@@ -81,8 +83,14 @@ export async function createMqttClient(config: MqttConfig): Promise<TypedMqttCli
       try {
         payload = JSON.parse(buffer.toString());
       } catch {
-        console.warn(`[mqtt] Non-JSON message on ${topic}:`, buffer.toString());
+        if (!nonJsonTopics.has(topic)) {
+          nonJsonTopics.add(topic);
+          console.warn(`[mqtt] Non-JSON message on ${topic} (logged once until it's JSON again):`, buffer.toString());
+        }
         return;
+      }
+      if (nonJsonTopics.delete(topic)) {
+        console.log(`[mqtt] JSON on ${topic} again`);
       }
 
       // Match against subscribed patterns (handles + wildcards)

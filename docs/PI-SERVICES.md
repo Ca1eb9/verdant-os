@@ -239,5 +239,4 @@ SD cards fail from sudden power loss during a write and from wear. With this set
 
 Known problems, not fixed yet:
 
-- **The shared MQTT client logs every message that isn't JSON** (`farm-controller/shared`), with no rate limit, so one bad sender can flood a service's journal. It should log once per topic until that topic is valid again, as the alert engine does.
 - **After a reconnect, the shared MQTT client resubscribes at QoS 0**, not the QoS 1 its subscriptions were made with, so messages can be lost after a broker restart.
