@@ -69,7 +69,7 @@ orchestrator uses it, for a robot that has gone silent.
 
 | Status | Meaning | `task_id` |
 |---|---|---|
-| `initializing` | Booted, position unknown: looking for a tag, or halted (search gave up, or after the controller drove it) | always `null` |
+| `initializing` | Booted, position unknown: looking for a tag, or halted (search gave up, or after it was driven by hand) | always `null` |
 | `idle` | Stopped with no task | always `null` |
 | `en_route` | Driving to its task's target | the task |
 | `working` | Doing the action at the target | the task |
@@ -122,12 +122,15 @@ pushed first, then the status changes.
 | `returning_to_dock` | Dock node reached | `arrived` | `docking` |
 | `docking` | Charge contact detected | `dock_connected`, then `task_complete` if on a dock task | `charging` |
 | `charging` | Battery ≥ `charge_complete_pct` (85) | `charge_complete` | `stopped` if latched; else `en_route` for a kept task; else `idle` |
+| `charging` | Charge contact lost (knocked off the charger), battery ≥ 40% (`CHARGE_RESUME_PCT`) | `charge_complete` | as at 85% |
+| `charging` | Charge contact lost, battery under 40% or not read yet | — | `docking` (backs on again) |
 | any | `stop` | — | `stopped` |
 | `stopped` | `resume` | — | paused status, or `en_route` for a kept task after charging |
 | any | Unrecoverable fault | `error` | `error` |
 | `error` | Fault cleared (e.g. known tag read again) | `recovery` | re-plan and continue the task, else `idle` |
 | `idle`, `en_route`, `working`, `stopped`, `error` | `jog` | — | `manual` |
 | any | Bluetooth controller input (`initializing` included: no tag needed) | — | `manual` |
+| `initializing` | `jog` (no tag needed) | — | `manual` |
 | `manual` | `resume`, or manual timeout | `recovery` if it was in `error` | continue from `current_node` (see [Manual control](#manual-control)); from `initializing` with no tag read, back to `initializing` (search again on `resume`, halted after a timeout) |
 
 Battery events (`battery_low`, `battery_critical`) are published once per
@@ -155,7 +158,7 @@ Telemetry:
   "robot_id": "robot-1", "status": "en_route", "current_node": "cp-01",
   "task_id": "3f2c…", "last_completed_task_id": "9a1b…",
   "battery_pct": 82.5, "heading": 1, "obstacle_cm": null,
-  "temperature_c": 24.1, "humidity_pct": 61.0,
+  "temperature_c": 24.1, "humidity_pct": 61.0, "controller_connected": false,
   "timestamp": 123456
 }
 ```
@@ -165,7 +168,10 @@ faces. It never changes (see "Driving" below). `battery_pct` is 0–100.
 `temperature_c` and `humidity_pct` come from the robot's AHT20 and are left
 out when it has no recent reading. They are for the dashboard: neither the
 robot nor the orchestrator acts on them. The robot has no light sensor, so it
-never sends `light_lux`.
+never sends `light_lux`. `controller_connected` says whether its Bluetooth
+controller is connected; telemetry goes out at once when it changes, so the
+dashboard can confirm **Connect to RC**. It's optional in the contract, for
+firmware that doesn't send it.
 
 Event:
 
@@ -239,8 +245,8 @@ The robot never queues commands: each one acts on the current state right away.
 | `stop` | Accepted in every status, `initializing` included (it halts the tag search). Pause in place: halt motors, hold the action timer, report `stopped`, keep `task_id`, set the stop latch. Ignored if already stopped. |
 | `resume` | In `manual`: leave manual control (see [Manual control](#manual-control)) and clear the stop latch. In `initializing`, halted after a manual timeout or a search that gave up: look for a tag again. Otherwise only acts if the stop latch is set: clear it and restore the paused status (the action timer continues with the remaining time). If it was on a task, re-plan from the current node first, since manual control may have moved it while stopped; a robot still at its target keeps working. If the robot is stopped at the dock with a kept task, re-plan and continue it. |
 | `return_to_dock` | Ignored if already returning, docking or charging. Otherwise head to the dock. A task in progress or paused is kept and resumed after charging. With no task and a `task_id` on the command, adopt it as a dock task and publish `task_complete` for it once connected to the charger. If already at the dock but not charging, run the dock sequence again (straight to `docking`, no `arrived`). No path to the dock: publish `task_failed` for a dock task's `task_id`, else ignore it. A latched stop stays latched. |
-| `jog` | Manual driving from the dashboard; `direction` is `forward` or `backward`. Accepted in `idle`, `en_route`, `working`, `stopped`, `error` and `manual`; ignored otherwise (dock trips, `initializing`) and below the motor cutoff. The Bluetooth controller's jogs (robot-only) are also accepted on a dock trip. The first jog enters `manual`. Each jog drives for a fixed **500 ms** from when it is received (`JOG_PULSE_MS` in `config.h`); a jog arriving while driving restarts the 500 ms. When the window runs out, the motors stop by themselves. `backward` reverses without turning; the heading doesn't change. |
-| `connect_controller` | Look for the Bluetooth controller for `PAD_CONNECT_WINDOW_MS` (10 s), in any status, `initializing` included. Otherwise the robot only looks while it can't reach the broker. No reply: whether a controller connected shows in the serial log only. Farm network only, like `jog`. |
+| `jog` | Manual driving from the dashboard; `direction` is `forward` or `backward`. Accepted in `idle`, `en_route`, `working`, `stopped`, `error`, `manual` and `initializing` (no tag needed: e.g. to drive it onto one); ignored on dock trips and below the motor cutoff. The dashboard only offers it before the first tag when `NEXT_PUBLIC_JOG_WHILE_INITIALIZING` is on. The Bluetooth controller's jogs (robot-only) are also accepted on a dock trip. The first jog enters `manual`. Each jog drives for a fixed **500 ms** from when it is received (`JOG_PULSE_MS` in `config.h`); a jog arriving while driving restarts the 500 ms. When the window runs out, the motors stop by themselves. `backward` reverses without turning; the heading doesn't change. |
+| `connect_controller` | Look for the Bluetooth controller for `PAD_CONNECT_WINDOW_MS` (10 s), in any status, `initializing` included. Otherwise the robot only looks while it can't reach the broker. No reply: `controller_connected` in telemetry turns `true` when one connects, and the controller rumbles once. Farm network only, like `jog`. |
 | `cancel` | Drop the task with this `task_id` if it is the current, paused or kept task: clear it without setting `last_completed_task_id` and without an event. A cancelled task that was moving or working goes to `idle` (or stays `stopped`). Cancelling a dock task stops the trip to the dock. Cancelling a kept task leaves the dock trip running, so the robot still charges. Ignore it if the id doesn't match. The orchestrator resends it whenever telemetry still shows the cancelled task, e.g. after the robot was offline. |
 
 The orchestrator sends a queued `stop` only when the robot is idle, so it acts as
@@ -318,7 +324,8 @@ stops short of the tag.
 
 - **Elevator:** it creeps onto the platform the way it drove on, then rides.
 - **Dock:** it backs on (it faces away from the dock) until `DOCK_STOP_CM`,
-  then waits for the charger contact, which stops the motors.
+  then waits for the charger contact, which stops the motors. The robot only
+  reads the contact while docking or charging.
 - If the end wall isn't reached within `APPROACH_TIMEOUT_MS` of driving, the
   robot faults (see Faults).
 
@@ -366,6 +373,10 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
   continue.
 - **Approach not finished:** the elevator or dock end wall isn't reached
   within a timeout. The robot faults the same way.
+- **Can't charge:** at `DOCK_STOP_CM` with no charger contact after a short
+  wait (`CHARGE_CONTACT_TIMEOUT_MS`): the charger is off or the pads don't
+  touch, which the robot can't fix. It faults the same way, and the
+  orchestrator raises a critical alert for the `error`.
 - **Turn needed:** turns are a placeholder: an edge whose next node is to
   the side (neither ahead nor behind) faults the same way.
 - **Motor cutoff:** whenever the robot is driving itself with the motors cut
@@ -398,10 +409,13 @@ deviations.
   `manual` from any state: a dock trip (the dashboard's `jog` can't take over
   one), and `initializing` too, creeping for its first tag or after giving up,
   so an operator can drive a robot that rebooted off the farm with no tag to
-  find. Until it reads a tag the robot accepts only `stop`, `resume` and the
-  controller's jogs. Each input only drives briefly, like a jog, so losing the
-  controller stops the robot. The obstacle stop and the motor cutoff still
-  apply.
+  find. Until it reads a tag the robot accepts only `stop`, `resume` and
+  driving by hand. The stick drives at a speed from how far it's pushed
+  (`PAD_MIN_SPEED` to `PAD_MAX_SPEED`), each input for only `PAD_PULSE_MS`
+  (250 ms), so letting go or losing the controller stops the robot quickly.
+  The obstacle stop and the motor cutoff still apply.
+- **Both:** anything ahead inside `SLOW_ZONE_CM` slows a jog or drive to
+  `APPROACH_SPEED` for the rest of its pulse, as when following an edge.
 
 **Timeout:** a manual session from either source ends by itself after
 `MANUAL_TIMEOUT_MS` (5 s, in `config.h`) without a `jog` or controller input;
@@ -441,24 +455,9 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
 ## TBD
 
 - Missed-tag and path-blocked timeout values
-- Charge-contact detection
 - ToF approach distances and speeds, and where the elevator and dock tags go
 - Battery ADC calibration curve
 - Turns (single drive motor: an edge to the side faults for now)
 - `harvest` action
-- Analog Bluetooth controller driving: speed from how far the stick is
-  pushed, with a shorter pulse than `JOG_PULSE_MS` so it stops sooner on
-  release. Today the stick past half way sends a fixed-speed `jog`
-  (`JOG_SPEED`). Needs its own nav entry point (a variable-speed timed drive),
-  not `jog`
-- Maybe: slow down near obstacles in `manual` too. Today a jog drives at
-  `JOG_SPEED` until it stops at `OBSTACLE_STOP_CM`; the `SLOW_ZONE_CM`
-  slow-down to `APPROACH_SPEED` only applies while following an edge. Would
-  fit with analog controller driving
-- Controller confirmation: tell the dashboard when a Bluetooth controller
-  connects or drops (after **Connect to RC**, and later), e.g. as robot events
-  or a telemetry field, and show it there; and confirm on the controller
-  itself (a rumble). Today only the serial log says. New events or fields are
-  a contract change (`types.ts` and every copy)
 - Graph updates from the orchestrator (the only case where the robot would
   write to flash)

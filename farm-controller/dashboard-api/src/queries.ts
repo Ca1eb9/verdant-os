@@ -79,20 +79,48 @@ export interface HistoryQuery {
   limit: number;
 }
 
-/** Rows received in [from, to], oldest first; the newest `limit` rows if there are more */
-function history(db: Db, table: string, idColumn: string, q: HistoryQuery): Row[] {
+function historyWhere(idColumn: string, q: HistoryQuery) {
   const where = ["received_at >= ?", "received_at <= ?"];
   const params: (string | number)[] = [q.from, q.to];
   if (q.id) {
     where.push(`${idColumn} = ?`);
     params.push(q.id);
   }
+  return { where: where.join(" AND "), params };
+}
+
+/** Rows received in [from, to], oldest first; the newest `limit` rows if there are more */
+function history(db: Db, table: string, idColumn: string, q: HistoryQuery): Row[] {
+  const { where, params } = historyWhere(idColumn, q);
   const rows = db
     .prepare(
-      `SELECT * FROM ${table} WHERE ${where.join(" AND ")}
+      `SELECT * FROM ${table} WHERE ${where}
        ORDER BY received_at DESC, id DESC LIMIT ?`,
     )
     .all(...params, q.limit) as Row[];
+  return rows.reverse();
+}
+
+/**
+ * One row per shelf per `bucketMs` of received_at, in [from, to], oldest first
+ * (the newest `limit` buckets if there are more): each reading's mean over the
+ * bucket, null when it never read there. water_level_ok is false if any
+ * reading in the bucket was low. received_at is the bucket's first reading;
+ * shelves sharing one sort by shelf_id.
+ */
+function shelfBuckets(db: Db, q: HistoryQuery, bucketMs: number): Row[] {
+  const { where, params } = historyWhere("shelf_id", q);
+  const rows = db
+    .prepare(
+      `SELECT shelf_id, MIN(level) AS level, AVG(temperature_c) AS temperature_c,
+         AVG(humidity_pct) AS humidity_pct, AVG(light_lux) AS light_lux,
+         AVG(water_temp_c) AS water_temp_c, MIN(water_level_ok) AS water_level_ok, AVG(ph) AS ph,
+         MAX(timestamp) AS timestamp, MIN(received_at) AS received_at
+       FROM shelf_sensors WHERE ${where}
+       GROUP BY shelf_id, received_at / CAST(? AS INTEGER)
+       ORDER BY received_at DESC, shelf_id DESC LIMIT ?`,
+    )
+    .all(...params, bucketMs, q.limit) as Row[];
   return rows.reverse();
 }
 
@@ -100,8 +128,10 @@ export function telemetryHistory(db: Db, q: HistoryQuery): RobotTelemetryRecord[
   return history(db, "robot_telemetry", "robot_id", q).map(toTelemetry);
 }
 
-export function shelfHistory(db: Db, q: HistoryQuery): ShelfReadingRecord[] {
-  return history(db, "shelf_sensors", "shelf_id", q).map((r) => ({
+/** Every reading, or with `bucketMs` their means per bucket (shelfBuckets) */
+export function shelfHistory(db: Db, q: HistoryQuery, bucketMs?: number): ShelfReadingRecord[] {
+  const rows = bucketMs ? shelfBuckets(db, q, bucketMs) : history(db, "shelf_sensors", "shelf_id", q);
+  return rows.map((r) => ({
     shelf_id: r.shelf_id as string,
     level: r.level as number,
     temperature_c: (r.temperature_c as number | null) ?? null,

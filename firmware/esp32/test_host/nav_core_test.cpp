@@ -102,6 +102,7 @@ class Rig : public NavOutput {
   }
   void creep() override { motion.push_back("creep"); }
   void jog(JogDirection d) override { motion.push_back(d == JogDirection::Backward ? "jog b" : "jog f"); }
+  void drive(int16_t speed) override { motion.push_back("drive " + std::to_string(speed)); }
   void start_docking() override { motion.push_back("dock"); }
   void note(const char*) override {}
 
@@ -122,6 +123,10 @@ class Rig : public NavOutput {
   void battery(float pct) { core.on_battery(pct); }
   void contact() {
     core.on_charge_contact();
+    after_step();
+  }
+  void contact_lost() {
+    core.on_charge_lost(now);
     after_step();
   }
   // Drives the path by reading each tag in turn.
@@ -199,9 +204,8 @@ static void test_boot() {
   r.core.begin();
   CHECK(r.status() == RobotStatus::Initializing);
   CHECK(r.last_motion() == "creep");
-  // No work before the robot knows where it is, and no dashboard jog.
+  // No work before the robot knows where it is.
   r.command(navigate("t1", "water-01", TargetAction::Water, 1000));
-  r.command(jog(JogDirection::Forward));
   r.command(make(CommandType::ReturnToDock, "d1"));
   CHECK(r.status() == RobotStatus::Initializing && r.events.empty());
   CHECK(r.last_motion() == "creep");
@@ -224,7 +228,6 @@ static void test_before_first_tag() {
   r.command(make(CommandType::Stop));
   CHECK(r.status() == RobotStatus::Stopped && r.latched() && r.last_motion() == "halt");
   r.command(navigate("t1", "water-01", TargetAction::Water, 1000));
-  r.command(jog(JogDirection::Forward));
   CHECK(r.status() == RobotStatus::Stopped);
   r.command(make(CommandType::Resume));
   CHECK(r.status() == RobotStatus::Initializing && !r.latched() && r.last_motion() == "creep");
@@ -241,9 +244,8 @@ static void test_before_first_tag() {
   c.command(jog(JogDirection::Forward, CommandSource::Controller));
   CHECK(c.status() == RobotStatus::Manual && c.last_motion() == "jog f" && c.node() == "");
   CHECK(c.events.empty());
-  // Still no work from the dashboard, nor its jogs, while it has no node.
+  // Still no work from the dashboard while it has no node.
   c.command(navigate("t1", "water-01", TargetAction::Water, 1000));
-  c.command(jog(JogDirection::Backward));
   CHECK(c.status() == RobotStatus::Manual && c.last_motion() == "jog f");
   // Timeout with no tag: halted, still initializing; it doesn't drive off.
   c.advance(MANUAL_TIMEOUT_MS);
@@ -279,6 +281,23 @@ static void test_before_first_tag() {
   k.battery(BATTERY_CUTOFF_PCT);
   k.command(jog(JogDirection::Forward, CommandSource::Controller));
   CHECK(k.status() == RobotStatus::Initializing);
+
+  // The dashboard's jogs work before the first tag too, like the controller's.
+  Rig d;
+  d.core.begin();
+  d.command(jog(JogDirection::Backward));
+  CHECK(d.status() == RobotStatus::Manual && d.last_motion() == "jog b" && d.events.empty());
+  d.advance(MANUAL_TIMEOUT_MS);
+  CHECK(d.status() == RobotStatus::Initializing && d.last_motion() == "halt");
+  d.command(make(CommandType::Stop));
+  d.command(jog(JogDirection::Forward));
+  CHECK(d.status() == RobotStatus::Manual);
+  d.command(make(CommandType::Resume));
+  CHECK(d.status() == RobotStatus::Initializing && d.last_motion() == "creep");
+  d.command(jog(JogDirection::Forward));
+  d.tag("cp-01");
+  d.command(make(CommandType::Resume));
+  CHECK(d.status() == RobotStatus::Idle && d.node() == "cp-01");
 }
 
 static void test_task_cycle() {
@@ -607,6 +626,66 @@ static void test_dock_task() {
   CHECK(r2.status() == RobotStatus::Idle && r2.events.empty());
 }
 
+static void test_charge_lost() {
+  SCENARIO("knocked off the charger");
+  // Charged enough: done charging, and carries on with the kept task.
+  Rig r;
+  r.boot_at("water-01");
+  r.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  r.command(make(CommandType::ReturnToDock));
+  r.drive({"cp-01", "dock-1"});
+  r.contact();
+  r.clear();
+  r.battery(CHARGE_RESUME_PCT);
+  r.contact_lost();
+  CHECK(r.emitted({RobotEventType::ChargeComplete}));
+  CHECK(r.status() == RobotStatus::EnRoute && r.task() == "t1");
+  CHECK(r.last_motion() == "edge dock-1>cp-01");
+
+  // Too low: backs onto the dock again, keeping the task, and charges on.
+  Rig r2;
+  r2.boot_at("water-01");
+  r2.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  r2.command(make(CommandType::ReturnToDock));
+  r2.drive({"cp-01", "dock-1"});
+  r2.contact();
+  r2.clear();
+  r2.battery(CHARGE_RESUME_PCT - 0.1f);
+  r2.contact_lost();
+  CHECK(r2.events.empty() && r2.status() == RobotStatus::Docking);
+  CHECK(r2.last_motion() == "dock" && r2.task() == "t1");
+  r2.contact();
+  CHECK(r2.emitted({RobotEventType::DockConnected}) && r2.status() == RobotStatus::Charging);
+  // No reading yet counts as too low.
+  r2.battery(NAN);
+  r2.contact_lost();
+  CHECK(r2.status() == RobotStatus::Docking);
+
+  // A stop still holds; nothing is lost while not charging.
+  Rig r3;
+  r3.boot_at("dock-1");
+  r3.command(make(CommandType::ReturnToDock, "d1"));
+  r3.contact();
+  r3.command(make(CommandType::Stop));
+  r3.clear();
+  r3.contact_lost();  // stopped: not charging
+  CHECK(r3.status() == RobotStatus::Stopped && r3.events.empty());
+  r3.command(make(CommandType::Resume));  // still on the charger
+  CHECK(r3.status() == RobotStatus::Charging);
+  Rig r4;
+  r4.boot_at("cp-01");
+  r4.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  r4.command(make(CommandType::Stop));
+  r4.command(make(CommandType::ReturnToDock));  // latch kept
+  r4.tag("dock-1");
+  r4.contact();
+  r4.clear();
+  r4.battery(CHARGE_RESUME_PCT);
+  r4.contact_lost();
+  CHECK(r4.emitted({RobotEventType::ChargeComplete}) && r4.status() == RobotStatus::Stopped);
+  CHECK(r4.task() == "t1");
+}
+
 static void test_stop_latch_through_dock_trip() {
   SCENARIO("stop latch survives a dock trip");
   Rig r;
@@ -706,6 +785,53 @@ static void test_cancel() {
   r.command(make(CommandType::ReturnToDock, "d1"));
   r.command(make(CommandType::Cancel, "d1"));
   CHECK(r.status() == RobotStatus::Idle && r.task().empty());
+}
+
+static Command drive(int16_t speed) {
+  Command c = make(CommandType::Drive);
+  c.speed = speed;
+  c.source = CommandSource::Controller;
+  return c;
+}
+
+static void test_drive() {
+  SCENARIO("the controller's drive");
+  // A jog at a speed: manual, the task kept, reversing below 0.
+  Rig r;
+  r.boot_at("cp-01");
+  r.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  r.clear();
+  r.command(drive(90));
+  CHECK(r.status() == RobotStatus::Manual && r.task() == "t1" && r.last_motion() == "drive 90");
+  CHECK(!r.core.reversing() && r.events.empty());
+  r.command(drive(-140));
+  CHECK(r.last_motion() == "drive -140" && r.core.reversing());
+  // Each drive restarts the manual timeout.
+  r.advance(MANUAL_TIMEOUT_MS - 1);
+  r.command(drive(-140));
+  r.advance(MANUAL_TIMEOUT_MS - 1);
+  CHECK(r.status() == RobotStatus::Manual);
+  r.advance(1);
+  CHECK(r.status() == RobotStatus::EnRoute && r.task() == "t1");
+
+  // Like the controller's jogs: it takes over a dock trip, and works before
+  // the first tag, but not below the motor cutoff.
+  Rig d;
+  d.boot_at("cp-01");
+  d.command(make(CommandType::ReturnToDock));
+  d.command(drive(-60));
+  CHECK(d.status() == RobotStatus::Manual && d.last_motion() == "drive -60");
+  d.advance(MANUAL_TIMEOUT_MS);
+  CHECK(d.status() == RobotStatus::ReturningToDock);
+  Rig b;
+  b.core.begin();
+  b.command(drive(60));
+  CHECK(b.status() == RobotStatus::Manual && b.node() == "");
+  Rig k;
+  k.boot_at("cp-01");
+  k.battery(BATTERY_CUTOFF_PCT);
+  k.command(drive(60));
+  CHECK(k.status() == RobotStatus::Idle && k.last_motion() != "drive 60");
 }
 
 static void test_manual() {
@@ -873,10 +999,12 @@ int main() {
   test_stop_resume();
   test_dock_trip_keeps_task();
   test_dock_task();
+  test_charge_lost();
   test_stop_latch_through_dock_trip();
   test_survival_return();
   test_cancel();
   test_manual();
+  test_drive();
   test_fault_recovery();
   printf("nav_core_test: %s\n", failures ? "FAILED" : "passed");
   return failures ? 1 : 0;

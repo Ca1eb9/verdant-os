@@ -78,12 +78,10 @@ void NavCore::on_command(const Command& cmd, uint32_t now) {
   // No position yet (initializing, or stopped or driven by hand before the
   // first tag): no path can be planned, and the orchestrator never gives
   // work to a robot without a node. Stop and resume still work, and so does
-  // the Bluetooth controller: its operator is at the robot, e.g. moving it
-  // off the farm, where there's no tag to find.
+  // driving by hand, e.g. onto a tag, or off the farm where there's none.
   if (node_ == NO_NODE) {
-    bool controller = cmd.source == CommandSource::Controller;
     bool allowed = cmd.type == CommandType::Stop || cmd.type == CommandType::Resume ||
-                   (cmd.type == CommandType::Jog && controller);
+                   cmd.type == CommandType::Jog || cmd.type == CommandType::Drive;
     if (!allowed) {
       out_.note("ignored: no position yet (no tag read)");
       return;
@@ -97,6 +95,7 @@ void NavCore::on_command(const Command& cmd, uint32_t now) {
     case CommandType::Cancel: cancel(cmd.task_id); break;
     case CommandType::Jog: jog(cmd.direction, cmd.source == CommandSource::Controller, now); break;
     case CommandType::ConnectController: break;  // comms hands it to the pad task
+    case CommandType::Drive: drive(cmd.speed, now); break;
   }
 }
 
@@ -155,17 +154,7 @@ void NavCore::tick(uint32_t now) {
       if (!isnan(battery_pct_) && battery_pct_ >= CHARGE_COMPLETE_PCT) {
         char details[EVENT_DETAILS_LEN];
         snprintf(details, sizeof(details), "%.1f%%", battery_pct_);
-        emit(RobotEventType::ChargeComplete, details);
-        // A stop that came in before or during the dock trip still holds.
-        if (ctx_.stop_latched) {
-          ctx_.has_paused_status = false;
-          out_.halt();
-          status_ = RobotStatus::Stopped;
-        } else if (ctx_.kept.target != NO_NODE) {
-          resume_kept(now);
-        } else {
-          go_idle("");
-        }
+        finish_charging(details, now);
       }
       break;
     default:
@@ -188,6 +177,37 @@ void NavCore::on_charge_contact() {
     ctx_.dock_task = false;
   }
   status_ = RobotStatus::Charging;
+}
+
+void NavCore::on_charge_lost(uint32_t now) {
+  if (status_ != RobotStatus::Charging) {
+    out_.note("ignored: charge contact lost while not charging");
+    return;
+  }
+  if (!isnan(battery_pct_) && battery_pct_ >= CHARGE_RESUME_PCT) {
+    char details[EVENT_DETAILS_LEN];
+    snprintf(details, sizeof(details), "%.1f%%, knocked off the charger", battery_pct_);
+    finish_charging(details, now);
+    return;
+  }
+  // Slowly, until DOCK_STOP_CM. No contact there either is a fault (nav/motion):
+  // something it can't fix, such as a dead charger.
+  out_.note("charge contact lost: backing onto the dock again");
+  redock();
+}
+
+void NavCore::finish_charging(const char* details, uint32_t now) {
+  emit(RobotEventType::ChargeComplete, details);
+  // A stop that came in before or during the dock trip still holds.
+  if (ctx_.stop_latched) {
+    ctx_.has_paused_status = false;
+    out_.halt();
+    status_ = RobotStatus::Stopped;
+  } else if (ctx_.kept.target != NO_NODE) {
+    resume_kept(now);
+  } else {
+    go_idle("");
+  }
 }
 
 void NavCore::fault(const char* details) {
@@ -373,6 +393,19 @@ void NavCore::cancel(const char* task_id) {
 }
 
 void NavCore::jog(JogDirection direction, bool controller, uint32_t now) {
+  if (!take_manual(controller, now)) return;
+  reversing_ = direction == JogDirection::Backward;
+  out_.jog(direction);
+}
+
+void NavCore::drive(int16_t speed, uint32_t now) {
+  // Only the controller sends it.
+  if (!take_manual(true, now)) return;
+  reversing_ = speed < 0;
+  out_.drive(speed);
+}
+
+bool NavCore::take_manual(bool controller, uint32_t now) {
   switch (status_) {
     case RobotStatus::Idle:
     case RobotStatus::EnRoute:
@@ -388,28 +421,25 @@ void NavCore::jog(JogDirection direction, bool controller, uint32_t now) {
       // trip too. Leaving manual picks the trip back up.
       if (controller) break;
       out_.note("ignored: jog not allowed on a dock trip");
-      return;
+      return false;
     case RobotStatus::Initializing:
-      // Looking for its first tag, or given up: the controller can still
-      // drive it, e.g. on a bench away from the farm's tags.
-      if (controller) break;
-      out_.note("ignored: still initializing");
-      return;
+      // Looking for its first tag, or given up: it can still be driven,
+      // e.g. onto a tag, or on a bench away from the farm's tags.
+      break;
     default:
       out_.note("ignored: jog not allowed now");
-      return;
+      return false;
   }
   if (BATTERY_FAILSAFE && !isnan(battery_pct_) && battery_pct_ <= BATTERY_CUTOFF_PCT) {
     out_.note("ignored: battery below the motor cutoff");
-    return;
+    return false;
   }
   if (status_ != RobotStatus::Manual) {
     manual_from_ = status_;
     status_ = RobotStatus::Manual;
   }
   last_manual_input_ms_ = now;
-  reversing_ = direction == JogDirection::Backward;
-  out_.jog(direction);
+  return true;
 }
 
 // ---- Transitions ----------------------------------------------------------------------

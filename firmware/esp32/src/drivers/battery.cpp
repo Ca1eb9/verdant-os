@@ -13,9 +13,12 @@ static const float kCellCurve[][2] = {
 };
 static const int kCurvePoints = sizeof(kCellCurve) / sizeof(kCellCurve[0]);
 
-float battery_pct_from_voltage(float pack_v, int cells) {
-  if (isnan(pack_v) || cells <= 0) return NAN;
-  float cell_v = pack_v / cells;
+float battery_pct_from_voltage(float pack_v, int cells, float full_pack_v) {
+  const float typical_full = kCellCurve[0][0];
+  const float empty = kCellCurve[kCurvePoints - 1][0];
+  if (isnan(pack_v) || cells <= 0 || !(full_pack_v / cells > empty)) return NAN;
+  // Onto the typical curve: this pack's full lands on its 4.20 V
+  float cell_v = empty + (pack_v / cells - empty) * (typical_full - empty) / (full_pack_v / cells - empty);
   if (cell_v >= kCellCurve[0][0]) return 100.0f;
   if (cell_v <= kCellCurve[kCurvePoints - 1][0]) return 0.0f;
   for (int i = 1; i < kCurvePoints; i++) {
@@ -34,6 +37,8 @@ float battery_pct_from_voltage(float pack_v, int cells) {
 #include "../config.h"
 #include "../log.h"
 
+static_assert(BATTERY_FULL_V > BATTERY_CELLS * 3.2f, "BATTERY_FULL_V must be above an empty pack");
+
 void Battery::begin() {
   analogReadResolution(12);
   analogSetPinAttenuation(PIN_BATTERY_ADC, ADC_11db);  // ~0-3.1 V input range
@@ -48,6 +53,6 @@ void Battery::sample() {
   float pack_v = adc_v * (BATTERY_R1_OHMS + BATTERY_R2_OHMS) / BATTERY_R2_OHMS * BATTERY_CAL_FACTOR;
 
   volts_ = isnan(volts_) ? pack_v : volts_ + BATTERY_EMA_ALPHA * (pack_v - volts_);
-  pct_ = battery_pct_from_voltage(volts_, BATTERY_CELLS);
+  pct_ = battery_pct_from_voltage(volts_, BATTERY_CELLS, BATTERY_FULL_V);
 }
 #endif

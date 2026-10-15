@@ -41,7 +41,7 @@ npm run start
 
 ## Live Farm Data On FarmNet
 
-Set `NEXT_PUBLIC_MQTT_WS_URL` (for example `ws://192.168.4.1:9001`, Mosquitto's WebSocket listener on the Pi) before `npm run dev` or `npm run build` to show live robots from MQTT and send commands, jog included, straight to the farm (`src/lib/farm/local-source.ts`), with no operator key: only the farm network reaches the broker. It's read at build time. Without it the app uses the default source. **Connect to RC** (Manual control) sends `connect_controller`: the robot looks for its Bluetooth controller for 10 s. The control panel's recent commands come live from `farm/commands/+`, so commands sent from other browsers or relayed from Supabase show up too. To also list the ones sent before the page opened, set `NEXT_PUBLIC_DASHBOARD_API_URL` to the Pi's Dashboard API (`GET /commands`, see `farm-controller/README.md`); it's asked once per robot. Until that exists, leave it unset and the list starts empty. The map uses the layout the orchestrator publishes, so start the orchestrator too.
+Set `NEXT_PUBLIC_MQTT_WS_URL` (for example `ws://192.168.4.1:9001`, Mosquitto's WebSocket listener on the Pi) before `npm run dev` or `npm run build` to show live robots from MQTT and send commands, jog included, straight to the farm (`src/lib/farm/local-source.ts`), with no operator key: only the farm network reaches the broker. It's read at build time. Without it the app uses the default source. **Connect to RC** (Manual control) sends `connect_controller`: the robot looks for its Bluetooth controller for 10 s, and the panel says when it connects (telemetry's `controller_connected`, also shown as **Controller**) or that none was found. The control panel's recent commands come live from `farm/commands/+`, so commands sent from other browsers or relayed from Supabase show up too. To also list the ones sent before the page opened, set `NEXT_PUBLIC_DASHBOARD_API_URL` to the Pi's Dashboard API (`GET /commands`, see `farm-controller/README.md`); it's asked once per robot. The same API gives the Alerts page the alerts raised before the page opened (`GET /alerts`, the latest 500) and the History page the last 7 days of shelf readings as 5-minute means (`GET /shelves?bucket_ms=`), each loaded once. Without it, leave it unset: those lists start empty and fill live. The map uses the layout the orchestrator publishes, so start the orchestrator too.
 
 For `npm run dev` on your own machine, create `web/.env.local` (gitignored). Next only reads env files in `web/`, not the repo root's `.env`:
 
@@ -54,6 +54,8 @@ NEXT_PUBLIC_FARM_NAME=Your Farm
 Restart the dev server after changing it; its startup output lists `Environments: .env.local` when the file is read. A local Mosquitto needs the WebSocket listener from `farm-controller/README.md`; a stock install doesn't have one, and the dashboard stays "Disconnected". From another device, use this machine's LAN IP instead of `localhost`.
 
 Also set `NEXT_PUBLIC_FARM_ID` and `NEXT_PUBLIC_FARM_NAME` to that Pi's farm (its row in Supabase's `farms` table). On FarmNet the dashboard belongs to that one farm, and the header's farm picker is locked to it.
+
+Manual control is hidden for a robot that hasn't read its first tag yet (`initializing`). Set `NEXT_PUBLIC_JOG_WHILE_INITIALIZING=true` to offer it there too, e.g. to drive a robot onto a tag; the robot accepts those jogs either way. It's read at build time.
 
 ## Farms
 

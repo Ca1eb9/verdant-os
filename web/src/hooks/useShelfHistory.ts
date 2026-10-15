@@ -44,9 +44,10 @@ function toPoints(readings: ShelfReading[], range: HistoryRange, now: number): H
 }
 
 /**
- * Chart points from the shelf readings the data source has received since the
- * dashboard opened. `live` is false when the source has no live shelf feed
- * (remote, for now), and the points are then empty.
+ * Chart points from the data source's shelf readings: stored ones (on FarmNet,
+ * from the Pi's Dashboard API), then those received since the dashboard
+ * opened. `live` is false when the source has no live shelf feed (remote, for
+ * now), and the points are then empty.
  */
 export function useShelfHistory(range: HistoryRange) {
   const [source, setSource] = useState(getFarmDataSource);

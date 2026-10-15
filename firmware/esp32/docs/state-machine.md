@@ -16,7 +16,7 @@ stateDiagram-v2
 
     initializing --> idle : first known tag read
     initializing --> stopped : stop - halts the tag search
-    initializing --> manual : Bluetooth controller input<br/>(creeping, or after the search gave up)
+    initializing --> manual : jog or Bluetooth controller input<br/>(creeping, or after the search gave up)
     stopped --> initializing : resume - no tag read yet,<br/>search again
     manual --> initializing : resume (search again) or timeout<br/>(halted) - no tag read yet
 
@@ -37,6 +37,9 @@ stateDiagram-v2
     docking --> idle : cancel dock task
     charging --> en_route : charged 85% [charge_complete]<br/>kept task - re-plan from the dock
     charging --> idle : charged 85% [charge_complete]<br/>nothing kept
+    charging --> en_route : knocked off the charger at 40% or more<br/>[charge_complete] - kept task
+    charging --> idle : knocked off the charger at 40% or more<br/>[charge_complete] - nothing kept
+    charging --> docking : knocked off the charger under 40%<br/>- back on slowly
 ```
 
 ## 2. Interrupts: stop, manual, faults
@@ -69,7 +72,7 @@ stateDiagram-v2
     manual --> idle : no task, or target<br/>unreachable [task_failed]
 
     OnTask --> error : missed tag or fault [error] - task kept
-    DockTrip --> error : fault [error]
+    DockTrip --> error : fault [error], e.g. no charge contact<br/>at the dock (can't charge)
     error --> OnTask : known tag read [recovery] - re-plan the task
     error --> idle : known tag read [recovery] - no task
 ```
@@ -77,8 +80,8 @@ stateDiagram-v2
 ## Rules the diagram can't show
 
 - **Before the first tag** (`initializing`, or `stopped` / `manual` reached
-  from it) the robot only accepts `stop`, `resume` and the Bluetooth
-  controller's jogs; everything else, dashboard jogs included, is ignored.
+  from it) the robot only accepts `stop`, `resume` and jogs (the dashboard's
+  and the Bluetooth controller's); everything else is ignored.
   Leaving that `stopped` or `manual`, a robot that read a tag meanwhile goes
   `idle`; otherwise it goes back to `initializing`, searching again on
   `resume` and halted after a manual timeout (so it never drives off a bench
@@ -98,9 +101,9 @@ stateDiagram-v2
   paused state, re-planning first if the robot was moved.
 - **`resume`** outside `manual` only acts if the stop latch is set. In `manual`
   it also clears the latch.
-- **Manual timeout:** each jog or Bluetooth input drives for 500 ms and restarts
-  a 5 s timer (`MANUAL_TIMEOUT_MS`); when it runs out the robot leaves manual as
-  shown.
+- **Manual timeout:** each jog drives for 500 ms, and each Bluetooth stick
+  input for 250 ms at a speed from the stick. Each restarts a 5 s timer
+  (`MANUAL_TIMEOUT_MS`); when it runs out the robot leaves manual as shown.
 - **Stop latch:** set by `stop`, cleared by `resume` or `navigate`. It survives
   dock trips and manual timeouts.
 - **`idle` never holds a task:** `task_id` is `null` in `idle`. In every other

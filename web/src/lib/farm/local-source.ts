@@ -10,16 +10,18 @@
 // from every browser and the remote bridge show up live. What was sent
 // before this page loaded comes once per robot from the Pi's Dashboard API,
 // GET {apiUrl}/commands?robot_id=, which returns { commands: CommandRecord[] }
-// newest first, like this app's /api/commands. With no apiUrl (the API isn't
-// built yet) the history starts empty and fills as commands are sent.
+// newest first, like this app's /api/commands. With no apiUrl the history
+// starts empty and fills as commands are sent.
 //
-// Alerts are kept in memory the same way, from farm/alerts (not retained), so
-// only those raised since the dashboard opened are listed.
+// Alerts are kept in memory the same way, from farm/alerts (not retained).
+// The earlier ones come once from GET {apiUrl}/alerts and go behind them, so
+// an alert still open after a reload is listed with its resolution.
 //
 // Shelf readings come from farm/shelf/+/sensors (not retained, one per shelf
 // every few seconds), so the first arrives within a report interval. Every
 // reading is also kept, for the History page's charts, while the connection
-// pill keeps the source connected on any page.
+// pill keeps the source connected on any page. In front of them go the stored
+// ones, loaded once from GET {apiUrl}/shelves as 5-minute means.
 
 import mqtt, { type MqttClient } from "mqtt";
 import {
@@ -49,10 +51,19 @@ const RECONNECT_MS = 2_000;
 const RECENT_COMMANDS = 10;
 /** Commands kept in memory across all robots */
 const KEPT_COMMANDS = 200;
-/** Alerts kept in memory */
-const KEPT_ALERTS = 100;
+/**
+ * Alerts kept in memory, and loaded from the Dashboard API (its most): enough
+ * that an open problem's alert is there even when its resolution is far newer
+ */
+const KEPT_ALERTS = 500;
 /** Shelf readings kept for history: a day of one shelf reporting every 5 s */
 const KEPT_SHELF_READINGS = 17_280;
+/** Stored shelf history loaded once: the History page's longest range */
+const STORED_HISTORY_MS = 7 * 24 * 60 * 60_000;
+/** ...as one mean per shelf per bucket: a 24 h chart's points are this size too */
+const STORED_HISTORY_BUCKET_MS = 5 * 60_000;
+/** The Dashboard API's most: a full week for up to four shelves; with more, the oldest days drop */
+const STORED_HISTORY_LIMIT = 10_000;
 
 const STATUSES: RobotStatus[] = [
   "idle", "en_route", "working", "returning_to_dock", "docking", "charging",
@@ -111,6 +122,12 @@ function isAlert(v: unknown): v is FarmAlert {
     (v.resolves === null || (typeof v.resolves === "string" && v.resolves.length > 0));
 }
 
+async function getJson(url: string): Promise<unknown> {
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) throw new Error(`${response.status} from ${url}`);
+  return response.json();
+}
+
 function isShelfData(v: unknown): v is ShelfSensorData {
   return isRecord(v) && typeof v.shelf_id === "string" && v.shelf_id.length > 0 &&
     Number.isInteger(v.level) && isNumOrNull(v.temperature_c) && isNumOrNull(v.humidity_pct) &&
@@ -147,6 +164,7 @@ function toView(id: string, e: Entry): RobotView {
     task,
     temperatureC: optNum(t?.temperature_c),
     humidityPct: optNum(t?.humidity_pct),
+    controllerConnected: typeof t?.controller_connected === "boolean" ? t.controller_connected : undefined,
   };
 }
 
@@ -189,6 +207,12 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
   const shelves = new Map<string, ShelfReading>();
   /** Every shelf reading since the page opened, oldest first */
   let shelfHistory: ShelfReading[] = [];
+  /** Stored readings from before those, oldest first */
+  let storedHistory: ShelfReading[] = [];
+  /** Loaded from the Dashboard API (or loading): each once per page */
+  const loaded = new Set<"alerts" | "shelves">();
+  /** Bumped by farm/alerts/clear: alerts loaded from before it were deleted */
+  let alertsCleared = 0;
 
   const recordCommand = (record: CommandRecord) => {
     if (commands.some((c) => c.id === record.id)) return;
@@ -200,12 +224,65 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
     listeners.forEach((listener) => listener(list));
   };
 
-  // One bad message per topic is worth a log line; a stream of them isn't
-  const ignore = (topic: string) => {
-    if (warned.has(topic)) return;
-    warned.add(topic);
-    console.warn(`[local-source] ignoring malformed message on ${topic}`);
+  const warnOnce = (key: string, message: string) => {
+    if (warned.has(key)) return;
+    warned.add(key);
+    console.warn(`[local-source] ${message}`);
   };
+  // One bad message per topic is worth a log line; a stream of them isn't
+  const ignore = (topic: string) => warnOnce(topic, `ignoring malformed message on ${topic}`);
+
+  const emitAlerts = () => alertListeners.forEach((listener) => listener(alerts));
+  const emitHistory = () => {
+    const readings = [...storedHistory, ...shelfHistory];
+    historyListeners.forEach((listener) => listener(readings));
+  };
+
+  // Once per page, on first use; a failure is retried on the next subscribe
+  const loadOnce = async (what: "alerts" | "shelves", load: (api: string) => Promise<void>) => {
+    if (!apiUrl || loaded.has(what)) return;
+    loaded.add(what);
+    try {
+      await load(apiUrl);
+    } catch (err) {
+      loaded.delete(what);
+      warnOnce(`stored ${what}`, `no stored ${what} from the Dashboard API: ${err instanceof Error ? err.message : err}`);
+    }
+  };
+
+  const loadStoredAlerts = () =>
+    loadOnce("alerts", async (api) => {
+      const cleared = alertsCleared;
+      const body = await getJson(`${api}/alerts?limit=${KEPT_ALERTS}`);
+      if (!isRecord(body) || !Array.isArray(body.alerts)) throw new Error("unexpected response");
+      if (cleared !== alertsCleared) return;
+      // older than anything heard live, so they go after it
+      const ids = new Set(alerts.map((a) => a.alert_id));
+      const earlier = body.alerts.filter((a): a is FarmAlert => isAlert(a) && !ids.has(a.alert_id));
+      alerts = [...alerts, ...earlier].slice(0, KEPT_ALERTS);
+      emitAlerts();
+    });
+
+  const loadStoredHistory = () =>
+    loadOnce("shelves", async (api) => {
+      // `to` left to the Pi: its clock, like received_at
+      const params = new URLSearchParams({
+        from: String(Date.now() - STORED_HISTORY_MS),
+        bucket_ms: String(STORED_HISTORY_BUCKET_MS),
+        limit: String(STORED_HISTORY_LIMIT),
+      });
+      const body = await getJson(`${api}/shelves?${params}`);
+      if (!isRecord(body) || !Array.isArray(body.readings)) throw new Error("unexpected response");
+      // received_at is the Pi's clock and live readings this browser's (no
+      // clock sync): the stored ones stop where the live ones start
+      const liveFrom = shelfHistory[0]?.receivedAt ?? Infinity;
+      storedHistory = body.readings.flatMap((row: unknown) => {
+        if (!isShelfData(row)) return [];
+        const { received_at: receivedAt, ...data } = row as ShelfSensorData & { received_at?: unknown };
+        return isNum(receivedAt) && receivedAt < liveFrom ? [{ data, receivedAt }] : [];
+      });
+      emitHistory();
+    });
 
   const onMessage = (topic: string, payload: Uint8Array) => {
     let msg: unknown;
@@ -226,14 +303,15 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
     if (topic === TOPICS.alertsClear) {
       if (!isRecord(msg) || !isNum(msg.timestamp)) return ignore(topic);
       alerts = [];
-      alertListeners.forEach((listener) => listener(alerts));
+      alertsCleared++;
+      emitAlerts();
       return;
     }
     if (topic === TOPICS.alerts) {
       if (!isAlert(msg)) return ignore(topic);
       if (alerts.some((a) => a.alert_id === msg.alert_id)) return;
       alerts = [msg, ...alerts].slice(0, KEPT_ALERTS);
-      alertListeners.forEach((listener) => listener(alerts));
+      emitAlerts();
       return;
     }
     if (topic.endsWith("/sensors")) {
@@ -243,7 +321,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       const list = [...shelves.values()];
       shelfListeners.forEach((listener) => listener(list));
       shelfHistory = [...shelfHistory, reading].slice(-KEPT_SHELF_READINGS);
-      historyListeners.forEach((listener) => listener(shelfHistory));
+      emitHistory();
       return;
     }
     if (topic === TOPICS.commands.local || topic === TOPICS.commands.remote) {
@@ -355,10 +433,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
           loadedHistory.add(key);
         } catch (err) {
           // retried on the next refresh; the live history still fills meanwhile
-          if (!warned.has("history")) {
-            warned.add("history");
-            console.warn(`[local-source] no command history from the Dashboard API: ${err instanceof Error ? err.message : err}`);
-          }
+          warnOnce("history", `no command history from the Dashboard API: ${err instanceof Error ? err.message : err}`);
         }
       }
       return commands.filter((c) => !robotId || c.robot_id === robotId).slice(0, RECENT_COMMANDS);
@@ -378,6 +453,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       alertListeners.add(onAlerts);
       updateConnection();
       onAlerts(alerts);
+      void loadStoredAlerts();
       return () => {
         alertListeners.delete(onAlerts);
         updateConnection();
@@ -397,7 +473,8 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
     subscribeShelfHistory(onHistory) {
       historyListeners.add(onHistory);
       updateConnection();
-      onHistory(shelfHistory);
+      onHistory([...storedHistory, ...shelfHistory]);
+      void loadStoredHistory();
       return () => {
         historyListeners.delete(onHistory);
         updateConnection();

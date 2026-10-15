@@ -2,7 +2,7 @@
 
 ## Why you need it
 
-The ESP32 ADC pins can only read about 0–3.1V (at the setting the firmware uses). Our battery is a 3S lithium pack: 12.6V at full charge, ~9.6V at empty. We need to know where in that range the battery currently sits so the robot knows when to go charge.
+The ESP32 ADC pins can only read about 0–3.1V (at the setting the firmware uses). Our battery is a 3S lithium pack: 12.73V at full charge (measured on our pack), ~9.6V at empty. We need to know where in that range the battery currently sits so the robot knows when to go charge.
 
 A buck converter steps the battery down to a constant voltage (3.3V or 5V) to power the ESP32. But "constant" is the problem — the converter outputs the same voltage whether the battery is full or nearly dead. Reading the converter's output tells you nothing about remaining charge. It reads 3.3V at 100% and still reads 3.3V one second before the battery dies.
 
@@ -11,7 +11,7 @@ The voltage divider taps the battery *before* the converter, where the voltage a
 ## Where it goes
 
 ```
-Battery+ (12.6V) ───┬─────────────[ Buck converter ]───── ESP32 5V (power)
+Battery+ (12.73V) ──┬─────────────[ Buck converter ]───── ESP32 5V (power)
                      │
                      ├──[ 100kΩ ]──┬──[ 22kΩ ]──----------|
                                    │                      |
@@ -35,11 +35,11 @@ V_out = V_battery × R2 / (R1 + R2)
 With R1 = 100kΩ and R2 = 22kΩ:
 
 ```
-Full charge:  12.6V × 22/122 = 2.27V
+Full charge:  12.73V × 22/122 = 2.30V
 Empty:         9.6V × 22/122 = 1.73V
 ```
 
-So the ESP32's ADC reads a value between 1.73V and 2.27V, well inside the range it reads accurately (33kΩ would put a full pack at 3.13V, the edge of it). The high resistance values (100kΩ + 22kΩ) mean almost no current flows through the divider — about 0.1mA — so it doesn't meaningfully drain the battery.
+So the ESP32's ADC reads a value between 1.73V and 2.30V, well inside the range it reads accurately (33kΩ would put a full pack at 3.13V, the edge of it). The high resistance values (100kΩ + 22kΩ) mean almost no current flows through the divider — about 0.1mA — so it doesn't meaningfully drain the battery.
 
 ## Why not just use a lower converter output?
 
@@ -51,7 +51,9 @@ Even if you used a 3.0V buck converter so the output fits the ADC range, it stil
 `BATTERY_SAMPLES` readings, undoes the divider with `BATTERY_R1_OHMS` and
 `BATTERY_R2_OHMS`, and turns each cell's voltage into a percentage with a Li-ion
 discharge curve rather than a straight line (a straight line reads up to 20 points
-high mid-pack). All the values are in `config.h`.
+high mid-pack). The curve's 100% point is `BATTERY_FULL_V`, the pack's voltage
+when full measured with a multimeter (12.73V for ours); empty stays at 3.2V a
+cell. All the values are in `config.h`.
 
 ## Calibration
 
@@ -61,6 +63,7 @@ The ESP32's ADC isn't perfectly linear, and resistors have tolerance (±5% for s
 2. Measure the real battery voltage with a multimeter.
 3. Compare it to the battery reading the robot reports.
 4. If they differ, adjust `BATTERY_CAL_FACTOR` (the ESP32's ADC reference varies from chip to chip).
+5. Charge the pack fully off the robot, measure it, and set `BATTERY_FULL_V` to that.
 
 For the capstone this gets you within ±2–3%, which is plenty for knowing when to go charge.
 

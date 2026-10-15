@@ -19,6 +19,8 @@ export const LIMITS = {
   historyMax: 10000,
   /** GET /telemetry or /shelves with no `from`: this far back */
   historyWindowMs: 60 * 60 * 1000,
+  /** GET /shelves?bucket_ms: smallest bucket (shelves report every few seconds) */
+  shelfBucketMinMs: 1000,
 } as const;
 
 /** Throws with the reason; the API can't run without a valid config */

@@ -17,7 +17,7 @@
 //   - battery and obstacle checks: survival overrides (survival_return(),
 //     report(), fault()), see nav/survival
 //   - backing onto the dock: see nav/motion (start_docking)
-//   - charge contact: dock sequence (on_charge_contact())
+//   - charge contact: dock sequence (on_charge_contact(), on_charge_lost())
 
 #pragma once
 
@@ -63,8 +63,11 @@ class NavOutput {
   virtual void follow_edge(NodeIndex from, NodeIndex to, EdgeDrive drive) = 0;
   // Drive forward slowly until a tag is read (localizing).
   virtual void creep() = 0;
-  // Drive one JOG_PULSE_MS pulse. Backward reverses without turning.
+  // Drive one JOG_PULSE_MS pulse at JOG_SPEED. Backward reverses without turning.
   virtual void jog(JogDirection direction) = 0;
+  // Drive one PAD_PULSE_MS pulse at `speed` (backward below 0): the
+  // Bluetooth controller's stick.
+  virtual void drive(int16_t speed) = 0;
   // Back onto the dock; report contact with on_charge_contact(), which brakes.
   virtual void start_docking() = 0;
 
@@ -82,8 +85,8 @@ class NavCore {
   void begin();
 
   // ---- Inputs ----
-  // Before the first tag only stop, resume and the Bluetooth controller's
-  // jogs are accepted (the controller can drive it off the farm).
+  // Before the first tag only stop, resume and jogs are accepted (driving it
+  // by hand onto a tag, or off the farm).
   void on_command(const Command& cmd, uint32_t now);
   // A new tag arrival (SensorData.tag_seq changed). NO_NODE for a tag that
   // isn't in the graph: ignored.
@@ -95,6 +98,10 @@ class NavCore {
 
   // Dock sequence: the charger contacts closed while `docking`.
   void on_charge_contact();
+  // Dock sequence: the contacts opened while `charging` (knocked off the
+  // charger). At or above CHARGE_RESUME_PCT it's done charging, as at
+  // charge_complete; below it, it backs onto the dock again.
+  void on_charge_lost(uint32_t now);
   // RFID navigation: can't continue (e.g. missed tag, or no tag found while
   // creeping after boot). Reports `error`, keeping the task, until a known
   // tag is read again. While initializing it only halts and publishes the
@@ -133,6 +140,11 @@ class NavCore {
   void cancel(const char* task_id);
   // `controller`: from the Bluetooth controller, which also overrides a dock trip.
   void jog(JogDirection direction, bool controller, uint32_t now);
+  // The controller's stick: a jog at a speed.
+  void drive(int16_t speed, uint32_t now);
+  // A jog or drive may start: enters manual if it isn't already. False (and
+  // noted) where driving by hand isn't allowed.
+  bool take_manual(bool controller, uint32_t now);
 
   // Transitions
   void emit(RobotEventType type, const char* details = "");
@@ -147,6 +159,7 @@ class NavCore {
   void follow_path(uint32_t now);
   void arrive(uint32_t now);
   void redock();
+  void finish_charging(const char* details, uint32_t now);
   void complete_task();
   void go_to_task(uint32_t now);
   void go_to_dock(uint32_t now);

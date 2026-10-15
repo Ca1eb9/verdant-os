@@ -9,6 +9,7 @@
 
 #include "../config.h"
 #include "../drivers/battery.h"
+#include "../drivers/charge_contact.h"
 #include "../drivers/env_sensor.h"
 #include "../drivers/rfid_reader.h"
 #include "../drivers/tof_sensor.h"
@@ -23,6 +24,7 @@ TofSensor s_tof_front("front", Wire, PIN_I2C_FRONT_SDA, PIN_I2C_FRONT_SCL, I2C_F
 TofSensor s_tof_rear("rear", Wire1, PIN_I2C_REAR_SDA, PIN_I2C_REAR_SCL, I2C_REAR_HZ,
                      PIN_TOF_REAR_XSHUT);
 Battery s_battery;
+ChargeContact s_charge;
 EnvSensor s_env(Wire1);  // after s_tof_rear, which starts Wire1 (at I2C_REAR_HZ)
 
 // ---- RFID state --------------------------------------------------------------
@@ -174,6 +176,22 @@ void update_env(uint32_t now) {
   }
 }
 
+// ---- Charge contact --------------------------------------------------------------
+// Read only while nav asks (docking or charging); otherwise not known.
+
+void update_charge() {
+  if (!g_charge_sense_on) {
+    s_charge.reset();
+    return;
+  }
+  bool was_known = s_charge.known(), was_closed = s_charge.closed();
+  s_charge.sample();
+  if (s_charge.known() != was_known || s_charge.closed() != was_closed) {
+    LOG("sensor", "charge contact %s (%.2f V)", s_charge.closed() ? "closed" : "open",
+        s_charge.volts());
+  }
+}
+
 // ---- Output --------------------------------------------------------------------
 
 // Newest data matters most: if nav falls behind and the queue is full, drop
@@ -193,6 +211,7 @@ void sensor_task(void* /*param*/) {
   s_tof_rear.begin();
   s_env.begin();
   s_battery.begin();
+  s_charge.begin();
   s_battery.sample();  // have a value before the first report
 
   uint32_t start = millis();
@@ -207,6 +226,8 @@ void sensor_task(void* /*param*/) {
   uint32_t last_report_ms = 0;
   uint32_t last_battery_ms = start;
   uint32_t last_reported_seq = 0;
+  bool last_reported_charge_known = false;
+  bool last_reported_charge = false;
   TickType_t wake = xTaskGetTickCount();
 
   for (;;) {
@@ -217,13 +238,16 @@ void sensor_task(void* /*param*/) {
     update_obstacle(s_rear, now);
     update_rfid(now);
     update_env(now);
+    update_charge();
     if (now - last_battery_ms >= BATTERY_PERIOD_MS) {
       last_battery_ms = now;
       s_battery.sample();
     }
 
     bool new_tag = s_tag.seq != last_reported_seq;
-    if (new_tag || now - last_report_ms >= SENSOR_REPORT_MS) {
+    bool charge_changed = s_charge.known() != last_reported_charge_known ||
+                          s_charge.closed() != last_reported_charge;
+    if (new_tag || charge_changed || now - last_report_ms >= SENSOR_REPORT_MS) {
       SensorData d = {};
       d.uptime_ms = now;
       d.rfid_ok = s_rfid.ok();
@@ -238,11 +262,15 @@ void sensor_task(void* /*param*/) {
       d.obstacle_rear_stop = g_obstacle_rear_flag;
       d.battery_v = s_battery.volts();
       d.battery_pct = s_battery.pct();
+      d.charge_sensed = s_charge.known();
+      d.charge_contact = s_charge.closed();
       d.temperature_c = s_air.temperature_c;
       d.humidity_pct = s_air.humidity_pct;
       push_sensor_data(d);
       last_report_ms = now;
       last_reported_seq = s_tag.seq;
+      last_reported_charge_known = d.charge_sensed;
+      last_reported_charge = d.charge_contact;
     }
 
     vTaskDelayUntil(&wake, pdMS_TO_TICKS(SENSOR_PERIOD_MS));

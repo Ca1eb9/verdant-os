@@ -108,6 +108,8 @@ The simulator runs in **autonomous mode** by default — it picks random targets
 AUTONOMOUS=false npm run sim
 ```
 
+**Connect to RC** (`connect_controller`) "connects" a pretend Bluetooth controller 2 s later (`controller_connected` in telemetry), so the dashboard's confirmation can be tried without a robot. It never drops.
+
 ### Ingester (telemetry recorder)
 
 Subscribes to all telemetry topics, to operator commands
@@ -137,7 +139,7 @@ npm run api          # port 3001, reads ingester/farm_telemetry.db
 | `GET /health` | `{ ok, database }`: `database` is false until the ingester has created it (the data routes answer 503 until then) |
 | `GET /robots` | `{ robots }`: each robot's newest telemetry |
 | `GET /telemetry?robot_id=&from=&to=&limit=` | `{ telemetry }`: robot telemetry received between `from` and `to` (default: the last hour), oldest first. `robot_id` optional; `limit` default 1000, at most 10000 (the newest rows are kept) |
-| `GET /shelves?shelf_id=&from=&to=&limit=` | `{ readings }`: `ShelfSensorData` plus `received_at`, oldest first, with the same `from`/`to`/`limit` rules as `/telemetry`. `shelf_id` optional |
+| `GET /shelves?shelf_id=&from=&to=&limit=&bucket_ms=` | `{ readings }`: `ShelfSensorData` plus `received_at`, oldest first, with the same `from`/`to`/`limit` rules as `/telemetry`. `shelf_id` optional. With `bucket_ms` (at least 1000), one row per shelf per bucket instead: each reading's mean (`null` if it never read there), `water_level_ok` false if any reading was low, `received_at` the bucket's first; `limit` then counts buckets. The dashboard loads its History page this way |
 | `GET /alerts?severity=&source=&limit=` | `{ alerts }`: `FarmAlert`s, newest first. Filters optional; `limit` default 50, at most 500 |
 | `GET /commands?robot_id=` | `{ commands }`: the last 10 operator commands, newest first, each `{ id, robot_id, command, issued_by, issued_at, status: "sent" }` (the dashboard's own `/api/commands` shape). `robot_id` optional |
 

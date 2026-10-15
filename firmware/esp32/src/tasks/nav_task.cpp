@@ -44,7 +44,11 @@ class QueueOutput : public NavOutput {
 
   void jog(JogDirection direction) override {
     last_jog_ms = millis();
-    motion.jog(direction);
+    motion.jog(direction, last_jog_ms);
+  }
+  void drive(int16_t speed) override {
+    last_jog_ms = millis();
+    motion.drive(speed, last_jog_ms);
   }
 
   void follow_edge(NodeIndex from, NodeIndex to, EdgeDrive drive) override {
@@ -202,6 +206,7 @@ void nav_task(void* /*param*/) {
 
   RobotStatus sent_status = RobotStatus::Initializing;
   NodeIndex sent_node = NO_NODE;
+  bool sent_controller = false;
   uint32_t last_telemetry = 0;
   bool telemetry_sent = false;
 
@@ -237,15 +242,29 @@ void nav_task(void* /*param*/) {
     Command cmd;
     while (xQueueReceive(g_command_queue, &cmd, 0) == pdTRUE) core.on_command(cmd, now);
 
+    // The contact's state, not its change: a robot sent to dock again while
+    // still on the charger (e.g. resumed after an error) has it closed already.
+    if (!sensors.charge_sensed) {
+      // Not read yet since docking or charging began.
+    } else if (sensors.charge_contact) {
+      if (core.status() == RobotStatus::Docking) core.on_charge_contact();
+    } else if (core.status() == RobotStatus::Charging) {
+      core.on_charge_lost(now);
+    }
+
     core.tick(now);
     const char* fault = out.motion.check(now, sensors, g_motor_kill_flag);
     if (fault) core.fault(fault);
     // For the sensor task's obstacle flags: lowered while creeping in.
     g_obstacle_front_stop_cm = out.motion.stop_cm(false);
     g_obstacle_rear_stop_cm = out.motion.stop_cm(true);
+    g_charge_sense_on = CHARGE_SENSE_ALWAYS || core.status() == RobotStatus::Docking ||
+                        core.status() == RobotStatus::Charging;
 
     // After the step's events are queued: comms sends those first.
-    bool changed = core.status() != sent_status || core.current_node() != sent_node;
+    bool controller = g_pad_connected;
+    bool changed = core.status() != sent_status || core.current_node() != sent_node ||
+                   controller != sent_controller;
     if (changed || !telemetry_sent || now - last_telemetry >= TELEMETRY_PERIOD_MS) {
       TelemetryMsg t = {};
       core.snapshot(t);
@@ -255,11 +274,13 @@ void nav_task(void* /*param*/) {
       t.temperature_c = sensors.temperature_c;  // NAN: comms leaves it out
       t.humidity_pct = sensors.humidity_pct;
       t.light_lux = NAN;  // no light sensor on the robot
+      t.controller_connected = controller;  // sent at once on a change: the dashboard confirms it
       // Full only while comms is offline, when telemetry is discarded anyway.
       xQueueSend(g_telemetry_queue, &t, 0);
       if (changed) LOG("nav", "%s at %s, task '%s'", to_wire(t.status), t.current_node, t.task_id);
       sent_status = core.status();
       sent_node = core.current_node();
+      sent_controller = controller;
       last_telemetry = now;
       telemetry_sent = true;
     }

@@ -4,6 +4,7 @@
 #include "motion.h"
 
 #include <math.h>
+#include <stdlib.h>
 
 #include "../config.h"
 
@@ -17,12 +18,11 @@ void Motion::brake() {
   send(DriveMode::Stop, 0, 0, true);
 }
 
-void Motion::jog(JogDirection direction) {
-  // Timed: the motor task stops it, so there's nothing to watch.
-  phase_ = Phase::Idle;
-  int16_t speed = direction == JogDirection::Backward ? -JOG_SPEED : JOG_SPEED;
-  send(DriveMode::Drive, speed, JOG_PULSE_MS);
+void Motion::jog(JogDirection direction, uint32_t now) {
+  start_manual(direction == JogDirection::Backward ? -JOG_SPEED : JOG_SPEED, JOG_PULSE_MS, now);
 }
+
+void Motion::drive(int16_t speed, uint32_t now) { start_manual(speed, PAD_PULSE_MS, now); }
 
 void Motion::follow_edge(NodeIndex from, NodeIndex to, EdgeDrive drive, uint32_t now) {
   switch (drive) {
@@ -56,6 +56,8 @@ void Motion::start_docking(uint32_t now) {
 }
 
 const char* Motion::check(uint32_t now, const SensorData& s, bool motors_killed) {
+  front_cm_ = s.obstacle_front_cm;
+  rear_cm_ = s.obstacle_rear_cm;
   switch (phase_) {
     case Phase::Idle:
       return nullptr;
@@ -67,6 +69,24 @@ const char* Motion::check(uint32_t now, const SensorData& s, bool motors_killed)
         start_driving(Phase::Driving, exit_backward_, CRUISE_SPEED, now);
       }
       return nullptr;
+    case Phase::AtDock:
+      if (now - ride_started_ms_ < CHARGE_CONTACT_TIMEOUT_MS) return nullptr;
+      phase_ = Phase::Idle;
+      return "can't charge: no charge contact on the dock";
+    case Phase::Manual: {
+      // Timed: the motor task stops it when the pulse ends. Until then, slow
+      // down (never up) for the rest of it on reaching the slow zone.
+      if ((int32_t)(manual_until_ms_ - now) <= 0) {
+        phase_ = Phase::Idle;
+        return nullptr;
+      }
+      int16_t speed = manual_speed();
+      if (abs(speed) < abs(manual_sent_)) {
+        manual_sent_ = speed;
+        send(DriveMode::Drive, speed, manual_until_ms_ - now);
+      }
+      return nullptr;
+    }
     case Phase::Driving:
     case Phase::Creeping:
     case Phase::Entering:
@@ -84,7 +104,7 @@ const char* Motion::check(uint32_t now, const SensorData& s, bool motors_killed)
     if (!isnan(ahead_cm) && ahead_cm <= (entering ? ELEVATOR_STOP_CM : DOCK_STOP_CM)) {
       // Already at APPROACH_SPEED, and easing off would roll into the wall.
       send(DriveMode::Stop, 0, 0, true);
-      phase_ = entering ? Phase::Riding : Phase::Idle;
+      phase_ = entering ? Phase::Riding : Phase::AtDock;
       ride_started_ms_ = now;
       return nullptr;
     }
@@ -101,6 +121,23 @@ const char* Motion::check(uint32_t now, const SensorData& s, bool motors_killed)
   if (driven_ms_ < (creeping ? CREEP_TIMEOUT_MS : MISSED_TAG_TIMEOUT_MS)) return nullptr;
   phase_ = Phase::Idle;
   return creeping ? "no tag found" : "missed tag";
+}
+
+void Motion::start_manual(int16_t speed, uint32_t pulse_ms, uint32_t now) {
+  phase_ = Phase::Manual;
+  backward_ = speed < 0;
+  manual_asked_ = speed;
+  manual_until_ms_ = now + pulse_ms;
+  manual_sent_ = manual_speed();
+  send(DriveMode::Drive, manual_sent_, pulse_ms);
+}
+
+int16_t Motion::manual_speed() const {
+  float ahead_cm = backward_ ? rear_cm_ : front_cm_;
+  if (isnan(ahead_cm) || ahead_cm >= SLOW_ZONE_CM || abs(manual_asked_) <= APPROACH_SPEED) {
+    return manual_asked_;
+  }
+  return backward_ ? -APPROACH_SPEED : APPROACH_SPEED;
 }
 
 float Motion::stop_cm(bool rear) const {

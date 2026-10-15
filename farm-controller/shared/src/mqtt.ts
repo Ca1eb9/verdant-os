@@ -4,7 +4,7 @@
 // Thin layer over mqtt.js that handles:
 //   - JSON serialization/deserialization
 //   - Typed publish and subscribe
-//   - Auto-reconnect with logging
+//   - Auto-reconnect with logging, resubscribing at the same QoS
 //   - Graceful shutdown
 //
 // Usage:
@@ -48,21 +48,20 @@ export async function createMqttClient(config: MqttConfig): Promise<TypedMqttCli
     clean: true,
     reconnectPeriod: 5000,
     connectTimeout: 10000,
+    // A clean session drops subscriptions on a reconnect: mqtt.js makes them
+    // again, each at the QoS it was made with
+    resubscribe: true,
   };
 
   const client = mqtt.connect(brokerUrl, options);
   const handlers = new Map<string, Set<(payload: unknown, topic: string) => void>>();
+  /** Topics whose last message wasn't JSON, so a bad sender logs once, not on every message */
+  const nonJsonTopics = new Set<string>();
 
   return new Promise((resolve, reject) => {
     client.on("connect", () => {
       console.log(`[mqtt] ${config.serviceName} connected to ${brokerUrl}`);
       config.onConnect?.();
-
-      // Re-subscribe to all registered topics on reconnect
-      for (const topic of handlers.keys()) {
-        client.subscribe(topic);
-      }
-
       resolve(buildClient());
     });
 
@@ -81,8 +80,14 @@ export async function createMqttClient(config: MqttConfig): Promise<TypedMqttCli
       try {
         payload = JSON.parse(buffer.toString());
       } catch {
-        console.warn(`[mqtt] Non-JSON message on ${topic}:`, buffer.toString());
+        if (!nonJsonTopics.has(topic)) {
+          nonJsonTopics.add(topic);
+          console.warn(`[mqtt] Non-JSON message on ${topic} (logged once until it's JSON again):`, buffer.toString());
+        }
         return;
+      }
+      if (nonJsonTopics.delete(topic)) {
+        console.log(`[mqtt] JSON on ${topic} again`);
       }
 
       // Match against subscribed patterns (handles + wildcards)

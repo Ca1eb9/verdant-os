@@ -66,7 +66,8 @@ enum class Heading : uint8_t { North = 0, East = 1, South = 2, West = 3 };
 enum class Turn : uint8_t { Straight = 0, Right = 1, UTurn = 2, Left = 3 };
 
 // ConnectController goes to the pad task, not nav (g_pad_connect_requests).
-enum class CommandType : uint8_t { Navigate, ReturnToDock, Stop, Resume, Cancel, Jog, ConnectController };
+// Drive: the Bluetooth controller's stick, at a speed (robot-only, never on the wire).
+enum class CommandType : uint8_t { Navigate, ReturnToDock, Stop, Resume, Cancel, Jog, ConnectController, Drive };
 
 // jog only; None means the field was absent.
 enum class JogDirection : uint8_t { None, Forward, Backward };
@@ -103,6 +104,11 @@ struct SensorData {
   // Battery
   float battery_v;             // pack voltage (smoothed), NAN until first read
   float battery_pct;           // 0-100, NAN until first read
+
+  // Dock charge contact, debounced. Only read while g_charge_sense_on, and
+  // not known for the first few readings after: act only when charge_sensed.
+  bool charge_sensed;
+  bool charge_contact;
 
   // Air (AHT20). NAN until the first reading, and when none in ENV_STALE_MS.
   float temperature_c;
@@ -159,6 +165,7 @@ struct Command {
   bool has_duration;
   uint32_t duration_ms;
   JogDirection direction;              // jog only
+  int16_t speed;                       // Drive only: -255..255, backward below 0
   TaskPriority priority;
   CommandSource source;
 };
@@ -182,6 +189,7 @@ struct TelemetryMsg {
   float temperature_c;            // NAN -> field omitted
   float humidity_pct;             // NAN -> field omitted
   float light_lux;                // NAN -> field omitted
+  bool controller_connected;      // the Bluetooth controller is connected (g_pad_connected)
 };
 
 // ---- nav task -> comms task (g_event_queue) ----------------------------------
@@ -220,6 +228,9 @@ extern volatile bool g_motor_kill_flag;  // set by survival overrides (nav)
 // writes are atomic on the ESP32 too.
 extern volatile float g_obstacle_front_stop_cm;
 extern volatile float g_obstacle_rear_stop_cm;
+// Set by nav while docking or charging: only then does the sensor task read
+// the charge contact.
+extern volatile bool g_charge_sense_on;
 // seq of the last Turn or timed Drive the motor task finished.
 extern volatile uint32_t g_drive_done_seq;
 
@@ -231,7 +242,7 @@ extern volatile uint32_t g_last_command_ms;
 // connect_controller commands received (comms counts, the pad task watches):
 // each one opens a PAD_CONNECT_WINDOW_MS window to look for the controller.
 extern volatile uint32_t g_pad_connect_requests;
-// The Bluetooth controller's link (pad task writes, the status LED reads):
+// The Bluetooth controller's link (pad task writes, the status LED and telemetry read):
 // connected or not, and millis() of the last change. 0 = never.
 extern volatile bool g_pad_connected;
 extern volatile uint32_t g_pad_link_changed_ms;

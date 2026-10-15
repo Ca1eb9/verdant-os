@@ -36,6 +36,7 @@ export function isRobotTelemetry(value: unknown): value is Telemetry {
     isOptionalNumber(value.temperature_c) &&
     isOptionalNumber(value.humidity_pct) &&
     isOptionalNumber(value.light_lux) &&
+    (value.controller_connected === undefined || typeof value.controller_connected === "boolean") &&
     isFiniteNumber(value.timestamp);
 }
 

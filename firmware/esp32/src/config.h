@@ -112,12 +112,31 @@ constexpr bool OBSTACLE_FAILSAFE = true;
 // Measure the real resistors with a multimeter and put the values here.
 
 constexpr float BATTERY_R1_OHMS = 100000.0f;
-constexpr float BATTERY_R2_OHMS = 22000.0f;     // full pack: 2.27 V at the pin, inside the ADC's accurate range
+constexpr float BATTERY_R2_OHMS = 22000.0f;     // full pack: 2.30 V at the pin, inside the ADC's accurate range
 constexpr int BATTERY_CELLS = 3;
+// The pack's voltage when full, measured with a multimeter on the real pack:
+// the 100% point of the charge curve (drivers/battery). Empty stays at 3.2 V
+// a cell.
+constexpr float BATTERY_FULL_V = 12.73f;
 constexpr float BATTERY_CAL_FACTOR = 1.0f;      // tweak after multimeter check
 constexpr uint8_t BATTERY_SAMPLES = 16;         // ADC reads averaged per sample
 constexpr float BATTERY_EMA_ALPHA = 0.2f;       // smoothing, 0..1 (1 = none)
 constexpr uint32_t BATTERY_PERIOD_MS = 500;
+
+// ---- Charge contact (PIN_CHARGE_SENSE, docs/wiring/robot.md) ----------------------
+// Only read while docking or charging (g_charge_sense_on), or always with
+// CHARGE_SENSE_ALWAYS, every sensor loop:
+// the robot reaches the pads at APPROACH_SPEED and brakes on the contact.
+
+constexpr float CHARGE_CONTACT_V = 1.2f;        // at the pin: 1.8-2.3 V docked, under 0.5 V off
+constexpr uint8_t CHARGE_SAMPLES = 4;           // ADC reads averaged per reading
+constexpr uint8_t CHARGE_CONTACT_COUNT = 3;     // readings in a row to change state (pins bounce)
+// At DOCK_STOP_CM with no contact this long: error, it can't charge.
+constexpr uint32_t CHARGE_CONTACT_TIMEOUT_MS = 2000;
+// Bench test: read the contact in every status and log each change with the
+// pin's voltage ("charge contact closed (2.21 V)"). Nav still only acts on it
+// while docking or charging. Logged at boot when on.
+constexpr bool CHARGE_SENSE_ALWAYS = false;
 
 // ---- Air temperature + humidity (AHT20, drivers/env_sensor.h) ----------------------
 
@@ -192,6 +211,9 @@ constexpr bool BATTERY_FAILSAFE = true;
 // The charging diode (docs/wiring/robot.md) drops ~0.4 V, so the pack tops
 // out around 4.1 V a cell, not 4.2. Matches orchestrator charge_complete_pct.
 constexpr float CHARGE_COMPLETE_PCT = 85.0f;
+// Knocked off the charger at or above this: done charging, carry on as after
+// charge_complete. Below it, back onto the dock again.
+constexpr float CHARGE_RESUME_PCT = 40.0f;
 
 // ---- Manual control -----------------------------------------------------------------
 
@@ -202,9 +224,19 @@ constexpr uint32_t NOTE_REPEAT_MS = 2000;       // the same nav note again withi
 
 // ---- Bluetooth controller (tasks/pad_task.h) ----------------------------------------
 
-constexpr float PAD_DEADZONE = 0.5f;            // fraction of full stick travel needed to drive
+constexpr float PAD_DEADZONE = 0.15f;           // fraction of full stick travel needed to drive
 constexpr uint32_t PAD_LOOP_MS = 40;            // controller task tick: one link check each
-constexpr uint32_t PAD_JOG_INTERVAL_MS = 200;   // held stick: jog this often (under JOG_PULSE_MS)
+// The stick drives at a speed from how far it's pushed: PAD_MIN_SPEED just past
+// the deadzone, up to PAD_MAX_SPEED fully pushed (0..255). TBD: tune on the robot.
+constexpr int16_t PAD_MIN_SPEED = 60;
+constexpr int16_t PAD_MAX_SPEED = 150;
+// Each drive lasts this long from receipt, shorter than a dashboard jog's
+// JOG_PULSE_MS, so the robot stops sooner when the stick is let go.
+constexpr uint32_t PAD_PULSE_MS = 250;
+// Held stick: drive again this often (with PAD_LOOP_MS, under PAD_PULSE_MS),
+// or straight away when the speed changes by PAD_SPEED_STEP.
+constexpr uint32_t PAD_DRIVE_INTERVAL_MS = 100;
+constexpr int16_t PAD_SPEED_STEP = 15;
 // A link check slower than this (they take about 20 ms): the stick has to be
 // centred again before it drives.
 constexpr uint32_t PAD_LINK_LOST_MS = 400;
@@ -214,6 +246,9 @@ constexpr uint32_t PAD_LINK_LOST_MS = 400;
 constexpr uint32_t PAD_CONNECT_WINDOW_MS = 10000;
 constexpr uint16_t PAD_SCAN_MS = 97;            // scan interval = window: always listening
 constexpr uint32_t PAD_SCAN_CHUNK_MS = 10000;   // each scan this long, then a fresh one
+// On each connection the controller rumbles once, to confirm it at the robot.
+constexpr uint8_t PAD_RUMBLE_PCT = 30;          // motor power, 0-100
+constexpr uint32_t PAD_RUMBLE_MS = 300;         // in the controller's 10 ms steps
 
 // ---- Motor task (tasks/motor_task.h) ------------------------------------------------
 

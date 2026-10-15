@@ -48,6 +48,7 @@ export function isRobotTelemetry(v: unknown, nodes: ReadonlySet<string>): v is R
     optNum(v.temperature_c) &&
     optNum(v.humidity_pct) &&
     optNum(v.light_lux) &&
+    optBool(v.controller_connected) &&
     isNum(v.timestamp)
   );
 }
