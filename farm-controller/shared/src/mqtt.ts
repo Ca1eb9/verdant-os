@@ -17,6 +17,7 @@
 // ============================================================
 
 import mqtt, { MqttClient, IClientOptions } from "mqtt";
+import { LogOnce } from "./log-once.js";
 
 export interface MqttConfig {
   /** Broker URL, default "mqtt://localhost:1883" */
@@ -55,18 +56,20 @@ export async function createMqttClient(config: MqttConfig): Promise<TypedMqttCli
 
   const client = mqtt.connect(brokerUrl, options);
   const handlers = new Map<string, Set<(payload: unknown, topic: string) => void>>();
-  /** Topics whose last message wasn't JSON, so a bad sender logs once, not on every message */
-  const nonJsonTopics = new Set<string>();
+  // A topic's non-JSON messages, and reconnect errors while the broker is
+  // down, log once until they clear
+  const logs = new LogOnce();
 
   return new Promise((resolve, reject) => {
     client.on("connect", () => {
       console.log(`[mqtt] ${config.serviceName} connected to ${brokerUrl}`);
+      logs.ok("error");
       config.onConnect?.();
       resolve(buildClient());
     });
 
     client.on("error", (err) => {
-      console.error(`[mqtt] ${config.serviceName} error:`, err.message);
+      logs.warn("error", `[mqtt] ${config.serviceName} error: ${err.message} (logged once until it connects again)`);
       reject(err);
     });
 
@@ -80,15 +83,11 @@ export async function createMqttClient(config: MqttConfig): Promise<TypedMqttCli
       try {
         payload = JSON.parse(buffer.toString());
       } catch {
-        if (!nonJsonTopics.has(topic)) {
-          nonJsonTopics.add(topic);
-          console.warn(`[mqtt] Non-JSON message on ${topic} (logged once until it's JSON again):`, buffer.toString());
-        }
+        logs.warn(`json ${topic}`,
+          `[mqtt] Non-JSON message on ${topic} (logged once until it's JSON again): ${buffer.toString()}`);
         return;
       }
-      if (nonJsonTopics.delete(topic)) {
-        console.log(`[mqtt] JSON on ${topic} again`);
-      }
+      logs.ok(`json ${topic}`, `[mqtt] JSON on ${topic} again`);
 
       // Match against subscribed patterns (handles + wildcards)
       for (const [pattern, fns] of handlers) {
