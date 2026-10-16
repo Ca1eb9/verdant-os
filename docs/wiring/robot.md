@@ -147,8 +147,8 @@ only lets current flow *into* the battery, so off the dock the pads are dead.
 It also blocks a charger wired backwards.
 
 The diode costs 0.3–0.5 V, so the 12.6 V charger fills the pack to about
-4.1 V a cell instead of 4.2 V. The firmware and the orchestrator call charging
-complete at **80%** (`CHARGE_COMPLETE_PCT`, `charge_complete_pct`) for that
+4.1 V a cell instead of 4.2 V. The firmware calls charging complete at
+**80%** (`CHARGE_COMPLETE_PCT`), a few points under that ceiling, for that
 reason.
 
 ### The two voltage dividers

@@ -43,7 +43,7 @@ const BATTERY_CHARGE_RATE = 5;
 const BATTERY_LOW_THRESHOLD = 20;
 const BATTERY_CRITICAL_THRESHOLD = 15;
 const BATTERY_CUTOFF_THRESHOLD = 5;
-/** Firmware CHARGE_COMPLETE_PCT / orchestrator charge_complete_pct */
+/** Firmware CHARGE_COMPLETE_PCT */
 const CHARGE_COMPLETE_THRESHOLD = 80;
 /** Each jog drives for this long from receipt; a newer jog restarts it */
 const JOG_PULSE_MS = 500;

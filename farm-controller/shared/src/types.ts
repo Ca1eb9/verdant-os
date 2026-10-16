@@ -370,7 +370,6 @@ export interface OrchestratorConfig {
   battery_critical_pct: number;
   /** Extra charge above battery_low_pct required before assigning a task */
   battery_assign_margin_pct: number;
-  charge_complete_pct: number;
   /** Grace period for the robot to act on a command before reconciling */
   command_ack_timeout_ms: number;
   /** Max finished tasks kept in memory */
