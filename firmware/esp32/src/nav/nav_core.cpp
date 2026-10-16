@@ -96,6 +96,7 @@ void NavCore::on_command(const Command& cmd, uint32_t now) {
     case CommandType::Jog: jog(cmd.direction, cmd.source == CommandSource::Controller, now); break;
     case CommandType::ConnectController: break;  // comms hands it to the pad task
     case CommandType::Drive: drive(cmd.speed, now); break;
+    case CommandType::ChargeComplete: end_charge(now); break;
   }
 }
 
@@ -141,6 +142,8 @@ void NavCore::on_tag(NodeIndex node, uint32_t now) {
 }
 
 void NavCore::tick(uint32_t now) {
+  // A new watch each time it starts charging (docked, or resumed on the charger)
+  if (status_ != RobotStatus::Charging) charge_watched_ = false;
   switch (status_) {
     case RobotStatus::Working:
       if (now - ctx_.action_started_ms >= ctx_.current.duration_ms) complete_task();
@@ -155,7 +158,9 @@ void NavCore::tick(uint32_t now) {
         char details[EVENT_DETAILS_LEN];
         snprintf(details, sizeof(details), "%.1f%%", battery_pct_);
         finish_charging(details, now);
+        break;
       }
+      watch_charge(now);
       break;
     default:
       break;
@@ -196,7 +201,53 @@ void NavCore::on_charge_lost(uint32_t now) {
   redock();
 }
 
+void NavCore::watch_charge(uint32_t now) {
+  if (isnan(battery_pct_)) return;
+  if (!charge_watched_) {
+    charge_watched_ = true;
+    charge_stall_reported_ = false;
+    charge_best_pct_ = battery_pct_;
+    charge_best_ms_ = now;
+    return;
+  }
+  if (battery_pct_ >= charge_best_pct_ + CHARGE_STALL_RISE_PCT) {
+    charge_best_pct_ = battery_pct_;
+    charge_best_ms_ = now;
+    return;
+  }
+  if (now - charge_best_ms_ < CHARGE_STALL_MS) return;
+  char details[EVENT_DETAILS_LEN];
+  snprintf(details, sizeof(details), "%.1f%%, no rise in %lu min", battery_pct_,
+           (unsigned long)(CHARGE_STALL_MS / 60000));
+  // Once per charge; below CHARGE_RESUME_PCT it stays on and keeps watching.
+  if (!charge_stall_reported_) {
+    charge_stall_reported_ = true;
+    emit(RobotEventType::ChargeStalled, details);
+  }
+  // Enough to work on: off the charger, as when knocked off it.
+  if (battery_pct_ >= CHARGE_RESUME_PCT) finish_charging(details, now);
+}
+
+void NavCore::end_charge(uint32_t now) {
+  if (!is_dock_trip(status_)) {
+    out_.note("ignored: charge_complete while not on a dock trip");
+    return;
+  }
+  // A dock task was the trip itself: done, as on docking.
+  if (ctx_.dock_task) {
+    emit(RobotEventType::TaskComplete, "charging ended by operator");
+    copy_id(ctx_.last_completed_task_id, ctx_.current.task_id);
+    clear_task(ctx_.current);
+    ctx_.dock_task = false;
+  }
+  char details[EVENT_DETAILS_LEN];
+  if (isnan(battery_pct_)) snprintf(details, sizeof(details), "ended by operator");
+  else snprintf(details, sizeof(details), "%.1f%%, ended by operator", battery_pct_);
+  finish_charging(details, now);
+}
+
 void NavCore::finish_charging(const char* details, uint32_t now) {
+  charges_completed_++;
   emit(RobotEventType::ChargeComplete, details);
   // A stop that came in before or during the dock trip still holds.
   if (ctx_.stop_latched) {

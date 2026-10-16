@@ -232,6 +232,25 @@ export function processEvent(
     return handleRecovery(state, event);
   }
 
+  // Charging stalled: the robot decides whether it leaves the charger
+  if (event.event === RobotEventType.CHARGE_STALLED) {
+    return {
+      state,
+      effects: [{
+        type: "publish_alert",
+        robotId: state.id,
+        severity: AlertSeverity.WARNING,
+        message: `Battery stopped rising while charging (${event.details ?? "no details"})`,
+      }],
+    };
+  }
+
+  // Any completed charge re-arms the critical battery alert, however full it
+  // got (the robot may stop short, or the operator ended it)
+  if (event.event === RobotEventType.CHARGE_COMPLETE) {
+    state.battery_critical_alerted = false;
+  }
+
   // Task events only apply to the task we assigned, whatever status we
   // last stored (telemetry and events can arrive in either order)
   if (

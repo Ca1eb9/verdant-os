@@ -115,6 +115,24 @@ static void test_warn() {
   r.check(CHARGE_COMPLETE_PCT);
   r.check(BATTERY_WARN_PCT);
   CHECK(r.count(RobotEventType::BatteryLow) == 2);
+
+  // Any completed charge re-arms it, however full: knocked off at
+  // CHARGE_RESUME_PCT here.
+  Rig k;
+  k.en_route();
+  k.check(BATTERY_WARN_PCT);
+  k.check(BATTERY_RETURN_PCT);
+  CHECK(k.count(RobotEventType::BatteryLow) == 1 && k.count(RobotEventType::BatteryCritical) == 1);
+  k.core.on_tag(N("cp-01"), k.now);
+  k.core.on_tag(N("dock-1"), k.now);
+  k.core.on_charge_contact();
+  k.check(CHARGE_RESUME_PCT);
+  k.core.on_charge_lost(k.now);
+  CHECK(k.status() == RobotStatus::EnRoute);
+  k.check(BATTERY_WARN_PCT);
+  CHECK(k.count(RobotEventType::BatteryLow) == 2);
+  k.check(BATTERY_RETURN_PCT);  // still at the dock's tag: it docks again
+  CHECK(k.count(RobotEventType::BatteryCritical) == 2 && k.status() == RobotStatus::Docking);
 }
 
 static void test_forced_return() {

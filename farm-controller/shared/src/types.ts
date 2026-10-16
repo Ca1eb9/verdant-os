@@ -32,6 +32,8 @@ export enum RobotEventType {
   CHARGE_COMPLETE = "charge_complete",
   ERROR = "error",
   RECOVERY = "recovery",
+  /** Charging, but the battery stopped rising: it leaves the charger if it has enough to work */
+  CHARGE_STALLED = "charge_stalled",
 }
 
 export enum Heading {
@@ -123,7 +125,10 @@ export interface RobotTelemetry {
  * for its Bluetooth controller for a few seconds (farm network only, like jog).
  */
 export interface RobotCommand {
-  command: "navigate" | "return_to_dock" | "stop" | "resume" | "cancel" | "jog" | "connect_controller";
+  command:
+    | "navigate" | "return_to_dock" | "stop" | "resume" | "cancel" | "jog" | "connect_controller"
+    /** End a dock trip (on the way, docking or charging) as if the charge completed */
+    | "charge_complete";
   task_id?: string;
   path?: string[];
   target_node?: string;

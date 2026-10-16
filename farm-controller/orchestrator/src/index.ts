@@ -516,9 +516,9 @@ function onRemoteCommand(raw: unknown, topic: string) {
     ? [[msg.robot_id, robots.get(msg.robot_id)] as const].filter(([, s]) => s)
     : [...robots];
 
-  // Resume is always immediate; stop and return_to_dock when flagged.
-  // Skip the queue. Send to targeted robot or all robots.
-  if (msg.command.command === "resume" ||
+  // Resume and charge_complete are always immediate; stop and return_to_dock
+  // when flagged. Skip the queue. Send to targeted robot or all robots.
+  if (msg.command.command === "resume" || msg.command.command === "charge_complete" ||
       ((msg.command.command === "stop" || msg.command.command === "return_to_dock") &&
         msg.immediate)
     ) {

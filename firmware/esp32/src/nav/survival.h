@@ -7,7 +7,8 @@
 // ignored while stopped, in manual and on a dock trip, so a stop beats the
 // forced return and only the motor cutoff applies to a stopped robot.
 //
-//   battery <= BATTERY_WARN_PCT    battery_low, once until charge complete
+//   battery <= BATTERY_WARN_PCT    battery_low, once until the next charge
+//                                  completes (at any level)
 //   battery <= BATTERY_RETURN_PCT  survival_return(): battery_critical, dock.
 //                                  Once per drop: again only after reaching
 //                                  the charger or rising above
@@ -47,6 +48,7 @@ class Survival {
 
   NavCore& core_;
   bool warned_ = false;
+  uint32_t charges_seen_ = 0;  // NavCore::charges_completed() last re-armed at
   bool returned_ = false;  // forced return made this drop
   bool cut_off_ = false;
   bool obstacle_reported_ = false;

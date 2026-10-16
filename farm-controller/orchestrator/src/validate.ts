@@ -20,7 +20,9 @@ const EVENT_TYPES = new Set<string>(Object.values(RobotEventType));
 const HEADINGS = new Set<unknown>([Heading.NORTH, Heading.EAST, Heading.SOUTH, Heading.WEST]);
 const PRIORITIES = new Set<string>(Object.values(TaskPriority));
 const SOURCES = new Set<string>(Object.values(CommandSource));
-const COMMANDS = new Set(["navigate", "return_to_dock", "stop", "resume", "cancel", "jog", "connect_controller"]);
+const COMMANDS = new Set([
+  "navigate", "return_to_dock", "stop", "resume", "cancel", "jog", "connect_controller", "charge_complete",
+]);
 const DIRECTIONS = new Set(["forward", "backward"]);
 const ACTIONS = new Set(["water", "grow", "harvest", "charge", "idle"]);
 

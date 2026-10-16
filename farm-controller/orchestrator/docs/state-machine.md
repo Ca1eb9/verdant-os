@@ -187,7 +187,8 @@ Events are a fast path; telemetry corrects anything missed.
 | `error` | CRITICAL alert; task and path kept |
 | `recovery` | INFO alert resolving the error alert; request the next task |
 | `path_blocked` | WARNING alert (while stored status is `en_route`) |
-| `charge_complete` | Request the next task (while stored status is `charging`) |
+| `charge_complete` | Re-arm the critical battery alert (any completed charge); request the next task (while stored status is `charging`) |
+| `charge_stalled` | WARNING alert: the battery stopped rising while charging. The robot decides whether it leaves the charger |
 | `arrived`, `task_started`, `dock_connected`, `battery_low`, `battery_critical`, `obstacle_detected` | No effect; status comes from telemetry |
 
 "Request the next task" only assigns one if the stored status is `idle` and the
@@ -204,6 +205,7 @@ From `farm/commands/local` (dashboard on the farm network) and
 | `stop` | Immediate: sent to the robot(s). Otherwise: a stop task per robot (the dashboard sends it as critical), run when the robot is next idle ("pause after the current task"). A robot with no `current_node` yet (initializing) never takes queued work, so it gets the stop straight away |
 | `return_to_dock` | Immediate: sent to the robot(s). Otherwise: a dock task per robot |
 | `resume` | Always sent straight to the robot(s); also ends `manual` |
+| `charge_complete` | Always sent straight to the robot(s), like `resume`: ends a dock trip as if it had charged |
 | `cancel` | Needs a `robot_id` or `task_id`. Cancels that queued or assigned task, or the robot's current task, including while `lost`. Refused for an assigned stop task (use `resume`) |
 | `jog` | Only from `farm/commands/local` and for a known robot; sent straight to it, never queued |
 | `connect_controller` | Same as `jog`: the robot looks for its Bluetooth controller for 10 s |

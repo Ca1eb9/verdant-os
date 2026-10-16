@@ -86,7 +86,7 @@ ToF approach: while driving an edge it slows to `APPROACH_SPEED` once anything a
 
 | Check | What happens |
 |---|---|
-| battery at or below `BATTERY_WARN_PCT` | `battery_low`, once until the next charge complete; not while docking or charging |
+| battery at or below `BATTERY_WARN_PCT` | `battery_low`, once until the next charge completes (at any level); not while docking or charging |
 | battery at or below `BATTERY_RETURN_PCT` | `NavCore::survival_return()`: `battery_critical` and back to the dock, keeping the task. Ignored while stopped, in manual and on a dock trip. Once per drop: again only after reaching the charger or rising above `BATTERY_WARN_PCT`, so a robot that faults on the way (a dock that can't charge) stays in `error` |
 | battery at or below `BATTERY_CUTOFF_PCT` | `g_motor_kill_flag` set in every status, until the battery is back above `BATTERY_RETURN_PCT`. Whenever the robot is driving itself, `error` ("motor cutoff"), so it doesn't wait forever with the motors off. Not while charging |
 | obstacle flag ahead while `en_route`, `returning_to_dock` or a jog pulse in `manual` | `obstacle_detected` once, then `path_blocked` after `PATH_BLOCKED_TIMEOUT_MS`; status kept |
@@ -99,6 +99,8 @@ Charge contact: while `docking` or `charging` (only then, `g_charge_sense_on`), 
 | open | `charging` | `on_charge_lost()`, knocked off the charger: at or above `CHARGE_RESUME_PCT` (40%), `charge_complete` and on as after a full charge; below it, back to `docking`, backing on slowly until `DOCK_STOP_CM` |
 
 A robot built without the docking parts never closes the contact, so a dock trip ends in the `can't charge` fault.
+
+While `charging`, a battery that rises less than `CHARGE_STALL_RISE_PCT` (1 point) in `CHARGE_STALL_MS` (30 min) sends `charge_stalled` once, and the orchestrator raises a warning. At `CHARGE_RESUME_PCT` (40%) or more the robot then leaves the charger as if knocked off it (`charge_complete`); below it, it stays on and keeps watching. The `charge_complete` command (the dashboard's **Charge complete**) ends a dock trip the same way. Every one of these, and reaching `CHARGE_COMPLETE_PCT`, is the same `finish_charging()`: `battery_low` and the forced return re-arm after it, however full the battery got.
 
 To bench-test the contact, set `CHARGE_SENSE_ALWAYS` in `config.h`: the pin is then read in every status, and each change is logged with its voltage (`charge contact closed (2.21 V)`). Nothing else changes: the robot still only acts on it while docking or charging, and publishes `dock_connected` only then.
 

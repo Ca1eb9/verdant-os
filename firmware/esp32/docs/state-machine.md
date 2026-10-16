@@ -35,11 +35,14 @@ stateDiagram-v2
     docking --> charging : charge contact [dock_connected,<br/>task_complete if dock task]
     returning_to_dock --> idle : cancel dock task
     docking --> idle : cancel dock task
-    charging --> en_route : charged 85% [charge_complete]<br/>kept task - re-plan from the dock
-    charging --> idle : charged 85% [charge_complete]<br/>nothing kept
+    charging --> en_route : charged 80% [charge_complete]<br/>kept task - re-plan from the dock
+    charging --> idle : charged 80% [charge_complete]<br/>nothing kept
     charging --> en_route : knocked off the charger at 40% or more<br/>[charge_complete] - kept task
     charging --> idle : knocked off the charger at 40% or more<br/>[charge_complete] - nothing kept
     charging --> docking : knocked off the charger under 40%<br/>- back on slowly
+    charging --> en_route : charge stalled at 40% or more<br/>[charge_stalled, charge_complete] - kept task
+    charging --> charging : charge stalled under 40%<br/>[charge_stalled] once, keeps watching
+    returning_to_dock --> idle : charge_complete command [charge_complete]
 ```
 
 ## 2. Interrupts: stop, manual, faults
@@ -58,7 +61,7 @@ stateDiagram-v2
     stopped --> OnTask : resume - re-plan if moved,<br/>working continues its remaining time
     stopped --> DockTrip : resume - was on a dock trip,<br/>or return_to_dock (latch kept)
     stopped --> idle : resume - no task
-    DockTrip --> stopped : charged 85% [charge_complete]<br/>while stop latched
+    DockTrip --> stopped : charged 80% [charge_complete]<br/>while stop latched
 
     idle --> manual : jog or Bluetooth input
     OnTask --> manual : jog or Bluetooth input - task kept

@@ -19,6 +19,13 @@ void Survival::check_battery(float battery_pct, uint32_t now) {
   snprintf(details, sizeof(details), "%.1f%%", battery_pct);
   RobotStatus status = core_.status();
 
+  // Any completed charge re-arms both, however full it got (knocked off at
+  // CHARGE_RESUME_PCT, a stalled charge, ended by the operator)
+  if (core_.charges_completed() != charges_seen_) {
+    charges_seen_ = core_.charges_completed();
+    warned_ = false;
+    returned_ = false;
+  }
   if (battery_pct >= CHARGE_COMPLETE_PCT) warned_ = false;
   if (cut_off_ && battery_pct > BATTERY_RETURN_PCT) cut_off_ = false;
   // Above the warning level it was charged somehow, off the robot included

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { type RobotState, type RobotTelemetry, RobotStatus } from "@farm/shared";
+import { type RobotEvent, type RobotState, type RobotTelemetry, RobotEventType, RobotStatus } from "@farm/shared";
 import { loadConfig } from "../src/config.js";
-import { processTelemetry, processWatchdog } from "../src/state-machine.js";
+import { processEvent, processTelemetry, processWatchdog } from "../src/state-machine.js";
 
 const config = loadConfig();
 const NOW = 1_000_000;
@@ -78,6 +78,30 @@ describe("critical battery alert", () => {
       alerts(state, RobotStatus.EN_ROUTE, config.battery_critical_pct - 2, NOW + config.command_ack_timeout_ms + 1).length,
       0,
     );
+  });
+});
+
+function event(type: RobotEventType, details?: string): RobotEvent {
+  return { robot_id: "robot-1", event: type, details, timestamp: NOW };
+}
+
+describe("charging", () => {
+  it("raises a warning when the battery stops rising while charging", () => {
+    const state = { ...robot(), status: RobotStatus.CHARGING };
+    const { effects } = processEvent(state, event(RobotEventType.CHARGE_STALLED, "35.0%, no rise in 30 min"), config);
+    assert.equal(effects.length, 1);
+    const alert = effects[0];
+    assert.ok(alert.type === "publish_alert" && alert.severity === "warning" && alert.message.includes("35.0%"));
+  });
+
+  it("re-arms the critical battery alert on any completed charge, however full", () => {
+    const state = robot();
+    const critical = config.battery_critical_pct;
+    assert.equal(alerts(state, RobotStatus.STOPPED, critical - 1).length, 1);
+    // the operator ended the charge below the low threshold: the next drop alerts again
+    state.status = RobotStatus.CHARGING;
+    processEvent(state, event(RobotEventType.CHARGE_COMPLETE, "12.0%, ended by operator"), config);
+    assert.equal(alerts(state, RobotStatus.STOPPED, critical - 1).length, 1);
   });
 });
 
