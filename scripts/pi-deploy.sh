@@ -31,6 +31,18 @@ as_farm git pull --ff-only
 echo "== stop services"
 systemctl stop "${SERVICES[@]}" 2>/dev/null || true
 
+# From here, any failure (no internet for npm ci, a failed build) starts the
+# services again on whatever is installed, rather than leaving the farm down.
+restart_on_failure() {
+  local status=$?
+  if [[ $status -ne 0 ]]; then
+    echo "Deploy failed (exit $status): starting the services again" >&2
+    systemctl daemon-reload || true
+    systemctl start "${SERVICES[@]}" || true
+  fi
+}
+trap restart_on_failure EXIT
+
 echo "== farm-controller"
 as_farm npm ci --no-audit --no-fund
 as_farm npm run build:shared

@@ -218,7 +218,7 @@ SD cards fail from sudden power loss during a write and from wear. With this set
 |---|---|
 | `status=203/EXEC` | Node isn't at `/usr/bin/node`. Check `which node`; reinstall from step 2. |
 | Orchestrator or ingester keeps restarting with `ECONNREFUSED` | Mosquitto isn't running: `systemctl status mosquitto`, `journalctl -u mosquitto -n 20`. |
-| `Cannot find module` after an update | The build didn't finish. Run the deploy script again and read its output. |
+| `Cannot find module` after an update | The build didn't finish. A failed deploy starts the services again on what's installed, which may be half-updated. Run the deploy script again and read its output. |
 | `EROFS: read-only file system` | A service tried to write outside its allowed folders. Data belongs in `/var/lib/verdant`; set the path in its env file. |
 | Ingester fails on `better-sqlite3` | It was built for a different Node version. Rerun the deploy script (it reinstalls), and check step 1's packages are installed. |
 | Dashboard shows old content | The deploy rebuilds it; make sure the script reached `== start`. |
