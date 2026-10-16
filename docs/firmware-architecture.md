@@ -347,7 +347,9 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
   - warn at 20%: publish `battery_low`, once until the next charge complete
     (not while docking or charging);
   - force return to dock at 15%: publish `battery_critical` and go to the dock,
-    keeping the task;
+    keeping the task. Once per drop: again only after reaching the charger
+    or rising above 20%, so a robot that faults on the way (e.g. a dock that
+    can't charge) stays in `error` instead of retrying every loop;
   - kill motors at about 5%, in every status. They stay off until the battery
     is back above 15%, so noise near the cutoff can't toggle them.
     `BATTERY_FAILSAFE = false` in `config.h` turns this cutoff off, for bench

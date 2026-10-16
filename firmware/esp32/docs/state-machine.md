@@ -113,7 +113,8 @@ stateDiagram-v2
   and `manual` only the motor cutoff (about 5%) applies: a stop beats the
   forced return.
   - warn at 20% [`battery_low`];
-  - forced return at 15% [`battery_critical`], keeping the task;
+  - forced return at 15% [`battery_critical`], keeping the task; once per
+    drop, again after reaching the charger or rising above 20%;
   - motor cutoff at about 5%, until back above 15%. Driving itself with the
     motors cut off is a fault [`error`].
 - **Obstacle:** motors stop (easing off over `STOP_RAMP_MS`) while the flag

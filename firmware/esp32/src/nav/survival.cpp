@@ -21,6 +21,8 @@ void Survival::check_battery(float battery_pct, uint32_t now) {
 
   if (battery_pct >= CHARGE_COMPLETE_PCT) warned_ = false;
   if (cut_off_ && battery_pct > BATTERY_RETURN_PCT) cut_off_ = false;
+  // Above the warning level it was charged somehow, off the robot included
+  if (status == RobotStatus::Charging || battery_pct > BATTERY_WARN_PCT) returned_ = false;
 
   // Charging (or on its way to the charger) is the fix, not a warning.
   bool charging = status == RobotStatus::Docking || status == RobotStatus::Charging;
@@ -41,8 +43,12 @@ void Survival::check_battery(float battery_pct, uint32_t now) {
     snprintf(why, sizeof(why), "motor cutoff at %s", details);
     core_.fault(why);
   }
-  // Can't drive anywhere with the motors off.
-  if (!cut_off_ && battery_pct <= BATTERY_RETURN_PCT) core_.survival_return(details, now);
+  // Can't drive anywhere with the motors off. Once per drop: retried every
+  // loop, a robot that faults on the way (no charge at the dock, a missed
+  // tag) would leave error, fault again and send an error each time.
+  if (!cut_off_ && !returned_ && battery_pct <= BATTERY_RETURN_PCT) {
+    returned_ = core_.survival_return(details, now);
+  }
 }
 
 void Survival::check_obstacle(bool blocked, uint32_t now) {

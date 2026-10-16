@@ -110,8 +110,8 @@ class NavCore {
   // Survival overrides: forced return to dock, keeping the task. Publishes
   // battery_critical. Ignored while stopped (a stop beats it), in manual
   // (only the motor cutoff applies in both), while already on a dock trip
-  // and while initializing.
-  void survival_return(const char* details, uint32_t now);
+  // and while initializing. False when ignored.
+  bool survival_return(const char* details, uint32_t now);
   // Survival overrides: an event that changes no status (battery_low,
   // obstacle_detected, path_blocked).
   void report(RobotEventType type, const char* details) { emit(type, details); }

@@ -229,15 +229,16 @@ void NavCore::fault(const char* details) {
   status_ = RobotStatus::Error;
 }
 
-void NavCore::survival_return(const char* details, uint32_t now) {
+bool NavCore::survival_return(const char* details, uint32_t now) {
   // A stop beats it: an operator stopped the robot on purpose. So does an
   // operator driving it by hand.
   if (status_ == RobotStatus::Initializing || status_ == RobotStatus::Stopped ||
       status_ == RobotStatus::Manual || is_dock_trip(status_)) {
-    return;
+    return false;
   }
   emit(RobotEventType::BatteryCritical, details);
   return_to_dock("", now);
+  return true;
 }
 
 // ---- Commands ----------------------------------------------------------------------
