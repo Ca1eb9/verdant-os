@@ -75,6 +75,8 @@ stateDiagram-v2
     DockTrip --> error : fault [error], e.g. no charge contact<br/>at the dock (can't charge)
     error --> OnTask : known tag read [recovery] - re-plan the task
     error --> idle : known tag read [recovery] - no task
+    error --> OnTask : navigate [recovery]
+    error --> DockTrip : return_to_dock [recovery]
 ```
 
 ## Rules the diagram can't show

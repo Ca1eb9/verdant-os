@@ -128,6 +128,7 @@ pushed first, then the status changes.
 | `stopped` | `resume` | — | paused status, or `en_route` for a kept task after charging |
 | any | Unrecoverable fault | `error` | `error` |
 | `error` | Fault cleared (e.g. known tag read again) | `recovery` | re-plan and continue the task, else `idle` |
+| `error` (also stopped or in `manual` from it) | `navigate` or `return_to_dock` accepted | `recovery` | `en_route` / `returning_to_dock` |
 | `idle`, `en_route`, `working`, `stopped`, `error` | `jog` | — | `manual` |
 | any | Bluetooth controller input (`initializing` included: no tag needed) | — | `manual` |
 | `initializing` | `jog` (no tag needed) | — | `manual` |

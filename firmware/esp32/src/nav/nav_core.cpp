@@ -274,6 +274,9 @@ void NavCore::navigate(const Command& cmd, uint32_t now) {
     return;
   }
 
+  // A new task leaves error (also one stopped or driven by hand meanwhile):
+  // the Pi resolves its error alert on recovery.
+  if (paused_or_current() == RobotStatus::Error) emit(RobotEventType::Recovery, "new task");
   // Replaces everything: task, kept task, paused status, stop latch, manual.
   clear_task(ctx_.kept);
   ctx_.dock_task = false;
@@ -361,6 +364,7 @@ void NavCore::return_to_dock(const char* dock_task_id, uint32_t now) {
     ctx_.current.duration_ms = 0;
     ctx_.dock_task = true;
   }
+  if (paused_or_current() == RobotStatus::Error) emit(RobotEventType::Recovery, "sent to the dock");
   // The stop latch stays: after charging the robot reports stopped.
   ctx_.has_paused_status = false;
   go_to_dock(now);

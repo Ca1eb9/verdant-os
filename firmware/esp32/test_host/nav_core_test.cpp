@@ -52,7 +52,8 @@ static bool emitted_before_transition(RobotEventType type, RobotStatus s) {
     case RobotEventType::DockConnected: return s == RobotStatus::Docking;
     case RobotEventType::ChargeComplete: return s == RobotStatus::Charging;
     case RobotEventType::Error: return s != RobotStatus::Error;
-    case RobotEventType::Recovery: return s == RobotStatus::Error || s == RobotStatus::Manual;
+    case RobotEventType::Recovery:
+      return s == RobotStatus::Error || s == RobotStatus::Manual || s == RobotStatus::Stopped;
     case RobotEventType::BatteryCritical:
       return s != RobotStatus::ReturningToDock && s != RobotStatus::Docking &&
              s != RobotStatus::Charging;
@@ -961,6 +962,41 @@ static void test_fault_recovery() {
   r2.command(make(CommandType::Resume));
   CHECK(r2.emitted({RobotEventType::Recovery}));
   CHECK(r2.status() == RobotStatus::ReturningToDock);
+
+  // A new task or a dock trip leaves error too: recovery first. Also from a
+  // stop or manual control that interrupted the error.
+  Rig r5;
+  r5.boot_at("cp-01");
+  r5.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  r5.core.fault("missed tag");
+  r5.clear();
+  r5.command(navigate("t2", "water-01", TargetAction::Water, 1000));
+  CHECK(r5.emitted({RobotEventType::Recovery}) && r5.status() == RobotStatus::EnRoute);
+  CHECK(r5.task() == "t2");
+  r5.core.fault("missed tag");
+  r5.clear();
+  r5.command(make(CommandType::ReturnToDock));
+  CHECK(r5.emitted({RobotEventType::Recovery}) && r5.status() == RobotStatus::ReturningToDock);
+  r5.core.fault("missed tag");
+  r5.command(make(CommandType::Stop));
+  r5.clear();
+  r5.command(navigate("t3", "water-01", TargetAction::Water, 1000));
+  CHECK(r5.emitted({RobotEventType::Recovery}) && r5.status() == RobotStatus::EnRoute);
+  r5.core.fault("missed tag");
+  r5.command(jog(JogDirection::Forward));
+  r5.clear();
+  r5.command(navigate("t4", "water-01", TargetAction::Water, 1000));
+  CHECK(r5.emitted({RobotEventType::Recovery}) && r5.status() == RobotStatus::EnRoute);
+  // A navigate that fails leaves it in error: no recovery.
+  r5.core.fault("missed tag");
+  r5.clear();
+  r5.command(navigate("t5", "elev-1-L0", TargetAction::Water, 1000));
+  CHECK(r5.emitted({RobotEventType::TaskFailed}) && r5.status() == RobotStatus::Error);
+  // Not in error: no recovery.
+  r5.tag("water-01");
+  r5.clear();
+  r5.command(navigate("t6", "cp-02", TargetAction::Water, 1000));
+  CHECK(r5.events.empty() || r5.events[0].type != RobotEventType::Recovery);
 
   // No tag found after boot: stops looking, still initializing.
   Rig r3;
