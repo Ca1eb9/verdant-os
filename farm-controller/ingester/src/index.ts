@@ -2,20 +2,33 @@
 // Telemetry ingester
 //
 // Subscribes to all robot, elevator, and shelf sensor telemetry, to
-// operator commands and to alerts. Logs to console and writes to SQLite
-// for persistence.
+// operator commands and to alerts, and writes them to SQLite for
+// persistence, keeping RETENTION_DAYS of each. Logs a summary a minute.
 //
 // Run:  npx tsx src/index.ts
 // ============================================================
 
 import Database from "better-sqlite3";
-import { TOPICS, extractIdFromTopic, createMqttClient } from "@farm/shared";
+import { TOPICS, extractIdFromTopic, createMqttClient, LogOnce } from "@farm/shared";
 import { isAlert, isAlertsCleared, isCommand, isElevatorTelemetry, isRobotTelemetry, isShelfSensorData } from "./validate.js";
 
 // --- Config --------------------------------------------------
 
 const BROKER_URL = process.env.BROKER_URL ?? "mqtt://localhost:1883";
 const DB_PATH = process.env.DB_PATH ?? "./farm_telemetry.db";
+const DEFAULT_RETENTION_DAYS = 7;
+/** Rows older than this are deleted, every table (alerts included, even open ones) */
+const RETENTION_DAYS = (() => {
+  const days = Number(process.env.RETENTION_DAYS ?? DEFAULT_RETENTION_DAYS);
+  if (Number.isFinite(days) && days > 0) return days;
+  console.warn(`RETENTION_DAYS must be a number of days above 0, got "${process.env.RETENTION_DAYS}": using ${DEFAULT_RETENTION_DAYS}`);
+  return DEFAULT_RETENTION_DAYS;
+})();
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Old rows are deleted at startup and this often */
+const RETENTION_CHECK_MS = DAY_MS;
+/** One line of what was stored this often, rather than a line per message */
+const STATS_INTERVAL_MS = 60_000;
 
 // --- Database setup ------------------------------------------
 
@@ -195,9 +208,32 @@ const insertAlert = db.prepare(`
 
 const deleteAlerts = db.prepare(`DELETE FROM alerts`);
 
+// Every table's received_at is in ms (the Pi's clock)
+const RETAINED_TABLES = ["robot_telemetry", "shelf_sensors", "elevator_telemetry", "commands", "alerts"];
+const deleteOld = RETAINED_TABLES.map((table) => ({
+  table,
+  statement: db.prepare(`DELETE FROM ${table} WHERE received_at < ?`),
+}));
+
+/** Deletes rows older than RETENTION_DAYS, so the database stays a week long */
+function deleteOldRows() {
+  const before = Date.now() - RETENTION_DAYS * DAY_MS;
+  try {
+    const deleted = deleteOld.map(({ table, statement }) => `${table} ${statement.run(before).changes}`);
+    console.log(`Deleted rows older than ${RETENTION_DAYS} days: ${deleted.join(", ")}`);
+  } catch (err) {
+    // Retried at the next check; never stop ingesting over it
+    console.error("Could not delete old rows:", err);
+  }
+}
+
 // --- Counters for logging ------------------------------------
 
+/** Stored since the last stats line */
 let counts = { robot: 0, shelf: 0, elevator: 0, command: 0, alert: 0 };
+let totalStored = 0;
+/** Malformed messages per topic: logged once until that topic is valid again */
+const logs = new LogOnce();
 
 // --- Main ----------------------------------------------------
 
@@ -209,14 +245,15 @@ async function main() {
 
   console.log(`\n Ingester running`);
   console.log(`   Broker: ${BROKER_URL}`);
-  console.log(`   Database: ${DB_PATH}\n`);
+  console.log(`   Database: ${DB_PATH} (rows kept ${RETENTION_DAYS} days)\n`);
 
   // --- Robot telemetry ---
   mqtt.subscribe<unknown>(TOPICS.robot.telemetryAll, (msg, topic) => {
     if (!isRobotTelemetry(msg)) {
-      console.warn(`Ignoring malformed robot telemetry on ${topic}`);
+      logs.warn(topic, `Ignoring malformed robot telemetry on ${topic} (logged once until it's valid again)`);
       return;
     }
+    logs.ok(topic);
     // Topic id, same as the orchestrator uses
     const id = extractIdFromTopic(topic) ?? msg.robot_id;
     insertRobot.run(
@@ -234,20 +271,15 @@ async function main() {
       msg.timestamp
     );
     counts.robot++;
-
-    const arrow = msg.heading === null ? "-" : ["N", "E", "S", "W"][msg.heading];
-    console.log(
-      `Robot: ${id} | ${msg.status.padEnd(16)} | ${arrow} ${msg.current_node ?? "-"} | ` +
-      `Task: ${msg.task_id ?? "-"} | Battery: ${msg.battery_pct}%`
-    );
   });
 
   // --- Shelf sensors ---
   mqtt.subscribe<unknown>(TOPICS.shelf.sensorsAll, (msg, topic) => {
     if (!isShelfSensorData(msg)) {
-      console.warn(`Ignoring malformed shelf reading on ${topic}`);
+      logs.warn(topic, `Ignoring malformed shelf reading on ${topic} (logged once until it's valid again)`);
       return;
     }
+    logs.ok(topic);
     const id = extractIdFromTopic(topic) ?? msg.shelf_id;
     // SQLite has no boolean type
     const levelOk = msg.water_level_ok == null ? null : msg.water_level_ok ? 1 : 0;
@@ -263,21 +295,15 @@ async function main() {
       msg.timestamp
     );
     counts.shelf++;
-
-    const waterLevel = msg.water_level_ok == null ? "-" : msg.water_level_ok ? "ok" : "LOW";
-    console.log(
-      `Shelf: ${id} L${msg.level} | Air: ${msg.temperature_c ?? "-"}°C ${msg.humidity_pct ?? "-"}% | ` +
-      `Water: ${msg.water_temp_c ?? "-"}°C level ${waterLevel} pH ${msg.ph ?? "-"} | Light: ${msg.light_lux ?? "-"} lux`
-    );
   });
 
   // --- Elevator telemetry ---
   mqtt.subscribe<unknown>(TOPICS.elevator.telemetryAll, (msg, topic) => {
     if (!isElevatorTelemetry(msg)) {
-      console.warn(`Ignoring malformed elevator telemetry on ${topic}`);
+      logs.warn(topic, `Ignoring malformed elevator telemetry on ${topic} (logged once until it's valid again)`);
       return;
     }
-    const id = extractIdFromTopic(topic) ?? msg.elevator_id;
+    logs.ok(topic);
     insertElevator.run(
       msg.elevator_id,
       msg.current_level,
@@ -287,18 +313,15 @@ async function main() {
       msg.timestamp
     );
     counts.elevator++;
-
-    console.log(
-      `Elevator: ${id} | level ${msg.current_level} | ${msg.status}`
-    );
   });
 
   // --- Operator commands ---
   mqtt.subscribe<unknown>(TOPICS.commands.all, (msg, topic) => {
     if (!isCommand(msg)) {
-      console.warn(`Ignoring malformed command on ${topic}`);
+      logs.warn(topic, `Ignoring malformed command on ${topic} (logged once until it's valid again)`);
       return;
     }
+    logs.ok(topic);
     if (msg.command.command === "jog") return;
     const channel = topic === TOPICS.commands.local ? "local" : "remote";
     const { changes } = insertCommand.run(msg.id, msg.robot_id ?? null, JSON.stringify(msg.command),
@@ -311,9 +334,10 @@ async function main() {
   // --- Alerts ---
   mqtt.subscribe<unknown>(TOPICS.alerts, (msg, topic) => {
     if (!isAlert(msg)) {
-      console.warn(`Ignoring malformed alert on ${topic}`);
+      logs.warn(topic, `Ignoring malformed alert on ${topic} (logged once until it's valid again)`);
       return;
     }
+    logs.ok(topic);
     const { changes } = insertAlert.run(msg.alert_id, msg.severity, msg.source, msg.source_type,
       msg.message, msg.metric, msg.value, msg.threshold, msg.timestamp, msg.resolves, Date.now());
     if (!changes) return; // already stored
@@ -324,9 +348,10 @@ async function main() {
   // npm run clear-alerts: the alert history starts over
   mqtt.subscribe<unknown>(TOPICS.alertsClear, (msg, topic) => {
     if (!isAlertsCleared(msg)) {
-      console.warn(`Ignoring malformed clear on ${topic}`);
+      logs.warn(topic, `Ignoring malformed clear on ${topic} (logged once until it's valid again)`);
       return;
     }
+    logs.ok(topic);
     const { changes } = deleteAlerts.run();
     console.log(`Alerts cleared: deleted ${changes} stored alerts`);
   });
@@ -336,17 +361,23 @@ async function main() {
     const total = counts.robot + counts.shelf + counts.elevator + counts.command + counts.alert;
     if (total > 0) {
       console.log(
-        `\nMessages ingested: ${total} total ` +
+        `Stored in the last ${STATS_INTERVAL_MS / 1000} s: ${total} ` +
         `(robot: ${counts.robot}, shelf: ${counts.shelf}, elevator: ${counts.elevator}, ` +
-        `command: ${counts.command}, alert: ${counts.alert})\n`
+        `command: ${counts.command}, alert: ${counts.alert})`
       );
     }
-  }, 1_000);
+    totalStored += total;
+    counts = { robot: 0, shelf: 0, elevator: 0, command: 0, alert: 0 };
+  }, STATS_INTERVAL_MS);
+
+  // --- Retention ---
+  deleteOldRows();
+  setInterval(deleteOldRows, RETENTION_CHECK_MS);
 
   // --- Graceful shutdown ---
   process.on("SIGINT", async () => {
     console.log("\nIngester shutting down");
-    const total = counts.robot + counts.shelf + counts.elevator + counts.command + counts.alert;
+    const total = totalStored + counts.robot + counts.shelf + counts.elevator + counts.command + counts.alert;
     console.log(`   Total messages stored: ${total}`);
     db.close();
     await mqtt.disconnect();

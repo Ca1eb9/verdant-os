@@ -198,7 +198,7 @@ sudo -u farm -H bash -c 'cd /opt/verdant-os/farm-controller/orchestrator && set 
 SD cards fail from sudden power loss during a write and from wear. With this setup:
 
 - **Always shut down with `sudo poweroff`** before unplugging. This matters more than anything else here.
-- Logs are capped (step 5). The ingester's database is the main writer, about one row per robot per second, which a good card handles for years.
+- Logs are capped (step 5). The ingester's database is the main writer, about one row per robot per second; it keeps 7 days (`RETENTION_DAYS` in `ingester.env`) and deletes older rows daily, so it stops growing after a week. Every service logs a recurring problem (bad messages, a broker that's down) once until it clears.
 - Use a quality A2-rated card from a known brand.
 - Back up now and then:
   - the data: `sudo tar czf ~/verdant-backup-$(date +%F).tgz /var/lib/verdant /etc/verdant`, then copy it off the Pi

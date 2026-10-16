@@ -120,6 +120,11 @@ The `alerts` table holds every `FarmAlert` (stored once per `alert_id`) with
 its `received_at`, and the `commands` table is the dashboard's command history
 on FarmNet. The Dashboard API serves both.
 
+Every table keeps `RETENTION_DAYS` (default 7) of rows: older ones, alerts
+still open included, are deleted at startup and once a day. It logs one line
+a minute of what it stored, and a malformed message once per topic until that
+topic is valid again.
+
 ```bash
 npm run ingest
 ```
