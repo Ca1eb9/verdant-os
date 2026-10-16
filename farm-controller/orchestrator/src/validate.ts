@@ -35,13 +35,13 @@ const optStr = (v: unknown) => v === undefined || typeof v === "string";
 const optNum = (v: unknown) => v === undefined || isNum(v);
 const optBool = (v: unknown) => v === undefined || typeof v === "boolean";
 
-/** `nodes` is the set of valid node ids from the topology */
-export function isRobotTelemetry(v: unknown, nodes: ReadonlySet<string>): v is RobotTelemetry {
+/** A current_node outside the topology still passes: the orchestrator alerts on it */
+export function isRobotTelemetry(v: unknown): v is RobotTelemetry {
   return (
     isObj(v) &&
     isStr(v.robot_id) &&
     STATUSES.has(v.status as string) &&
-    (v.current_node === null || (isStr(v.current_node) && nodes.has(v.current_node))) &&
+    (v.current_node === null || isStr(v.current_node)) &&
     (v.task_id === null || isStr(v.task_id)) &&
     (v.last_completed_task_id === null || isStr(v.last_completed_task_id)) &&
     isNum(v.battery_pct) &&

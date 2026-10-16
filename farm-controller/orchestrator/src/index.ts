@@ -34,6 +34,7 @@ import {
   type NavGraph,
   createMqttClient,
   type TypedMqttClient,
+  LogOnce,
 } from "@farm/shared";
 
 import { loadConfig } from "./config.js";
@@ -82,6 +83,10 @@ const robots = new Map<string, RobotState>();
 const problemAlerts = new Map<string, Map<AlertProblem, string>>();
 const queue = new TaskQueue();
 let mqtt: TypedMqttClient;
+/** Invalid messages per topic: logged once until that topic is valid again */
+const logs = new LogOnce();
+/** Telemetry messages in a row reporting a node outside the topology, per robot */
+const unknownNodeCount = new Map<string, number>();
 
 /** Last time a cancel was sent to each robot, to avoid resending every message */
 const cancelSentAt = new Map<string, number>();
@@ -288,8 +293,10 @@ function tryAssignTask(robotId: string) {
   if (state.current_node === null) return; // hasn't read a tag yet
 
   // First task this robot may take; tasks pinned to other robots don't block it.
-  // Stop and dock tasks don't need charge; everything else waits for charging.
-  const charged = state.battery_pct > config.battery_low_pct + config.battery_assign_margin_pct;
+  // Stop and dock tasks don't need charge; everything else waits for charging
+  // (unless battery_failsafe is off).
+  const charged = !config.battery_failsafe ||
+    state.battery_pct > config.battery_low_pct + config.battery_assign_margin_pct;
   const now = Date.now();
   const task = queue.all().find((t) =>
     (!t.pinned_robot || t.pinned_robot === robotId) &&
@@ -401,16 +408,54 @@ function remoteTask(msg: RemoteCommand, taskId: string): FarmTask {
 
 // --- MQTT handlers -------------------------------------------
 
+/**
+ * A node outside the topology (a robot flashed with another layout, or off
+ * the farm): the robot is talking, so it isn't lost, but its position counts
+ * as unknown and it gets no work. After unknown_node_alert_count in a row, a
+ * WARNING alert, once until it reports a known node again.
+ */
+function checkNode(robotId: string, msg: RobotTelemetry): RobotTelemetry {
+  const node = msg.current_node;
+  if (node === null) return msg;
+  const open = problemAlerts.get(robotId)?.has("unknown_node") ?? false;
+  if (nodeIds.has(node)) {
+    unknownNodeCount.delete(robotId);
+    if (open) {
+      executeEffects(robotId, [{
+        type: "publish_alert",
+        robotId,
+        severity: AlertSeverity.INFO,
+        message: `Robot is back on the farm layout at ${node}`,
+        resolves: "unknown_node",
+      }]);
+    }
+    return msg;
+  }
+  const count = (unknownNodeCount.get(robotId) ?? 0) + 1;
+  unknownNodeCount.set(robotId, count);
+  if (count === config.unknown_node_alert_count && !open) {
+    executeEffects(robotId, [{
+      type: "publish_alert",
+      robotId,
+      severity: AlertSeverity.WARNING,
+      message: `Robot is on an unexpected path: it reports node ${node}, which isn't in the farm layout`,
+      problem: "unknown_node",
+    }]);
+  }
+  return { ...msg, current_node: null };
+}
+
 function onTelemetry(raw: unknown, topic: string) {
-  if (!isRobotTelemetry(raw, nodeIds)) {
-    console.warn(`[ORCH] Dropped invalid telemetry on ${topic}`);
+  if (!isRobotTelemetry(raw)) {
+    logs.warn(`telemetry ${topic}`, `[ORCH] Dropped invalid telemetry on ${topic} (logged once until it's valid again)`);
     return;
   }
-  const msg = raw;
-  const robotId = extractIdFromTopic(topic) ?? msg.robot_id;
+  logs.ok(`telemetry ${topic}`, `[ORCH] Valid telemetry on ${topic} again`);
+  const robotId = extractIdFromTopic(topic) ?? raw.robot_id;
   const state = getOrCreateRobot(robotId);
   // Pi receive time; robot clocks aren't synced
   state.last_seen = Date.now();
+  const msg = checkNode(robotId, raw);
 
   // Robot is (back) on its way to a task, e.g. after a dock detour: add its
   // route from here so nodes on the way back aren't reported as deviations
@@ -455,9 +500,10 @@ function onTelemetry(raw: unknown, topic: string) {
 
 function onEvent(raw: unknown, topic: string) {
   if (!isRobotEvent(raw)) {
-    console.warn(`[ORCH] Dropped invalid event on ${topic}`);
+    logs.warn(`event ${topic}`, `[ORCH] Dropped invalid event on ${topic} (logged once until it's valid again)`);
     return;
   }
+  logs.ok(`event ${topic}`);
   const event = raw;
   const robotId = extractIdFromTopic(topic) ?? event.robot_id;
   const state = getOrCreateRobot(robotId);
@@ -474,9 +520,10 @@ function onEvent(raw: unknown, topic: string) {
 
 function onRemoteCommand(raw: unknown, topic: string) {
   if (!isRemoteCommand(raw)) {
-    console.warn(`[REMOTE] Dropped invalid command on ${topic}`);
+    logs.warn(`command ${topic}`, `[REMOTE] Dropped invalid command on ${topic} (logged once until one is valid)`);
     return;
   }
+  logs.ok(`command ${topic}`);
   const msg = raw;
 
   // Jog (manual driving) and connect_controller (the robot looks for its
@@ -711,6 +758,9 @@ async function main() {
   // Retained, so the dashboard's map always matches the layout the robots use
   mqtt.publish(TOPICS.system.topology, topology, true);
   console.log(`[ORCH]   battery:   low=${config.battery_low_pct}% critical=${config.battery_critical_pct}%`);
+  if (!config.battery_failsafe) {
+    console.warn("[ORCH] WARNING: battery_failsafe off: no low-battery return to the dock, tasks at any charge");
+  }
   console.log(`[ORCH]   watchdog:  ${config.heartbeat_timeout_ms / 1000}s timeout`);
   // Restore tasks from the last run. Assigned tasks go back on their robot
   // as-is; its first telemetry reconciles them like any other.

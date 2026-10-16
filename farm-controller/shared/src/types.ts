@@ -370,6 +370,13 @@ export interface OrchestratorConfig {
   battery_critical_pct: number;
   /** Extra charge above battery_low_pct required before assigning a task */
   battery_assign_margin_pct: number;
+  /**
+   * false: no low-battery return to the dock and no charge needed to take
+   * work (bench tests). The robot's own forced return at 15% still applies.
+   */
+  battery_failsafe: boolean;
+  /** Telemetry messages in a row with a node outside the topology before its alert */
+  unknown_node_alert_count: number;
   /** Grace period for the robot to act on a command before reconciling */
   command_ack_timeout_ms: number;
   /** Max finished tasks kept in memory */

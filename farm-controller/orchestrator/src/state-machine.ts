@@ -27,7 +27,7 @@ import {
 // The orchestrator loop reads these and performs the actual I/O.
 
 /** Problems whose alert a later INFO alert marks resolved */
-export type AlertProblem = "lost" | "error";
+export type AlertProblem = "lost" | "error" | "unknown_node";
 
 export type SideEffect =
   | { type: "send_command"; robotId: string; command: RobotCommand }
@@ -162,7 +162,7 @@ export function processTelemetry(
   const dockThreshold = state.status === RobotStatus.IDLE
     ? config.battery_low_pct + config.battery_assign_margin_pct
     : config.battery_low_pct;
-  if (!stopPending &&
+  if (config.battery_failsafe && !stopPending &&
       state.battery_pct <= dockThreshold &&
       (state.status === RobotStatus.IDLE ||
        state.status === RobotStatus.EN_ROUTE ||

@@ -105,6 +105,25 @@ describe("charging", () => {
   });
 });
 
+describe("battery_failsafe", () => {
+  it("off: no return to dock at low battery, but the critical alert still goes", () => {
+    const off = { ...config, battery_failsafe: false };
+    for (const status of [RobotStatus.IDLE, RobotStatus.EN_ROUTE, RobotStatus.WORKING]) {
+      const { effects } = processTelemetry(
+        { ...robot(), status }, telemetry(status, config.battery_critical_pct - 1), off, NOW, false,
+      );
+      assert.ok(!effects.some((e) => e.type === "send_command"), status);
+      assert.ok(effects.some((e) => e.type === "publish_alert" && e.severity === "critical"), status);
+    }
+  });
+
+  it("on (the default): sends the robot to the dock", () => {
+    assert.equal(config.battery_failsafe, true);
+    const { effects } = processTelemetry(robot(), telemetry(RobotStatus.IDLE, config.battery_low_pct), config, NOW, false);
+    assert.ok(effects.some((e) => e.type === "send_command" && e.command.command === "return_to_dock"));
+  });
+});
+
 describe("lost robot alerts", () => {
   it("raises the lost problem and resolves it on recovery", () => {
     const state = robot();

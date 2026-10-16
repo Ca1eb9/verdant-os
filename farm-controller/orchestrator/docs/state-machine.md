@@ -12,7 +12,10 @@ the **task lifecycle** and its **reactions** to what the robot reports.
 Defaults below are from `orchestrator-config.json`:
 `heartbeat_timeout_ms` 30 s, `command_ack_timeout_ms` 5 s, `battery_low_pct` 20,
 `battery_assign_margin_pct` 10, `battery_critical_pct` 15, `max_task_retries` 2,
-`task_retry_delay_ms` 60 s.
+`task_retry_delay_ms` 60 s, `unknown_node_alert_count` 3, `battery_failsafe`
+true. With `battery_failsafe` false (bench tests) the orchestrator never sends a
+robot to the dock for low battery and assigns tasks at any charge; the critical
+alert still goes, and the robot's own forced return at 15% still applies.
 
 ## 1. Robot status as tracked
 
@@ -119,7 +122,7 @@ Notes:
   requeue puts it back to `pending`.
 - Queued, assigned and finished tasks are saved to `orchestrator-state.json` and
   restored on restart; restored assigned tasks are reconciled by the robot's
-  next telemetry. Each robot's open lost and error alerts are saved with them:
+  next telemetry. Each robot's open lost, error and unexpected-path alerts are saved with them:
   a robot lost before a restart gets its "Robot recovered" alert on its first
   telemetry after it, resolving the saved one.
 
@@ -129,10 +132,14 @@ Runs for every telemetry message, in this order.
 
 ```mermaid
 flowchart TD
-    A[Telemetry on farm/robot/id/telemetry] --> B{Valid payload and<br/>current_node in topology?}
-    B -- no --> Z[Drop and log]
+    A[Telemetry on farm/robot/id/telemetry] --> B{Valid payload?}
+    B -- no --> Z[Drop, log once per topic]
     B -- yes --> C[last_seen = receive time]
-    C --> D{Status becomes en_route<br/>and task has a target?}
+    C --> C1{current_node outside<br/>the topology?}
+    C1 -- yes --> C2[Position unknown: no work.<br/>After unknown_node_alert_count in a row,<br/>WARNING alert: unexpected path, once]
+    C1 -- known node --> C3[Resolve that alert if open]
+    C3 --> D
+    C2 --> D{Status becomes en_route<br/>and task has a target?}
     D -- yes --> E[Add route from current node<br/>to expected path]
     D -- no --> F
     E --> F[Copy status, node, battery, heading]
@@ -160,7 +167,7 @@ flowchart TD
     Q{Returning, docking<br/>or charging?} -- yes --> Q2[Clear dock request]
     Q2 --> Q3[First drop to critical since above low?<br/>Arm the CRITICAL alert]
     Q -- no --> Q3
-    Q3 --> R{No stop pending, battery at threshold,<br/>idle / en_route / working?}
+    Q3 --> R{battery_failsafe on, no stop pending,<br/>battery at threshold,<br/>idle / en_route / working?}
     R -- yes --> R1[Alert if armed: returning to dock]
     R1 --> S{Dock request sent<br/>within grace period?}
     S -- yes --> Y

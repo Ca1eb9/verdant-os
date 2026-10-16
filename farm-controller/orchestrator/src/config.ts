@@ -7,6 +7,8 @@ const DEFAULTS: OrchestratorConfig = {
   battery_low_pct: 20,
   battery_critical_pct: 15,
   battery_assign_margin_pct: 10,
+  battery_failsafe: true,
+  unknown_node_alert_count: 3,
   command_ack_timeout_ms: 5000,
   completed_task_limit: 200,
   max_task_retries: 2,
