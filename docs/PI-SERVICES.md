@@ -234,3 +234,12 @@ SD cards fail from sudden power loss during a write and from wear. With this set
 | `farm-dashboard-api` fails with `Failed to load environment files` | `/etc/verdant/dashboard-api.env` is missing (a Pi set up before the Dashboard API): create it as in step 4 and rerun the deploy script. |
 | Dashboard shows no earlier commands; the browser console says CORS or "no command history from the Dashboard API" | Check `curl http://192.168.4.1:3001/health` from the laptop. If that works, add the address the dashboard is opened from to `CORS_ORIGINS` in `/etc/verdant/dashboard-api.env` and `sudo systemctl restart farm-dashboard-api`. `"database":false` means the ingester hasn't created its database yet (`journalctl -u farm-ingester`). |
 | Dashboard map shows "Default farm layout" | The orchestrator isn't running, or Mosquitto lost its retained messages (persistence off): restart the orchestrator. |
+
+## TBD
+
+Known problems, not fixed yet:
+
+- **The dashboard's config status shows another farm's newest reading**:
+  `web/src/app/api/config/status/route.ts` reads the newest `sensor_events`
+  row from any farm, not the selected one, so with several farms in Supabase
+  its "latest event" and age can belong to a different farm.

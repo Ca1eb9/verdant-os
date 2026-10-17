@@ -183,11 +183,12 @@ npm run orch
 - The plant scheduler queues water and grow tasks for each robot in
   `robot_plants` (`orchestrator/docs/state-machine.md`, section 6). Tests:
   `npm -w @farm/orchestrator test`.
-- Queued, assigned and finished tasks, and each robot's open lost and error
-  alerts, are saved to `farm-controller/orchestrator-state.json` (gitignored)
-  and restored on restart. "Robot recovered" resolves the open alert, also
-  after a restart; a lost or error alert raised again while one is open
-  replaces it (`resolves` set to the old one).
+- Queued, assigned and finished tasks, and each robot's open lost, error and
+  unknown-node alerts, are saved to `farm-controller/orchestrator-state.json`
+  (gitignored) and restored on restart. "Robot recovered" resolves an open
+  lost or error alert and "Robot is back on the farm layout" an unknown-node
+  one, also after a restart; a lost or error alert raised again while one is
+  open replaces it (`resolves` set to the old one).
 - Environment overrides: `BROKER_URL`, `CONFIG_PATH`, `TOPOLOGY_PATH`, `STATE_PATH`.
 - It exits if the broker isn't reachable at startup. On the Pi it runs as a
   systemd service that starts after Mosquitto and restarts on failure: see
