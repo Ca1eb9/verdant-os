@@ -812,9 +812,15 @@ async function main() {
   console.log(`[ORCH]   scheduler: ${planted || "no plants"}`);
   if (plants.length) setInterval(persisting(runScheduler), config.scheduler_interval_ms);
 
-  // Status logging
+  // Status logging, only on change. Battery isn't part of the key so a
+  // draining robot doesn't log every percent; its alerts cover the levels.
+  const loggedStatus = new Map<string, string>();
+  let loggedQueue = 0;
   setInterval(() => {
     for (const [id, s] of robots) {
+      const key = `${s.status}|${s.current_node}|${s.assigned_task?.task_id}`;
+      if (loggedStatus.get(id) === key) continue;
+      loggedStatus.set(id, key);
       console.log(
         `[STATUS] ${id}: ${s.status.padEnd(18)} ` +
         `node=${(s.current_node ?? "-").padEnd(12)} ` +
@@ -822,7 +828,8 @@ async function main() {
         `task=${s.assigned_task?.task_id ?? "none"}`
       );
     }
-    if (queue.length > 0) {
+    if (queue.length !== loggedQueue) {
+      loggedQueue = queue.length;
       console.log(`[QUEUE] ${queue.length} tasks pending`);
     }
   }, 10_000);
