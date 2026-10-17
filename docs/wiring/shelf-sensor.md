@@ -19,7 +19,7 @@ connected inside and what the resistors are for. What the node does is in
 | DFRobot liquid level kit: XKC-Y25-V sensor (white disc) on its adapter board | Water above or below a line | Cable from the adapter: red, green, black |
 | DFRobot pH meter V1.1 board, with its probe on the BNC socket | pH | Cable from the board: red, blue, black |
 | 4.7 kΩ resistor (yellow, violet, red) | | |
-| 10 kΩ resistor (brown, black, orange) | | |
+| 100 kΩ resistor (brown, black, yellow) | | |
 | Jumper wires, male to male | | |
 
 The two DFRobot cables end in a 3-pin plug. If yours is a female header,
@@ -58,7 +58,7 @@ rails carry the power: Uno **5V to the + rail, Uno GND to the − rail**.
 | Resistor | Between | Job |
 |---|---|---|
 | 4.7 kΩ | row 13 (5V) and row 17 (DS18B20 data) | Pull-up for the DS18B20 |
-| 10 kΩ | row 22 (level signal) and row 26 (GND) | Pull-down for the level sensor |
+| 100 kΩ | row 22 (level signal) and row 26 (GND) | Pull-down for the level sensor |
 
 On the Uno, 5V, GND, A0, A4 and A5 are on the header by the "POWER" and
 "ANALOG IN" labels; D2, D3 and D4 are on the "DIGITAL" header across the board.
@@ -73,13 +73,13 @@ Following [the rules in README.md](README.md#how-to-tell-whether-a-pin-needs-one
   can only pull the data line LOW; something else must pull it back HIGH
   between bits. Its datasheet asks for about 5 kΩ to the supply, and 4.7 kΩ is
   the standard value. Without it the firmware reports `water_temp_c: null`.
-- **Level sensor: 10 kΩ pull-down.** The adapter drives its output both ways:
+- **Level sensor: 100 kΩ pull-down.** The adapter drives its output both ways:
   HIGH (equal to its supply voltage) with water, 0V without. So it needs no
   resistor to work. The pull-down decides what D4 reads if the sensor is
   unplugged or its wire breaks: LOW, which the firmware reports as "water
   low". A broken sensor then raises the alarm instead of hiding a dry
-  reservoir. At 5V, 10 kΩ lets 0.5 mA through; the adapter can supply up to
-  50 mA.
+  reservoir. The adapter's output is weak, so the pull-down is large: at 5V,
+  100 kΩ draws only 0.05 mA from it, and still holds an unplugged D4 LOW.
 - **DHT11: none to add.** Its data line also needs a pull-up, but the module
   has one on its board. A bare 4-pin DHT11, without the board, would need its
   own.
@@ -133,7 +133,7 @@ plug back in, and check it before adding the next:
 | DHT11 | `temperature_c` and `humidity_pct` have values. Breathe on it: humidity rises |
 | BH1750 | `light_lux` has a value. Cover it: it falls near 0 |
 | DS18B20 + 4.7 kΩ | `water_temp_c` has a value. Hold the probe: it rises |
-| Level sensor + 10 kΩ | `water_level_ok` is `false`. Hold the white disc flat against a plastic bottle of water: on the next line it's `true` |
+| Level sensor + 100 kΩ | `water_level_ok` is `false`. Hold the white disc flat against a plastic bottle of water: on the next line it's `true` |
 | pH board | With the probe unplugged, touch the BNC socket's centre pin to its outer shell with a paperclip: `ph_mv` settles at about 2000, what the board outputs at pH 7 |
 
 When a sensor reads `null` or never changes, unplug the USB cable and check
@@ -165,7 +165,7 @@ in and can be swapped without desoldering.
 | Solid-core wire, about 22 AWG | The 10 short links to the rails |
 | 8 female-to-male jumper wires | Perfboard to Uno |
 
-Plus the 4.7 kΩ and 10 kΩ resistors from the breadboard.
+Plus the 4.7 kΩ and 100 kΩ resistors from the breadboard.
 
 ### What moves
 
@@ -200,7 +200,7 @@ Plus the 4.7 kΩ and 10 kΩ resistors from the breadboard.
 | 25 | pH cable **blue** | Pin → Uno **A0** |
 | 26 | pH cable **black** | Link to − rail |
 
-The resistors go in hole c: the 4.7 kΩ across rows 14 and 15, the 10 kΩ
+The resistors go in hole c: the 4.7 kΩ across rows 14 and 15, the 100 kΩ
 across rows 20 and 21. The Uno's 5V and GND pins sit on the bottom + and −
 rails (drawn near rows 28 and 30; any hole on the rail works). Use the rails
 as they're marked on your board.
@@ -214,7 +214,7 @@ as they're marked on your board.
 3. **Check it before anything is plugged in.** With a multimeter on Ω:
    - the + and − rails must not read near 0 Ω;
    - each link must read near 0 Ω from its row to its rail;
-   - rows 14 and 15 should read about 4.7 kΩ, and rows 20 and 21 about 10 kΩ;
+   - rows 14 and 15 should read about 4.7 kΩ, and rows 20 and 21 about 100 kΩ;
    - neighbouring rows must not be joined by a stray blob of solder.
 4. **Plug in the sensors** with the USB cable unplugged, then repeat
    [Before you plug in the USB cable](#before-you-plug-in-the-usb-cable) and

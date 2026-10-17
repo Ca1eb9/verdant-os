@@ -198,7 +198,7 @@ sudo -u farm -H bash -c 'cd /opt/verdant-os/farm-controller/orchestrator && set 
 SD cards fail from sudden power loss during a write and from wear. With this setup:
 
 - **Always shut down with `sudo poweroff`** before unplugging. This matters more than anything else here.
-- Logs are capped (step 5). The ingester's database is the main writer, about one row per robot per second, which a good card handles for years.
+- Logs are capped (step 5). The ingester's database is the main writer, about one row per robot per second; it keeps 7 days (`RETENTION_DAYS` in `ingester.env`) and deletes older rows daily, so it stops growing after a week. Every service logs a recurring problem (bad messages, a broker that's down) once until it clears.
 - Use a quality A2-rated card from a known brand.
 - Back up now and then:
   - the data: `sudo tar czf ~/verdant-backup-$(date +%F).tgz /var/lib/verdant /etc/verdant`, then copy it off the Pi
@@ -218,7 +218,7 @@ SD cards fail from sudden power loss during a write and from wear. With this set
 |---|---|
 | `status=203/EXEC` | Node isn't at `/usr/bin/node`. Check `which node`; reinstall from step 2. |
 | Orchestrator or ingester keeps restarting with `ECONNREFUSED` | Mosquitto isn't running: `systemctl status mosquitto`, `journalctl -u mosquitto -n 20`. |
-| `Cannot find module` after an update | The build didn't finish. Run the deploy script again and read its output. |
+| `Cannot find module` after an update | The build didn't finish. A failed deploy starts the services again on what's installed, which may be half-updated. Run the deploy script again and read its output. |
 | `EROFS: read-only file system` | A service tried to write outside its allowed folders. Data belongs in `/var/lib/verdant`; set the path in its env file. |
 | Ingester fails on `better-sqlite3` | It was built for a different Node version. Rerun the deploy script (it reinstalls), and check step 1's packages are installed. |
 | Dashboard shows old content | The deploy rebuilds it; make sure the script reached `== start`. |
@@ -234,3 +234,12 @@ SD cards fail from sudden power loss during a write and from wear. With this set
 | `farm-dashboard-api` fails with `Failed to load environment files` | `/etc/verdant/dashboard-api.env` is missing (a Pi set up before the Dashboard API): create it as in step 4 and rerun the deploy script. |
 | Dashboard shows no earlier commands; the browser console says CORS or "no command history from the Dashboard API" | Check `curl http://192.168.4.1:3001/health` from the laptop. If that works, add the address the dashboard is opened from to `CORS_ORIGINS` in `/etc/verdant/dashboard-api.env` and `sudo systemctl restart farm-dashboard-api`. `"database":false` means the ingester hasn't created its database yet (`journalctl -u farm-ingester`). |
 | Dashboard map shows "Default farm layout" | The orchestrator isn't running, or Mosquitto lost its retained messages (persistence off): restart the orchestrator. |
+
+## TBD
+
+Known problems, not fixed yet:
+
+- **The dashboard's config status shows another farm's newest reading**:
+  `web/src/app/api/config/status/route.ts` reads the newest `sensor_events`
+  row from any farm, not the selected one, so with several farms in Supabase
+  its "latest event" and age can belong to a different farm.

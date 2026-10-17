@@ -115,6 +115,24 @@ static void test_warn() {
   r.check(CHARGE_COMPLETE_PCT);
   r.check(BATTERY_WARN_PCT);
   CHECK(r.count(RobotEventType::BatteryLow) == 2);
+
+  // Any completed charge re-arms it, however full: knocked off at
+  // CHARGE_RESUME_PCT here.
+  Rig k;
+  k.en_route();
+  k.check(BATTERY_WARN_PCT);
+  k.check(BATTERY_RETURN_PCT);
+  CHECK(k.count(RobotEventType::BatteryLow) == 1 && k.count(RobotEventType::BatteryCritical) == 1);
+  k.core.on_tag(N("cp-01"), k.now);
+  k.core.on_tag(N("dock-1"), k.now);
+  k.core.on_charge_contact();
+  k.check(CHARGE_RESUME_PCT);
+  k.core.on_charge_lost(k.now);
+  CHECK(k.status() == RobotStatus::EnRoute);
+  k.check(BATTERY_WARN_PCT);
+  CHECK(k.count(RobotEventType::BatteryLow) == 2);
+  k.check(BATTERY_RETURN_PCT);  // still at the dock's tag: it docks again
+  CHECK(k.count(RobotEventType::BatteryCritical) == 2 && k.status() == RobotStatus::Docking);
 }
 
 static void test_forced_return() {
@@ -136,6 +154,30 @@ static void test_forced_return() {
   r.events.clear();
   r.check(BATTERY_RETURN_PCT - 1);
   CHECK(r.events.empty() && r.status() == RobotStatus::Charging);
+
+  // Faulted on the way (a dock that can't charge): it stays in error instead
+  // of setting off and faulting again every loop.
+  Rig f;
+  f.en_route();
+  f.check(BATTERY_RETURN_PCT - 1);
+  f.core.fault("can't charge: no charge contact on the dock");
+  CHECK(f.status() == RobotStatus::Error);
+  for (int i = 0; i < 100; i++) f.check(BATTERY_RETURN_PCT - 1);
+  CHECK(f.status() == RobotStatus::Error && f.count(RobotEventType::BatteryCritical) == 1);
+  // Charged off the robot, above the warning level: the next drop returns again.
+  f.check(BATTERY_WARN_PCT + 1);
+  f.check(BATTERY_RETURN_PCT - 1);
+  CHECK(f.status() == RobotStatus::ReturningToDock && f.count(RobotEventType::BatteryCritical) == 2);
+  // Reaching the charger re-arms it too, however low the battery.
+  f.core.on_tag(N("cp-01"), f.now);
+  f.core.on_tag(N("dock-1"), f.now);
+  f.core.on_charge_contact();
+  f.check(BATTERY_RETURN_PCT - 1);
+  f.core.on_charge_lost(f.now);  // knocked off, too low: back on
+  f.core.fault("can't charge: no charge contact on the dock");
+  f.check(BATTERY_RETURN_PCT - 1);
+  CHECK(f.status() == RobotStatus::ReturningToDock || f.status() == RobotStatus::Docking);
+  CHECK(f.count(RobotEventType::BatteryCritical) == 3);
 }
 
 static void test_stop_beats_return() {

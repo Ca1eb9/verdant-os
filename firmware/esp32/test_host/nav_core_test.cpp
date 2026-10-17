@@ -48,11 +48,16 @@ static bool emitted_before_transition(RobotEventType type, RobotStatus s) {
       return s == RobotStatus::EnRoute || s == RobotStatus::ReturningToDock;
     case RobotEventType::TaskStarted: return s == RobotStatus::EnRoute;
     case RobotEventType::TaskComplete:
-      return s == RobotStatus::Working || s == RobotStatus::Docking;
+      return s == RobotStatus::Working || s == RobotStatus::Docking ||
+             s == RobotStatus::ReturningToDock;
     case RobotEventType::DockConnected: return s == RobotStatus::Docking;
-    case RobotEventType::ChargeComplete: return s == RobotStatus::Charging;
+    case RobotEventType::ChargeComplete:  // the charge_complete command ends any dock trip
+      return s == RobotStatus::Charging || s == RobotStatus::Docking ||
+             s == RobotStatus::ReturningToDock;
+    case RobotEventType::ChargeStalled: return s == RobotStatus::Charging;
     case RobotEventType::Error: return s != RobotStatus::Error;
-    case RobotEventType::Recovery: return s == RobotStatus::Error || s == RobotStatus::Manual;
+    case RobotEventType::Recovery:
+      return s == RobotStatus::Error || s == RobotStatus::Manual || s == RobotStatus::Stopped;
     case RobotEventType::BatteryCritical:
       return s != RobotStatus::ReturningToDock && s != RobotStatus::Docking &&
              s != RobotStatus::Charging;
@@ -686,6 +691,112 @@ static void test_charge_lost() {
   CHECK(r4.task() == "t1");
 }
 
+static void test_charge_stalled() {
+  SCENARIO("charge stalled");
+  // Enough charge: off the charger as after charge_complete, with the task.
+  Rig r;
+  r.boot_at("water-01");
+  r.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  r.command(make(CommandType::ReturnToDock));
+  r.drive({"cp-01", "dock-1"});
+  r.contact();
+  r.battery(CHARGE_RESUME_PCT + 10);
+  r.advance(10);  // starts the watch
+  r.battery(CHARGE_RESUME_PCT + 10 + CHARGE_STALL_RISE_PCT - 0.1f);  // not enough of a rise
+  r.clear();
+  r.advance(CHARGE_STALL_MS - 1);
+  CHECK(r.events.empty() && r.status() == RobotStatus::Charging);
+  r.advance(1);
+  CHECK(r.emitted({RobotEventType::ChargeStalled, RobotEventType::ChargeComplete}));
+  CHECK(r.status() == RobotStatus::EnRoute && r.task() == "t1");
+
+  // Too low to work: stays on the charger, says so once, keeps watching.
+  Rig s;
+  s.boot_at("cp-01");
+  s.command(make(CommandType::ReturnToDock, "d1"));
+  s.tag("dock-1");
+  s.contact();
+  s.battery(CHARGE_RESUME_PCT - 10);
+  s.advance(10);
+  s.clear();
+  s.advance(CHARGE_STALL_MS);
+  CHECK(s.emitted({RobotEventType::ChargeStalled}) && s.status() == RobotStatus::Charging);
+  s.advance(CHARGE_STALL_MS);
+  CHECK(s.events.size() == 1);
+  // Rising again resets the watch; stalled above CHARGE_RESUME_PCT it leaves.
+  s.battery(CHARGE_RESUME_PCT + 5);
+  s.advance(10);
+  s.advance(CHARGE_STALL_MS - 20);
+  CHECK(s.status() == RobotStatus::Charging);
+  s.advance(20);
+  CHECK(s.emitted({RobotEventType::ChargeStalled, RobotEventType::ChargeComplete}));
+  CHECK(s.status() == RobotStatus::Idle);
+
+  // Rising steadily: never stalled.
+  Rig g;
+  g.boot_at("dock-1");
+  g.command(make(CommandType::ReturnToDock));
+  g.contact();
+  g.clear();
+  for (float pct = 30; pct < CHARGE_COMPLETE_PCT; pct += CHARGE_STALL_RISE_PCT) {
+    g.battery(pct);
+    g.advance(CHARGE_STALL_MS / 2);
+  }
+  CHECK(g.events.empty() && g.status() == RobotStatus::Charging);
+
+  // A stop resets the watch: resumed on the charger, it starts again.
+  g.command(make(CommandType::Stop));
+  g.advance(CHARGE_STALL_MS * 2);
+  g.command(make(CommandType::Resume));
+  CHECK(g.status() == RobotStatus::Charging);
+  g.advance(10);
+  CHECK(g.events.empty() && g.status() == RobotStatus::Charging);
+}
+
+static void test_charge_complete_command() {
+  SCENARIO("charge_complete command");
+  // Charging, with a kept task: off the charger and on with it.
+  Rig r;
+  r.boot_at("water-01");
+  r.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  r.command(make(CommandType::ReturnToDock));
+  r.drive({"cp-01", "dock-1"});
+  r.contact();
+  r.battery(30);
+  r.clear();
+  r.command(make(CommandType::ChargeComplete));
+  CHECK(r.emitted({RobotEventType::ChargeComplete}) && r.status() == RobotStatus::EnRoute);
+  CHECK(r.task() == "t1");
+
+  // On the way to the dock on a dock task: the task is done, then idle.
+  Rig d;
+  d.boot_at("water-01");
+  d.command(make(CommandType::ReturnToDock, "d1"));
+  CHECK(d.status() == RobotStatus::ReturningToDock);
+  d.clear();
+  d.command(make(CommandType::ChargeComplete));
+  CHECK(d.emitted({RobotEventType::TaskComplete, RobotEventType::ChargeComplete}));
+  CHECK(d.status() == RobotStatus::Idle && d.last_completed() == "d1" && d.task().empty());
+
+  // Docking, stop latched: stopped, as after a full charge.
+  Rig k;
+  k.boot_at("cp-01");
+  k.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  k.command(make(CommandType::Stop));
+  k.command(make(CommandType::ReturnToDock));
+  k.tag("dock-1");
+  CHECK(k.status() == RobotStatus::Docking);
+  k.command(make(CommandType::ChargeComplete));
+  CHECK(k.status() == RobotStatus::Stopped && k.task() == "t1");
+
+  // Not on a dock trip: ignored.
+  Rig n;
+  n.boot_at("cp-01");
+  n.clear();
+  n.command(make(CommandType::ChargeComplete));
+  CHECK(n.events.empty() && n.status() == RobotStatus::Idle);
+}
+
 static void test_stop_latch_through_dock_trip() {
   SCENARIO("stop latch survives a dock trip");
   Rig r;
@@ -962,6 +1073,41 @@ static void test_fault_recovery() {
   CHECK(r2.emitted({RobotEventType::Recovery}));
   CHECK(r2.status() == RobotStatus::ReturningToDock);
 
+  // A new task or a dock trip leaves error too: recovery first. Also from a
+  // stop or manual control that interrupted the error.
+  Rig r5;
+  r5.boot_at("cp-01");
+  r5.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  r5.core.fault("missed tag");
+  r5.clear();
+  r5.command(navigate("t2", "water-01", TargetAction::Water, 1000));
+  CHECK(r5.emitted({RobotEventType::Recovery}) && r5.status() == RobotStatus::EnRoute);
+  CHECK(r5.task() == "t2");
+  r5.core.fault("missed tag");
+  r5.clear();
+  r5.command(make(CommandType::ReturnToDock));
+  CHECK(r5.emitted({RobotEventType::Recovery}) && r5.status() == RobotStatus::ReturningToDock);
+  r5.core.fault("missed tag");
+  r5.command(make(CommandType::Stop));
+  r5.clear();
+  r5.command(navigate("t3", "water-01", TargetAction::Water, 1000));
+  CHECK(r5.emitted({RobotEventType::Recovery}) && r5.status() == RobotStatus::EnRoute);
+  r5.core.fault("missed tag");
+  r5.command(jog(JogDirection::Forward));
+  r5.clear();
+  r5.command(navigate("t4", "water-01", TargetAction::Water, 1000));
+  CHECK(r5.emitted({RobotEventType::Recovery}) && r5.status() == RobotStatus::EnRoute);
+  // A navigate that fails leaves it in error: no recovery.
+  r5.core.fault("missed tag");
+  r5.clear();
+  r5.command(navigate("t5", "elev-1-L0", TargetAction::Water, 1000));
+  CHECK(r5.emitted({RobotEventType::TaskFailed}) && r5.status() == RobotStatus::Error);
+  // Not in error: no recovery.
+  r5.tag("water-01");
+  r5.clear();
+  r5.command(navigate("t6", "cp-02", TargetAction::Water, 1000));
+  CHECK(r5.events.empty() || r5.events[0].type != RobotEventType::Recovery);
+
   // No tag found after boot: stops looking, still initializing.
   Rig r3;
   r3.core.begin();
@@ -1000,6 +1146,8 @@ int main() {
   test_dock_trip_keeps_task();
   test_dock_task();
   test_charge_lost();
+  test_charge_stalled();
+  test_charge_complete_command();
   test_stop_latch_through_dock_trip();
   test_survival_return();
   test_cancel();

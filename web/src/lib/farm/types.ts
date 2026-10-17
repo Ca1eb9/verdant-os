@@ -30,7 +30,8 @@ export type RobotEventType =
   | "dock_connected"
   | "charge_complete"
   | "error"
-  | "recovery";
+  | "recovery"
+  | "charge_stalled";
 
 /** N = 0, E = 1, S = 2, W = 3 */
 export type Heading = 0 | 1 | 2 | 3;
@@ -52,7 +53,9 @@ export type PlantType =
 
 export type GrowthStage = "seedling" | "vegetative" | "mature" | "harvest_ready";
 
-export type CommandType = "navigate" | "return_to_dock" | "stop" | "resume" | "cancel" | "jog" | "connect_controller";
+export type CommandType =
+  | "navigate" | "return_to_dock" | "stop" | "resume" | "cancel" | "jog" | "connect_controller"
+  | "charge_complete";
 
 export type JogDirection = "forward" | "backward";
 

@@ -40,7 +40,7 @@ def standing_resistor(r, bands, label):
     draw_standing_resistor(rx(r), rx(r + 1), HOLE["c"], bands, label)
 
 standing_resistor(14, ["#e6b800", "#7f3fbf", "#d62728", "#c9a227"], "4.7 kΩ")
-standing_resistor(20, ["#7a4a1e", "#111", "#ff7f0e", "#c9a227"], "10 kΩ")
+standing_resistor(20, ["#7a4a1e", "#111", "#e6b800", "#c9a227"], "100 kΩ")
 
 # ---- parts soldered into hole e
 def socket(rows, label, female=True):
@@ -111,7 +111,7 @@ lines = [
     ("", None),
     ("Resistors stand on end, hole c:", "bold"),
     ("4.7 kΩ: rows 14 (5V) and 15 (data)", None),
-    ("10 kΩ: rows 20 (signal) and 21 (GND)", None),
+    ("100 kΩ: rows 20 (signal) and 21 (GND)", None),
     ("", None),
     ("Links (short wires), hole a to rail:", "bold"),
     ("+ rail: rows 3, 7, 14, 19, 24", None),

@@ -43,8 +43,8 @@ const BATTERY_CHARGE_RATE = 5;
 const BATTERY_LOW_THRESHOLD = 20;
 const BATTERY_CRITICAL_THRESHOLD = 15;
 const BATTERY_CUTOFF_THRESHOLD = 5;
-/** Firmware CHARGE_COMPLETE_PCT / orchestrator charge_complete_pct */
-const CHARGE_COMPLETE_THRESHOLD = 85;
+/** Firmware CHARGE_COMPLETE_PCT */
+const CHARGE_COMPLETE_THRESHOLD = 80;
 /** Each jog drives for this long from receipt; a newer jog restarts it */
 const JOG_PULSE_MS = 500;
 /** The simulated Bluetooth controller connects this long after connect_controller */
@@ -405,6 +405,21 @@ async function main() {
         }
       }
 
+      // Ends a dock trip as if it had charged; a dock task was the trip itself
+      if (cmd.command === "charge_complete") {
+        if (!DOCK_TRIP.includes(robot.status)) {
+          console.log(`[CMD] charge_complete ignored: not on a dock trip`);
+        } else {
+          if (robot.dockTask) {
+            publishEvent(RobotEventType.TASK_COMPLETE, `charging ended by operator`);
+            robot.lastCompletedTaskId = robot.taskId;
+            robot.taskId = null;
+            robot.dockTask = false;
+          }
+          finishCharging(`${robot.battery.toFixed(1)}%, ended by operator`);
+        }
+      }
+
       // Resume in manual hands control back: continue the task, or go idle
       if (cmd.command === "resume" && robot.status === RobotStatus.MANUAL) {
         exitManual();
@@ -598,21 +613,26 @@ function handleDocking() {
 
 function handleCharging() {
   robot.battery = Math.min(100, robot.battery + BATTERY_CHARGE_RATE);
-  if (robot.battery >= CHARGE_COMPLETE_THRESHOLD) {
-    publishEvent(RobotEventType.CHARGE_COMPLETE, `${robot.battery.toFixed(1)}%`);
-    resetBatteryFlags();
-    console.log(`[CHARGE] complete (${robot.battery.toFixed(1)}%)`);
-    robot.status = RobotStatus.IDLE;
-    robot.currentAction = "idle";
+  if (robot.battery >= CHARGE_COMPLETE_THRESHOLD) finishCharging(`${robot.battery.toFixed(1)}%`);
+}
 
-    // Still stopped: wait for resume, keeping any interrupted task
-    if (robot.stopLatched) {
-      robot.status = RobotStatus.STOPPED;
-      robot.pausedStatus = null;
-      return;
-    }
-    resumeKeptTask();
+/** Every way a charge ends (full, or the charge_complete command): on as after charging */
+function finishCharging(details: string) {
+  publishEvent(RobotEventType.CHARGE_COMPLETE, details);
+  resetBatteryFlags();
+  console.log(`[CHARGE] complete (${details})`);
+  robot.status = RobotStatus.IDLE;
+  robot.currentAction = "idle";
+  robot.path = [];
+  robot.targetNode = null;
+
+  // Still stopped: wait for resume, keeping any interrupted task
+  if (robot.stopLatched) {
+    robot.status = RobotStatus.STOPPED;
+    robot.pausedStatus = null;
+    return;
   }
+  resumeKeptTask();
 }
 
 function handleManual() {

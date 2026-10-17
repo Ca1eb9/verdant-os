@@ -157,7 +157,7 @@ cable([(28, C["5v"]), (29, C["a0"]), (30, C["gnd"])], 194, px_)
 
 # ---- resistors (leads in hole c)
 resistor(rx(13), rx(17), HOLE["c"], ["#e6b800", "#7f3fbf", "#d62728", "#c9a227"], "4.7 kΩ pull-up")
-resistor(rx(22), rx(26), HOLE["c"], ["#7a4a1e", "#111", "#ff7f0e", "#c9a227"], "10 kΩ pull-down")
+resistor(rx(22), rx(26), HOLE["c"], ["#7a4a1e", "#111", "#e6b800", "#c9a227"], "100 kΩ pull-down")
 
 # ---- jumpers, hole a -> rail
 for r in (3, 7, 13, 21, 28):
@@ -208,8 +208,8 @@ text(LX, y, "Resistors", 15, "start", "bold")
 notes = [
     ("4.7 kΩ: row 13 to row 17 (hole c)", "bold"),
     ("yellow, violet, red, gold", None),
-    ("10 kΩ: row 22 to row 26 (hole c)", "bold"),
-    ("brown, black, orange, gold", None),
+    ("100 kΩ: row 22 to row 26 (hole c)", "bold"),
+    ("brown, black, yellow, gold", None),
     ("", None),
     ("Power rows", "bold"),
     ("Red jumper from hole a to the + rail:", None),

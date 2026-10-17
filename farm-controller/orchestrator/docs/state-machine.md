@@ -12,7 +12,10 @@ the **task lifecycle** and its **reactions** to what the robot reports.
 Defaults below are from `orchestrator-config.json`:
 `heartbeat_timeout_ms` 30 s, `command_ack_timeout_ms` 5 s, `battery_low_pct` 20,
 `battery_assign_margin_pct` 10, `battery_critical_pct` 15, `max_task_retries` 2,
-`task_retry_delay_ms` 60 s.
+`task_retry_delay_ms` 60 s, `unknown_node_alert_count` 3, `battery_failsafe`
+true. With `battery_failsafe` false (bench tests) the orchestrator never sends a
+robot to the dock for low battery and assigns tasks at any charge; the critical
+alert still goes, and the robot's own forced return at 15% still applies.
 
 ## 1. Robot status as tracked
 
@@ -119,7 +122,7 @@ Notes:
   requeue puts it back to `pending`.
 - Queued, assigned and finished tasks are saved to `orchestrator-state.json` and
   restored on restart; restored assigned tasks are reconciled by the robot's
-  next telemetry. Each robot's open lost and error alerts are saved with them:
+  next telemetry. Each robot's open lost, error and unexpected-path alerts are saved with them:
   a robot lost before a restart gets its "Robot recovered" alert on its first
   telemetry after it, resolving the saved one.
 
@@ -129,10 +132,14 @@ Runs for every telemetry message, in this order.
 
 ```mermaid
 flowchart TD
-    A[Telemetry on farm/robot/id/telemetry] --> B{Valid payload and<br/>current_node in topology?}
-    B -- no --> Z[Drop and log]
+    A[Telemetry on farm/robot/id/telemetry] --> B{Valid payload?}
+    B -- no --> Z[Drop, log once per topic]
     B -- yes --> C[last_seen = receive time]
-    C --> D{Status becomes en_route<br/>and task has a target?}
+    C --> C1{current_node outside<br/>the topology?}
+    C1 -- yes --> C2[Position unknown: no work.<br/>After unknown_node_alert_count in a row,<br/>WARNING alert: unexpected path, once]
+    C1 -- known node --> C3[Resolve that alert if open]
+    C3 --> D
+    C2 --> D{Status becomes en_route<br/>and task has a target?}
     D -- yes --> E[Add route from current node<br/>to expected path]
     D -- no --> F
     E --> F[Copy status, node, battery, heading]
@@ -160,7 +167,7 @@ flowchart TD
     Q{Returning, docking<br/>or charging?} -- yes --> Q2[Clear dock request]
     Q2 --> Q3[First drop to critical since above low?<br/>Arm the CRITICAL alert]
     Q -- no --> Q3
-    Q3 --> R{No stop pending, battery at threshold,<br/>idle / en_route / working?}
+    Q3 --> R{battery_failsafe on, no stop pending,<br/>battery at threshold,<br/>idle / en_route / working?}
     R -- yes --> R1[Alert if armed: returning to dock]
     R1 --> S{Dock request sent<br/>within grace period?}
     S -- yes --> Y
@@ -187,7 +194,8 @@ Events are a fast path; telemetry corrects anything missed.
 | `error` | CRITICAL alert; task and path kept |
 | `recovery` | INFO alert resolving the error alert; request the next task |
 | `path_blocked` | WARNING alert (while stored status is `en_route`) |
-| `charge_complete` | Request the next task (while stored status is `charging`) |
+| `charge_complete` | Re-arm the critical battery alert (any completed charge); request the next task (while stored status is `charging`) |
+| `charge_stalled` | WARNING alert: the battery stopped rising while charging. The robot decides whether it leaves the charger |
 | `arrived`, `task_started`, `dock_connected`, `battery_low`, `battery_critical`, `obstacle_detected` | No effect; status comes from telemetry |
 
 "Request the next task" only assigns one if the stored status is `idle` and the
@@ -204,6 +212,7 @@ From `farm/commands/local` (dashboard on the farm network) and
 | `stop` | Immediate: sent to the robot(s). Otherwise: a stop task per robot (the dashboard sends it as critical), run when the robot is next idle ("pause after the current task"). A robot with no `current_node` yet (initializing) never takes queued work, so it gets the stop straight away |
 | `return_to_dock` | Immediate: sent to the robot(s). Otherwise: a dock task per robot |
 | `resume` | Always sent straight to the robot(s); also ends `manual` |
+| `charge_complete` | Always sent straight to the robot(s), like `resume`: ends a dock trip as if it had charged |
 | `cancel` | Needs a `robot_id` or `task_id`. Cancels that queued or assigned task, or the robot's current task, including while `lost`. Refused for an assigned stop task (use `resume`) |
 | `jog` | Only from `farm/commands/local` and for a known robot; sent straight to it, never queued |
 | `connect_controller` | Same as `jog`: the robot looks for its Bluetooth controller for 10 s |

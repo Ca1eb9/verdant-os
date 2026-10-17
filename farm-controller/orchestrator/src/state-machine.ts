@@ -27,7 +27,7 @@ import {
 // The orchestrator loop reads these and performs the actual I/O.
 
 /** Problems whose alert a later INFO alert marks resolved */
-export type AlertProblem = "lost" | "error";
+export type AlertProblem = "lost" | "error" | "unknown_node";
 
 export type SideEffect =
   | { type: "send_command"; robotId: string; command: RobotCommand }
@@ -162,7 +162,7 @@ export function processTelemetry(
   const dockThreshold = state.status === RobotStatus.IDLE
     ? config.battery_low_pct + config.battery_assign_margin_pct
     : config.battery_low_pct;
-  if (!stopPending &&
+  if (config.battery_failsafe && !stopPending &&
       state.battery_pct <= dockThreshold &&
       (state.status === RobotStatus.IDLE ||
        state.status === RobotStatus.EN_ROUTE ||
@@ -230,6 +230,25 @@ export function processEvent(
   // Recovery event, even if telemetry already moved the robot out of error
   if (event.event === RobotEventType.RECOVERY) {
     return handleRecovery(state, event);
+  }
+
+  // Charging stalled: the robot decides whether it leaves the charger
+  if (event.event === RobotEventType.CHARGE_STALLED) {
+    return {
+      state,
+      effects: [{
+        type: "publish_alert",
+        robotId: state.id,
+        severity: AlertSeverity.WARNING,
+        message: `Battery stopped rising while charging (${event.details ?? "no details"})`,
+      }],
+    };
+  }
+
+  // Any completed charge re-arms the critical battery alert, however full it
+  // got (the robot may stop short, or the operator ended it)
+  if (event.event === RobotEventType.CHARGE_COMPLETE) {
+    state.battery_critical_alerted = false;
   }
 
   // Task events only apply to the task we assigned, whatever status we

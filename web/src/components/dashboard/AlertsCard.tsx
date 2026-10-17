@@ -14,24 +14,28 @@ interface AlertRow {
   severity: "info" | "warning" | "critical";
   source: string;
   at: number;
-  resolved: boolean;
 }
 
-/** The newest alerts from the farm's services (orchestrator, alert engine) */
+/**
+ * The newest open alerts from the farm's services (orchestrator, alert
+ * engine): resolved ones, greyed out on the Alerts page, are left off.
+ */
 export function AlertsCard() {
   const { fmt } = usePreferences();
   const farmAlerts = useFarmAlerts();
 
   const rows = useMemo<AlertRow[]>(
     () =>
-      listAlerts(farmAlerts ?? []).slice(0, SHOWN_ALERTS).map(({ alert, resolvedAt }) => ({
-        key: alert.alert_id,
-        title: alert.message,
-        severity: alert.severity,
-        source: alert.source,
-        at: alert.timestamp,
-        resolved: resolvedAt !== null,
-      })),
+      listAlerts(farmAlerts ?? [])
+        .filter(({ resolvedAt }) => resolvedAt === null)
+        .slice(0, SHOWN_ALERTS)
+        .map(({ alert }) => ({
+          key: alert.alert_id,
+          title: alert.message,
+          severity: alert.severity,
+          source: alert.source,
+          at: alert.timestamp,
+        })),
     [farmAlerts],
   );
 
@@ -54,14 +58,13 @@ export function AlertsCard() {
               </div>
               <span className={styles.metricLabel} suppressHydrationWarning>
                 {row.source} · {fmt.time(row.at)}
-                {row.resolved ? " · resolved" : ""}
               </span>
             </li>
           ))}
         </ul>
       ) : (
         <p className={styles.emptyNote}>
-          {farmAlerts === null ? "Alerts aren't available here yet." : "No alerts right now."}
+          {farmAlerts === null ? "Alerts aren't available here yet." : "No open alerts right now."}
         </p>
       )}
     </article>

@@ -39,6 +39,7 @@ const char* to_wire(RobotEventType e) {
     case RobotEventType::ChargeComplete: return "charge_complete";
     case RobotEventType::Error: return "error";
     case RobotEventType::Recovery: return "recovery";
+    case RobotEventType::ChargeStalled: return "charge_stalled";
   }
   return "error";
 }
@@ -52,6 +53,7 @@ const char* to_wire(CommandType c) {
     case CommandType::Cancel: return "cancel";
     case CommandType::Jog: return "jog";
     case CommandType::ConnectController: return "connect_controller";
+    case CommandType::ChargeComplete: return "charge_complete";
     case CommandType::Drive: return "drive";  // robot-only, for the log
   }
   return "stop";
@@ -238,7 +240,7 @@ CommandParseResult parse_command_json(const char* json, size_t len, Command& out
   // command (required)
   JsonVariantConst cmd = o["command"];
   if (!cmd.is<const char*>()) return CommandParseResult::MissingCommand;
-  if (!from_wire(cmd.as<const char*>(), CommandType::Navigate, CommandType::ConnectController,
+  if (!from_wire(cmd.as<const char*>(), CommandType::Navigate, CommandType::ChargeComplete,
                  out.type))
     return CommandParseResult::UnknownCommand;
 

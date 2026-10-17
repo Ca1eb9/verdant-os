@@ -102,6 +102,9 @@ class NavCore {
   // charger). At or above CHARGE_RESUME_PCT it's done charging, as at
   // charge_complete; below it, it backs onto the dock again.
   void on_charge_lost(uint32_t now);
+  // Charges completed since boot, whichever way they ended (CHARGE_COMPLETE_PCT,
+  // knocked off, stalled, the charge_complete command): survival re-arms on it.
+  uint32_t charges_completed() const { return charges_completed_; }
   // RFID navigation: can't continue (e.g. missed tag, or no tag found while
   // creeping after boot). Reports `error`, keeping the task, until a known
   // tag is read again. While initializing it only halts and publishes the
@@ -110,8 +113,8 @@ class NavCore {
   // Survival overrides: forced return to dock, keeping the task. Publishes
   // battery_critical. Ignored while stopped (a stop beats it), in manual
   // (only the motor cutoff applies in both), while already on a dock trip
-  // and while initializing.
-  void survival_return(const char* details, uint32_t now);
+  // and while initializing. False when ignored.
+  bool survival_return(const char* details, uint32_t now);
   // Survival overrides: an event that changes no status (battery_low,
   // obstacle_detected, path_blocked).
   void report(RobotEventType type, const char* details) { emit(type, details); }
@@ -159,7 +162,12 @@ class NavCore {
   void follow_path(uint32_t now);
   void arrive(uint32_t now);
   void redock();
+  // Every way a charge ends: charge_complete, then on as after charging.
   void finish_charging(const char* details, uint32_t now);
+  // Charging: charge_stalled if the battery stops rising (CHARGE_STALL_MS).
+  void watch_charge(uint32_t now);
+  // The charge_complete command: ends a dock trip as if it had charged.
+  void end_charge(uint32_t now);
   void complete_task();
   void go_to_task(uint32_t now);
   void go_to_dock(uint32_t now);
@@ -179,6 +187,12 @@ class NavCore {
   TaskContext ctx_ = {};
 
   float battery_pct_ = NAN;
+  uint32_t charges_completed_ = 0;
+  // Charging: the highest reading so far and since when, for watch_charge().
+  bool charge_watched_ = false;
+  bool charge_stall_reported_ = false;
+  float charge_best_pct_ = NAN;
+  uint32_t charge_best_ms_ = 0;
 
   // Status `error` interrupted, continued after recovery.
   RobotStatus error_from_ = RobotStatus::Idle;

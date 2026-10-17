@@ -21,6 +21,7 @@ import {
   readStateFile,
   writeStateFile,
   type TypedMqttClient,
+  LogOnce,
 } from "@farm/shared";
 
 import { loadConfig, type ShelfBridgeConfig, type ShelfPort } from "./config.js";
@@ -76,6 +77,8 @@ const links: ShelfLink[] = config.shelves.map((shelf) => ({
 
 let mqtt: TypedMqttClient;
 let shuttingDown = false;
+/** A shelf's bad lines: logged once until it sends a valid reading */
+const logs = new LogOnce();
 
 const tag = (link: ShelfLink) => `[${link.shelf.shelf_id}]`;
 
@@ -97,9 +100,12 @@ function onLine(link: ShelfLink, raw: string) {
   const reading = parseLine(line, link.shelf, Date.now());
   const now = performance.now();
   if (!reading) {
-    console.warn(`${tag(link)} dropped invalid line: ${line}`);
+    logs.warn(`invalid ${link.shelf.shelf_id}`,
+      `${tag(link)} dropped invalid line (logged once until a valid reading): ${line}`);
     return;
   }
+  logs.ok(`invalid ${link.shelf.shelf_id}`, `${tag(link)} valid readings again`);
+  logs.ok(`long ${link.shelf.shelf_id}`);
 
   if (link.lastSeq !== null && reading.seq <= link.lastSeq) {
     console.log(`${tag(link)} node restarted (seq ${link.lastSeq} → ${reading.seq})`);
@@ -135,12 +141,14 @@ function onData(link: ShelfLink, chunk: Buffer) {
   const lines = link.buffer.split(/\r?\n/);
   link.buffer = lines.pop() ?? "";
   if (link.buffer.length > config.max_line_length) {
-    console.warn(`${tag(link)} dropped ${link.buffer.length} bytes with no newline`);
+    logs.warn(`long ${link.shelf.shelf_id}`,
+      `${tag(link)} dropped ${link.buffer.length} bytes with no newline (logged once until a valid reading)`);
     link.buffer = "";
   }
   for (const line of lines) {
     if (line.length > config.max_line_length) {
-      console.warn(`${tag(link)} dropped over-long line (${line.length} bytes)`);
+      logs.warn(`long ${link.shelf.shelf_id}`,
+        `${tag(link)} dropped over-long line of ${line.length} bytes (logged once until a valid reading)`);
       continue;
     }
     onLine(link, line);

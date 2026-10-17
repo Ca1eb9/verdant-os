@@ -208,12 +208,18 @@ constexpr float BATTERY_CUTOFF_PCT = 5.0f;      // kill motors
 // bench-test without the battery divider wired (it then reads 0%): the
 // warning and the forced return still apply. Logged at boot when off.
 constexpr bool BATTERY_FAILSAFE = true;
-// The charging diode (docs/wiring/robot.md) drops ~0.4 V, so the pack tops
-// out around 4.1 V a cell, not 4.2. Matches orchestrator charge_complete_pct.
-constexpr float CHARGE_COMPLETE_PCT = 85.0f;
-// Knocked off the charger at or above this: done charging, carry on as after
-// charge_complete. Below it, back onto the dock again.
+// The charging diode (docs/wiring/robot.md) drops ~0.4 V, so the dock tops
+// the pack out around 12.2-12.3 V, 83-86% of a full 12.73 V. Set a few
+// points below the dock's measured ceiling, or charging never completes.
+constexpr float CHARGE_COMPLETE_PCT = 80.0f;
+// Knocked off the charger, or its charge stalled, at or above this: done
+// charging, carry on as after charge_complete. Below it, back onto the dock
+// again (knocked off) or stay on the charger (stalled).
 constexpr float CHARGE_RESUME_PCT = 40.0f;
+// Charging, but risen less than CHARGE_STALL_RISE_PCT in CHARGE_STALL_MS:
+// charge_stalled. Charging at 2 A gains about 30 points an hour.
+constexpr uint32_t CHARGE_STALL_MS = 30UL * 60 * 1000;
+constexpr float CHARGE_STALL_RISE_PCT = 1.0f;
 
 // ---- Manual control -----------------------------------------------------------------
 

@@ -121,20 +121,24 @@ pushed first, then the status changes.
 | any | `return_to_dock`, survival return (not while `stopped` or `manual`) | `battery_critical` if survival | `returning_to_dock` |
 | `returning_to_dock` | Dock node reached | `arrived` | `docking` |
 | `docking` | Charge contact detected | `dock_connected`, then `task_complete` if on a dock task | `charging` |
-| `charging` | Battery ≥ `charge_complete_pct` (85) | `charge_complete` | `stopped` if latched; else `en_route` for a kept task; else `idle` |
-| `charging` | Charge contact lost (knocked off the charger), battery ≥ 40% (`CHARGE_RESUME_PCT`) | `charge_complete` | as at 85% |
+| `charging` | Battery ≥ `CHARGE_COMPLETE_PCT` (80, a few points under the dock's ceiling) | `charge_complete` | `stopped` if latched; else `en_route` for a kept task; else `idle` |
+| `charging` | Charge contact lost (knocked off the charger), battery ≥ 40% (`CHARGE_RESUME_PCT`) | `charge_complete` | as at 80% |
+| `charging` | Battery rose less than 1 point in 30 min (`CHARGE_STALL_RISE_PCT`, `CHARGE_STALL_MS`) | `charge_stalled` (once per charge), then `charge_complete` if ≥ 40% | as at 80% if ≥ 40%; else stays `charging` and keeps watching |
+| `returning_to_dock`, `docking`, `charging` | `charge_complete` command | `task_complete` if on a dock task, then `charge_complete` | as at 80% |
 | `charging` | Charge contact lost, battery under 40% or not read yet | — | `docking` (backs on again) |
 | any | `stop` | — | `stopped` |
 | `stopped` | `resume` | — | paused status, or `en_route` for a kept task after charging |
 | any | Unrecoverable fault | `error` | `error` |
 | `error` | Fault cleared (e.g. known tag read again) | `recovery` | re-plan and continue the task, else `idle` |
+| `error` (also stopped or in `manual` from it) | `navigate` or `return_to_dock` accepted | `recovery` | `en_route` / `returning_to_dock` |
 | `idle`, `en_route`, `working`, `stopped`, `error` | `jog` | — | `manual` |
 | any | Bluetooth controller input (`initializing` included: no tag needed) | — | `manual` |
 | `initializing` | `jog` (no tag needed) | — | `manual` |
 | `manual` | `resume`, or manual timeout | `recovery` if it was in `error` | continue from `current_node` (see [Manual control](#manual-control)); from `initializing` with no tag read, back to `initializing` (search again on `resume`, halted after a timeout) |
 
 Battery events (`battery_low`, `battery_critical`) are published once per
-discharge and re-armed after `charge_complete`.
+discharge and re-armed after any `charge_complete`, however full the battery
+got (full, knocked off the charger, stalled, or ended by the operator).
 
 ## MQTT contract
 
@@ -247,6 +251,7 @@ The robot never queues commands: each one acts on the current state right away.
 | `return_to_dock` | Ignored if already returning, docking or charging. Otherwise head to the dock. A task in progress or paused is kept and resumed after charging. With no task and a `task_id` on the command, adopt it as a dock task and publish `task_complete` for it once connected to the charger. If already at the dock but not charging, run the dock sequence again (straight to `docking`, no `arrived`). No path to the dock: publish `task_failed` for a dock task's `task_id`, else ignore it. A latched stop stays latched. |
 | `jog` | Manual driving from the dashboard; `direction` is `forward` or `backward`. Accepted in `idle`, `en_route`, `working`, `stopped`, `error`, `manual` and `initializing` (no tag needed: e.g. to drive it onto one); ignored on dock trips and below the motor cutoff. The dashboard only offers it before the first tag when `NEXT_PUBLIC_JOG_WHILE_INITIALIZING` is on. The Bluetooth controller's jogs (robot-only) are also accepted on a dock trip. The first jog enters `manual`. Each jog drives for a fixed **500 ms** from when it is received (`JOG_PULSE_MS` in `config.h`); a jog arriving while driving restarts the 500 ms. When the window runs out, the motors stop by themselves. `backward` reverses without turning; the heading doesn't change. |
 | `connect_controller` | Look for the Bluetooth controller for `PAD_CONNECT_WINDOW_MS` (10 s), in any status, `initializing` included. Otherwise the robot only looks while it can't reach the broker. No reply: `controller_connected` in telemetry turns `true` when one connects, and the controller rumbles once. Farm network only, like `jog`. |
+| `charge_complete` | End a dock trip (on the way, docking or charging) as if the charge had completed: `charge_complete` and on with a kept task, or `idle` (`stopped` if latched). A dock task is completed first. Ignored otherwise. From the dashboard, locally or remotely. Below 15% the forced return sends it straight back. |
 | `cancel` | Drop the task with this `task_id` if it is the current, paused or kept task: clear it without setting `last_completed_task_id` and without an event. A cancelled task that was moving or working goes to `idle` (or stays `stopped`). Cancelling a dock task stops the trip to the dock. Cancelling a kept task leaves the dock trip running, so the robot still charges. Ignore it if the id doesn't match. The orchestrator resends it whenever telemetry still shows the cancelled task, e.g. after the robot was offline. |
 
 The orchestrator sends a queued `stop` only when the robot is idle, so it acts as
@@ -344,10 +349,12 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
   **below** the orchestrator's `battery_low_pct` (20%) so the orchestrator
   handles normal charging (in `stopped` and `manual`, only the motor cutoff
   applies):
-  - warn at 20%: publish `battery_low`, once until the next charge complete
+  - warn at 20%: publish `battery_low`, once until the next charge completes (at any level)
     (not while docking or charging);
   - force return to dock at 15%: publish `battery_critical` and go to the dock,
-    keeping the task;
+    keeping the task. Once per drop: again only after reaching the charger
+    or rising above 20%, so a robot that faults on the way (e.g. a dock that
+    can't charge) stays in `error` instead of retrying every loop;
   - kill motors at about 5%, in every status. They stay off until the battery
     is back above 15%, so noise near the cutoff can't toggle them.
     `BATTERY_FAILSAFE = false` in `config.h` turns this cutoff off, for bench

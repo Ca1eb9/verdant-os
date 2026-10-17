@@ -18,7 +18,7 @@ export interface PersistedTasks {
 }
 
 const EMPTY: PersistedTasks = { queue: [], assigned: [], finished: [], open_alerts: {} };
-const PROBLEMS: AlertProblem[] = ["lost", "error"];
+const PROBLEMS: AlertProblem[] = ["lost", "error", "unknown_node"];
 
 function parseOpenAlerts(value: unknown): PersistedTasks["open_alerts"] {
   const open: PersistedTasks["open_alerts"] = {};

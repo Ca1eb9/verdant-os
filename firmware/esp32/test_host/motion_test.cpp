@@ -403,7 +403,7 @@ static void test_with_nav_core() {
 
   // To the dock: backward, then backs on until DOCK_STOP_CM; contact stops it.
   Robot d;
-  d.core.on_battery(80.0f);
+  d.core.on_battery(50.0f);  // below CHARGE_COMPLETE_PCT: it stays on the charger
   d.core.begin();
   d.tag("water-01");
   Command c = {};

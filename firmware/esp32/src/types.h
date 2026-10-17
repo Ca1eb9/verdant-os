@@ -59,6 +59,7 @@ enum class RobotEventType : uint8_t {
   ChargeComplete,    // "charge_complete"
   Error,             // "error"
   Recovery,          // "recovery"
+  ChargeStalled,     // "charge_stalled"
 };
 
 // Numeric on the wire, same values as types.ts.
@@ -66,8 +67,12 @@ enum class Heading : uint8_t { North = 0, East = 1, South = 2, West = 3 };
 enum class Turn : uint8_t { Straight = 0, Right = 1, UTurn = 2, Left = 3 };
 
 // ConnectController goes to the pad task, not nav (g_pad_connect_requests).
-// Drive: the Bluetooth controller's stick, at a speed (robot-only, never on the wire).
-enum class CommandType : uint8_t { Navigate, ReturnToDock, Stop, Resume, Cancel, Jog, ConnectController, Drive };
+// ChargeComplete: the operator ends a dock trip as if the charge completed.
+// Drive: the Bluetooth controller's stick, at a speed (robot-only, never on
+// the wire): keep it last, after every wire command.
+enum class CommandType : uint8_t {
+  Navigate, ReturnToDock, Stop, Resume, Cancel, Jog, ConnectController, ChargeComplete, Drive
+};
 
 // jog only; None means the field was absent.
 enum class JogDirection : uint8_t { None, Forward, Backward };

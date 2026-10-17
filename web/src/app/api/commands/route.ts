@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 const TABLE = "remote_commands";
 const COLUMNS = "id,robot_id,command,issued_by,issued_at,status,error";
-const COMMANDS: CommandType[] = ["navigate", "return_to_dock", "stop", "resume", "cancel"];
+const COMMANDS: CommandType[] = ["navigate", "return_to_dock", "stop", "resume", "cancel", "charge_complete"];
 const PRIORITIES: TaskPriority[] = ["low", "normal", "high", "critical"];
 const ACTIONS: ActionAtTarget[] = ["water", "grow", "harvest", "charge", "idle"];
 const ID_PATTERN = /^[A-Za-z0-9._:-]{1,64}$/;
@@ -52,15 +52,17 @@ function parseCommand(body: unknown): { farmId: string; robotId: string; command
   if (raw.command === "jog") return "Manual driving is only available on the farm network.";
   // for an operator at the robot; the orchestrator refuses it from Supabase too
   if (raw.command === "connect_controller") return "Connecting a controller is only available on the farm network.";
-  if (!COMMANDS.includes(raw.command as CommandType)) return "command must be navigate, return_to_dock, stop, resume or cancel.";
+  if (!COMMANDS.includes(raw.command as CommandType)) {
+    return "command must be navigate, return_to_dock, stop, resume, cancel or charge_complete.";
+  }
 
   const type = raw.command as CommandType;
   const priority = PRIORITIES.includes(raw.priority as TaskPriority) ? (raw.priority as TaskPriority) : "normal";
   const command: RobotCommand = { command: type, priority, source: "remote" };
 
   if (typeof raw.immediate === "boolean") command.immediate = raw.immediate;
-  // resume and cancel always take effect right away
-  if (type === "resume" || type === "cancel") command.immediate = true;
+  // resume, cancel and charge_complete always take effect right away
+  if (type === "resume" || type === "cancel" || type === "charge_complete") command.immediate = true;
 
   // cancel names the task, so a task that changed meanwhile isn't cancelled by mistake
   if (type === "cancel") {

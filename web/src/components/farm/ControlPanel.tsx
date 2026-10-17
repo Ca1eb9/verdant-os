@@ -58,6 +58,7 @@ const COMMAND_LABEL: Record<RobotCommand["command"], string> = {
   cancel: "Cancel task",
   jog: "Jog",
   connect_controller: "Connect to RC",
+  charge_complete: "Charge complete",
 };
 
 function readKey() {
@@ -219,6 +220,8 @@ export function ControlPanel({
   // queued unplaced, it would set off for the dock as soon as the robot read a tag
   const canDock = online && placed && status !== "docking" && status !== "charging" && Boolean(dockNode);
   const canResume = online && (status === "stopped" || status === "manual" || status === "idle");
+  // Ends a dock trip as if it had charged: the robot carries on, or goes idle
+  const canEndCharge = online && (status === "returning_to_dock" || status === "docking" || status === "charging");
   // Cancel works offline too: the orchestrator resends it when the robot reconnects.
   // A stop can't be cancelled; Resume releases the robot instead.
   const stopActive = task?.type === "stop";
@@ -247,6 +250,9 @@ export function ControlPanel({
 
   const sendResume = () =>
     robot && send({ robot_id: robot.id, command: { command: "resume", priority: "critical", immediate: true } });
+
+  const sendEndCharge = () =>
+    robot && send({ robot_id: robot.id, command: { command: "charge_complete", priority: "critical", immediate: true } });
 
   // The robot only looks for its Bluetooth controller when asked (or when it
   // can't reach the farm). Its telemetry says when one connects.
@@ -485,6 +491,18 @@ export function ControlPanel({
             Return to dock
           </button>
         </div>
+        <span
+          className={styles.tip}
+          title={
+            canEndCharge
+              ? "Ends charging now: the robot carries on with its task, or goes idle."
+              : "Only while the robot is going to the dock, docking or charging."
+          }
+        >
+          <button type="button" className={styles.btn} disabled={!canEndCharge || busy} onClick={sendEndCharge}>
+            Charge complete
+          </button>
+        </span>
         <label className={styles.check}>
           <input
             id="quick-immediate"

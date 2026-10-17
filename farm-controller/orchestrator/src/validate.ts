@@ -20,7 +20,9 @@ const EVENT_TYPES = new Set<string>(Object.values(RobotEventType));
 const HEADINGS = new Set<unknown>([Heading.NORTH, Heading.EAST, Heading.SOUTH, Heading.WEST]);
 const PRIORITIES = new Set<string>(Object.values(TaskPriority));
 const SOURCES = new Set<string>(Object.values(CommandSource));
-const COMMANDS = new Set(["navigate", "return_to_dock", "stop", "resume", "cancel", "jog", "connect_controller"]);
+const COMMANDS = new Set([
+  "navigate", "return_to_dock", "stop", "resume", "cancel", "jog", "connect_controller", "charge_complete",
+]);
 const DIRECTIONS = new Set(["forward", "backward"]);
 const ACTIONS = new Set(["water", "grow", "harvest", "charge", "idle"]);
 
@@ -33,13 +35,13 @@ const optStr = (v: unknown) => v === undefined || typeof v === "string";
 const optNum = (v: unknown) => v === undefined || isNum(v);
 const optBool = (v: unknown) => v === undefined || typeof v === "boolean";
 
-/** `nodes` is the set of valid node ids from the topology */
-export function isRobotTelemetry(v: unknown, nodes: ReadonlySet<string>): v is RobotTelemetry {
+/** A current_node outside the topology still passes: the orchestrator alerts on it */
+export function isRobotTelemetry(v: unknown): v is RobotTelemetry {
   return (
     isObj(v) &&
     isStr(v.robot_id) &&
     STATUSES.has(v.status as string) &&
-    (v.current_node === null || (isStr(v.current_node) && nodes.has(v.current_node))) &&
+    (v.current_node === null || isStr(v.current_node)) &&
     (v.task_id === null || isStr(v.task_id)) &&
     (v.last_completed_task_id === null || isStr(v.last_completed_task_id)) &&
     isNum(v.battery_pct) &&

@@ -120,6 +120,11 @@ The `alerts` table holds every `FarmAlert` (stored once per `alert_id`) with
 its `received_at`, and the `commands` table is the dashboard's command history
 on FarmNet. The Dashboard API serves both.
 
+Every table keeps `RETENTION_DAYS` (default 7) of rows: older ones, alerts
+still open included, are deleted at startup and once a day. It logs one line
+a minute of what it stored, and a malformed message once per topic until that
+topic is valid again.
+
 ```bash
 npm run ingest
 ```
@@ -170,17 +175,20 @@ AUTONOMOUS=false npm run sim
 npm run orch
 ```
 
-- Settings load from `orchestrator-config.json` at startup.
+- Settings load from `orchestrator-config.json` at startup. Missing keys take
+  their default; a value of the wrong type or out of range stops it with
+  `[FATAL] Bad orchestrator config`, and an unknown key only warns.
 - It publishes `topology.json` (retained) to `farm/system/topology` at startup,
   for the dashboard's map.
 - The plant scheduler queues water and grow tasks for each robot in
   `robot_plants` (`orchestrator/docs/state-machine.md`, section 6). Tests:
   `npm -w @farm/orchestrator test`.
-- Queued, assigned and finished tasks, and each robot's open lost and error
-  alerts, are saved to `farm-controller/orchestrator-state.json` (gitignored)
-  and restored on restart. "Robot recovered" resolves the open alert, also
-  after a restart; a lost or error alert raised again while one is open
-  replaces it (`resolves` set to the old one).
+- Queued, assigned and finished tasks, and each robot's open lost, error and
+  unknown-node alerts, are saved to `farm-controller/orchestrator-state.json`
+  (gitignored) and restored on restart. "Robot recovered" resolves an open
+  lost or error alert and "Robot is back on the farm layout" an unknown-node
+  one, also after a restart; a lost or error alert raised again while one is
+  open replaces it (`resolves` set to the old one).
 - Environment overrides: `BROKER_URL`, `CONFIG_PATH`, `TOPOLOGY_PATH`, `STATE_PATH`.
 - It exits if the broker isn't reachable at startup. On the Pi it runs as a
   systemd service that starts after Mosquitto and restarts on failure: see
