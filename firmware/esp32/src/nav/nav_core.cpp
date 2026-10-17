@@ -81,7 +81,8 @@ void NavCore::on_command(const Command& cmd, uint32_t now) {
   // driving by hand, e.g. onto a tag, or off the farm where there's none.
   if (node_ == NO_NODE) {
     bool allowed = cmd.type == CommandType::Stop || cmd.type == CommandType::Resume ||
-                   cmd.type == CommandType::Jog || cmd.type == CommandType::Drive;
+                   cmd.type == CommandType::Jog || cmd.type == CommandType::Drive ||
+                   cmd.type == CommandType::ChargeComplete;  // a bench charge needs no node
     if (!allowed) {
       out_.note("ignored: no position yet (no tag read)");
       return;
@@ -169,8 +170,10 @@ void NavCore::tick(uint32_t now) {
 
 void NavCore::on_charge_contact() {
   // Bench test: a charger plugged into the pads of a robot that isn't moving
-  // on its own. Stopped keeps its paused task and latch for afterwards.
-  if (charge_sense_always_ && (status_ == RobotStatus::Idle || status_ == RobotStatus::Stopped)) {
+  // on its own, or is still looking for its first tag (the search stops).
+  // Stopped keeps its paused task and latch for afterwards.
+  if (charge_sense_always_ && (status_ == RobotStatus::Idle || status_ == RobotStatus::Stopped ||
+                               status_ == RobotStatus::Initializing)) {
     out_.halt();
     emit(RobotEventType::DockConnected, "charge_sense_always: charging off the dock");
     bench_charge_ = true;
@@ -269,8 +272,16 @@ void NavCore::finish_charging(const char* details, uint32_t now) {
     bench_charge_ = false;
     out_.halt();
     // A resume while charging released the stop: carry on as it says.
-    if (bench_from_ == RobotStatus::Stopped && !ctx_.stop_latched) resume_paused(now);
-    else status_ = bench_from_;
+    if (bench_from_ == RobotStatus::Stopped && !ctx_.stop_latched) {
+      resume_paused(now);
+    } else if (bench_from_ == RobotStatus::Initializing) {
+      // Placed by a tag read meanwhile; else halted, as it never drives off a
+      // bench on its own: resume starts the search again.
+      if (node_ != NO_NODE) go_idle("");
+      else status_ = RobotStatus::Initializing;
+    } else {
+      status_ = bench_from_;
+    }
     return;
   }
   // A stop that came in before or during the dock trip still holds.

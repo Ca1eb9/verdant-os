@@ -135,9 +135,9 @@ constexpr uint8_t CHARGE_CONTACT_COUNT = 3;     // readings in a row to change s
 constexpr uint32_t CHARGE_CONTACT_TIMEOUT_MS = 2000;
 // Bench test: read the contact in every status and log each change with the
 // pin's voltage ("charge contact closed (2.21 V)"). A contact closing while
-// idle or stopped charges where the robot is: dock_connected, then the usual
-// charge flow (charge_complete at CHARGE_COMPLETE_PCT, stall watch), back to
-// idle or stopped after. Losing the contact while charging never backs it
+// idle, stopped or initializing charges where the robot is: dock_connected,
+// then the usual charge flow (charge_complete at CHARGE_COMPLETE_PCT, stall
+// watch), back to that status after (initializing: halted, not searching). Losing the contact while charging never backs it
 // onto the dock, at any battery level: the charge ends. Logged at boot when on.
 constexpr bool CHARGE_SENSE_ALWAYS = false;
 

@@ -121,7 +121,7 @@ pushed first, then the status changes.
 | any | `return_to_dock`, survival return (not while `stopped` or `manual`) | `battery_critical` if survival | `returning_to_dock` |
 | `returning_to_dock` | Dock node reached | `arrived` | `docking` |
 | `docking` | Charge contact detected | `dock_connected`, then `task_complete` if on a dock task | `charging` |
-| `idle`, `stopped` (bench only: `CHARGE_SENSE_ALWAYS`) | Charge contact closes | `dock_connected` | `charging` where it is; any way the charge ends, back to `idle` / `stopped` |
+| `idle`, `stopped`, `initializing` (bench only: `CHARGE_SENSE_ALWAYS`) | Charge contact closes | `dock_connected` | `charging` where it is; any way the charge ends, back to `idle` / `stopped`, or from `initializing` halted there (`idle` if a tag was read meanwhile) |
 | `charging` | Battery ≥ `CHARGE_COMPLETE_PCT` (80, a few points under the dock's ceiling) | `charge_complete` | `stopped` if latched; else `en_route` for a kept task; else `idle` |
 | `charging` | Charge contact lost (knocked off the charger), battery ≥ 40% (`CHARGE_RESUME_PCT`) | `charge_complete` | as at 80% |
 | `charging` | Battery rose less than 1 point in 30 min (`CHARGE_STALL_RISE_PCT`, `CHARGE_STALL_MS`) | `charge_stalled` (once per charge), then `charge_complete` if ≥ 40% | as at 80% if ≥ 40%; else stays `charging` and keeps watching |

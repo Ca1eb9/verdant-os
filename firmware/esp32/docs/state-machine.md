@@ -85,8 +85,9 @@ stateDiagram-v2
 ## Rules the diagram can't show
 
 - **Before the first tag** (`initializing`, or `stopped` / `manual` reached
-  from it) the robot only accepts `stop`, `resume` and jogs (the dashboard's
-  and the Bluetooth controller's); everything else is ignored.
+  from it) the robot only accepts `stop`, `resume`, jogs (the dashboard's
+  and the Bluetooth controller's) and `charge_complete` (for a bench charge,
+  below); everything else is ignored.
   Leaving that `stopped` or `manual`, a robot that read a tag meanwhile goes
   `idle`; otherwise it goes back to `initializing`, searching again on
   `resume` and halted after a manual timeout (so it never drives off a bench
@@ -103,10 +104,13 @@ stateDiagram-v2
 - **`return_to_dock`** is ignored while already returning, docking or charging
   (a bench charge, below, excepted).
 - **`CHARGE_SENSE_ALWAYS`** (bench tests, `config.h`): the charge contact
-  closing while `idle` or `stopped` sends `dock_connected` and goes `charging`
-  where the robot is. Any way the charge ends (`charge_complete`) goes back to
-  that `idle` or `stopped`, its paused task and stop latch kept (a `resume`
-  while charging releases it as usual). A `stop` or manual control meanwhile
+  closing while `idle`, `stopped` or `initializing` sends `dock_connected` and
+  goes `charging` where the robot is. Any way the charge ends
+  (`charge_complete`) goes back to that `idle` or `stopped`, its paused task
+  and stop latch kept (a `resume` while charging releases it as usual). From
+  `initializing` the tag search stops; afterwards it waits halted in
+  `initializing` (`resume` searches again), or goes `idle` if a tag was read
+  meanwhile. The `charge_complete` command works before the first tag too. A `stop` or manual control meanwhile
   comes back to `charging` there, never driving to the dock; `navigate` and
   `return_to_dock` replace it. With the flag on, losing the contact while
   `charging` (bench or dock) always ends the charge instead of backing onto
