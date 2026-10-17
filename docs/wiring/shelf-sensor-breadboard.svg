@@ -769,7 +769,7 @@
 <rect x="528.0" y="533" width="44" height="14" rx="6" fill="#e8d3a6" stroke="#8a6d3b"/>
 <rect x="535.0" y="533" width="4" height="14" fill="#7a4a1e"/>
 <rect x="543.0" y="533" width="4" height="14" fill="#111"/>
-<rect x="551.0" y="533" width="4" height="14" fill="#ff7f0e"/>
+<rect x="551.0" y="533" width="4" height="14" fill="#e6b800"/>
 <rect x="565.0" y="533" width="4" height="14" fill="#c9a227"/>
 <circle cx="510" cy="540" r="3" fill="#888"/>
 <circle cx="590" cy="540" r="3" fill="#888"/>
@@ -873,8 +873,8 @@
 <text x="830" y="332" font-family="Helvetica, Arial, sans-serif" font-size="15" text-anchor="start" font-weight="bold" fill="#222">Resistors</text>
 <text x="830" y="354" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" font-weight="bold" fill="#222">4.7 kΩ: row 13 to row 17 (hole c)</text>
 <text x="830" y="372" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" font-weight="normal" fill="#222">yellow, violet, red, gold</text>
-<text x="830" y="390" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" font-weight="bold" fill="#222">10 kΩ: row 22 to row 26 (hole c)</text>
-<text x="830" y="408" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" font-weight="normal" fill="#222">brown, black, orange, gold</text>
+<text x="830" y="390" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" font-weight="bold" fill="#222">100 kΩ: row 22 to row 26 (hole c)</text>
+<text x="830" y="408" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" font-weight="normal" fill="#222">brown, black, yellow, gold</text>
 <text x="830" y="426" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" font-weight="normal" fill="#222"></text>
 <text x="830" y="444" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" font-weight="bold" fill="#222">Power rows</text>
 <text x="830" y="462" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" font-weight="normal" fill="#222">Red jumper from hole a to the + rail:</text>
@@ -890,6 +890,6 @@
 <text x="830" y="642" font-family="Helvetica, Arial, sans-serif" font-size="12" text-anchor="start" font-weight="bold" fill="#222">Unplug the USB cable before changing wiring.</text>
 <rect x="325.2" y="513" width="89.60000000000001" height="15" rx="3" fill="#fff" opacity="0.92"/>
 <text x="370.0" y="525" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="bold" fill="#5a4320">4.7 kΩ pull-up</text>
-<rect x="502.0" y="513" width="96.0" height="15" rx="3" fill="#fff" opacity="0.92"/>
-<text x="550.0" y="525" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="bold" fill="#5a4320">10 kΩ pull-down</text>
+<rect x="498.8" y="513" width="102.4" height="15" rx="3" fill="#fff" opacity="0.92"/>
+<text x="550.0" y="525" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="bold" fill="#5a4320">100 kΩ pull-down</text>
 </svg>
