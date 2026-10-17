@@ -24,7 +24,7 @@ npm ci
 cp .env.example .env.local
 ```
 
-Fill in Supabase values in `.env.local`.
+Fill in `.env.local` (gitignored): each value is described in `.env.example`. Next only reads env files in `web/`.
 
 3. Start the development server:
 
@@ -43,7 +43,7 @@ npm run start
 
 Set `NEXT_PUBLIC_MQTT_WS_URL` (for example `ws://192.168.4.1:9001`, Mosquitto's WebSocket listener on the Pi) before `npm run dev` or `npm run build` to show live robots from MQTT and send commands, jog included, straight to the farm (`src/lib/farm/local-source.ts`), with no operator key: only the farm network reaches the broker. It's read at build time. Without it the app uses the default source. **Connect to RC** (Manual control) sends `connect_controller`: the robot looks for its Bluetooth controller for 10 s, and the panel says when it connects (telemetry's `controller_connected`, also shown as **Controller**) or that none was found. The control panel's recent commands come live from `farm/commands/+`, so commands sent from other browsers or relayed from Supabase show up too. To also list the ones sent before the page opened, set `NEXT_PUBLIC_DASHBOARD_API_URL` to the Pi's Dashboard API (`GET /commands`, see `farm-controller/README.md`); it's asked once per robot. The same API gives the Alerts page the alerts raised before the page opened (`GET /alerts`, the latest 500) and the History page the last 7 days of shelf readings as 5-minute means (`GET /shelves?bucket_ms=`), each loaded once. Without it, leave it unset: those lists start empty and fill live. The map uses the layout the orchestrator publishes, so start the orchestrator too.
 
-For `npm run dev` on your own machine, create `web/.env.local` (gitignored). Next only reads env files in `web/`, not the repo root's `.env`:
+For `npm run dev` on your own machine, set these in `web/.env.local` (from `web/.env.example`, step 2):
 
 ```
 NEXT_PUBLIC_MQTT_WS_URL=ws://localhost:9001
