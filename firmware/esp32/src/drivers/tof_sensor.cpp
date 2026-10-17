@@ -19,7 +19,9 @@ bool TofSensor::begin() {
   // sensor to 0x12, but without XSHUT wired the sensor keeps that address
   // across an ESP32 reset, and the next boot can't find it at 0x52.
   VL53L4CX_Error st = dev_.InitSensor(VL53L4CX_DEFAULT_DEVICE_ADDRESS);
-  if (st == VL53L4CX_ERROR_NONE) st = dev_.VL53L4CX_SetDistanceMode(VL53L4CX_DISTANCEMODE_SHORT);
+  // Medium, the library's default: it refuses short on a VL53L4CX (error -4,
+  // invalid params).
+  if (st == VL53L4CX_ERROR_NONE) st = dev_.VL53L4CX_SetDistanceMode(VL53L4CX_DISTANCEMODE_MEDIUM);
   if (st == VL53L4CX_ERROR_NONE)
     st = dev_.VL53L4CX_SetMeasurementTimingBudgetMicroSeconds(TOF_TIMING_BUDGET_US);
   if (st == VL53L4CX_ERROR_NONE) st = dev_.VL53L4CX_StartMeasurement();
@@ -27,7 +29,7 @@ bool TofSensor::begin() {
   ok_ = (st == VL53L4CX_ERROR_NONE);
   if (ok_) {
     fail_logged_ = false;
-    LOG("tof", "%s VL53L4CX ready (short mode, %lu ms budget)", name_,
+    LOG("tof", "%s VL53L4CX ready (medium mode, %lu ms budget)", name_,
         (unsigned long)TOF_TIMING_BUDGET_US / 1000);
   } else if (!fail_logged_) {
     LOG("tof", "%s VL53L4CX init failed (error %d) - check I2C wiring; retrying quietly", name_, (int)st);
