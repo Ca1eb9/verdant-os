@@ -67,7 +67,7 @@ One Supabase project serves every farm, and each farm has its own Pi. Every Supa
 
 The header pill shows the farm connection, never the browser's network: "Connected" while the active data source reaches the farm (the MQTT broker here; the Supabase bridge's presence remotely, once the remote source exists), "Connecting" on the first attempt, and "Disconnected" otherwise, with a banner on every page saying why. Data sources report it through `FarmDataSource.subscribeConnection()`.
 
-On the farm pages (Dashboard, Farm, History, Alerts), the growing logo covers the page while the farm loads, and again while it's disconnected, with the same reason and a "Show the page anyway" button that holds until the farm is back or another farm is picked (`src/components/layout/FarmLoadingOverlay.tsx`). The covered page is inert, so the keyboard can't reach it either. It waits 400 ms first, so a quick load doesn't flash it. Settings and Config never show it, and neither does mock mode.
+On the farm pages (Dashboard, Farm, History, Alerts), the growing logo covers the page while the farm loads, and again while it's disconnected, with the same reason and a "Show the page anyway" button that holds until the farm is back or another farm is picked (`src/components/layout/FarmLoadingOverlay.tsx`). The covered page is inert, so the keyboard can't reach it either. It waits 400 ms first, so a quick load doesn't flash it. Settings never shows it, and neither does mock mode.
 
 ## Verification
 
@@ -84,11 +84,9 @@ That runs lint, TypeScript, and production build validation.
 - `/` - live dashboard
 - `/history` - historical charts (mock data only, for now)
 - `/alerts` - alerts from the farm's robots, shelves and services (`FarmDataSource.subscribeAlerts`: live from `farm/alerts` on FarmNet, not available remotely yet), newest first. An alert another one resolved (`FarmAlert.resolves`) is faded with its resolve time (`listAlerts` in `src/hooks/useFarmAlerts.ts`); the Dashboard's Alerts card and sensor dots follow the same alerts. The dashboard checks no sensor ranges itself: that's the alert engine's job. `npm run clear-alerts` on the Pi (`farm/alerts/clear`) empties the list
-- `/config` - deployment and ingestion readiness
 - `/api/farms` - the farms in Supabase's `farms` table
 - `/api/sensor-events/latest?farm_id=` - a farm's latest Supabase sensor event
 - `/api/commands?farm_id=` - a farm's recent remote commands (GET), or send one (POST, with `farm_id` in the body)
-- `/api/config/status` - server-side environment and ingestion status
 
 ## Shelf Sensors
 
