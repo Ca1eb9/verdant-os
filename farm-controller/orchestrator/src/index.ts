@@ -20,6 +20,7 @@ import {
   type FarmAlert,
   type RemoteCommand,
   type RobotStateUpdate,
+  type OrchestratorConfig,
   RobotStatus,
   RobotEventType,
   Heading,
@@ -59,7 +60,13 @@ const STATE_PATH = fileURLToPath(
   new URL(process.env.STATE_PATH ?? "../../orchestrator-state.json", import.meta.url)
 );
 
-const config = loadConfig(fileURLToPath(new URL(CONFIG_PATH, import.meta.url)));
+let config: OrchestratorConfig;
+try {
+  config = loadConfig(fileURLToPath(new URL(CONFIG_PATH, import.meta.url)));
+} catch (error) {
+  console.error(`[FATAL] Bad orchestrator config: ${(error as Error).message}`);
+  process.exit(1);
+}
 const topology: FarmTopology = JSON.parse(
   readFileSync(new URL(TOPOLOGY_PATH, import.meta.url), "utf-8")
 );

@@ -175,7 +175,9 @@ AUTONOMOUS=false npm run sim
 npm run orch
 ```
 
-- Settings load from `orchestrator-config.json` at startup.
+- Settings load from `orchestrator-config.json` at startup. Missing keys take
+  their default; a value of the wrong type or out of range stops it with
+  `[FATAL] Bad orchestrator config`, and an unknown key only warns.
 - It publishes `topology.json` (retained) to `farm/system/topology` at startup,
   for the dashboard's map.
 - The plant scheduler queues water and grow tasks for each robot in
