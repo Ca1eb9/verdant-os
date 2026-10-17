@@ -50,8 +50,9 @@ static bool emitted_before_transition(RobotEventType type, RobotStatus s) {
     case RobotEventType::TaskComplete:
       return s == RobotStatus::Working || s == RobotStatus::Docking ||
              s == RobotStatus::ReturningToDock;
-    case RobotEventType::DockConnected:  // idle or stopped: a bench charge (charge_sense_always)
-      return s == RobotStatus::Docking || s == RobotStatus::Idle || s == RobotStatus::Stopped;
+    case RobotEventType::DockConnected:  // a bench charge (charge_sense_always)
+      return s == RobotStatus::Docking || s == RobotStatus::Idle || s == RobotStatus::Stopped ||
+             s == RobotStatus::Initializing;
     case RobotEventType::ChargeComplete:  // the charge_complete command ends any dock trip
       return s == RobotStatus::Charging || s == RobotStatus::Docking ||
              s == RobotStatus::ReturningToDock;
@@ -884,6 +885,28 @@ static void test_bench_charge() {
   p.clear();
   p.command(make(CommandType::ChargeComplete));
   CHECK(p.emitted({RobotEventType::ChargeComplete}) && p.status() == RobotStatus::Idle);
+
+  // Initializing: the search stops, and it waits halted afterwards.
+  Rig i;
+  i.core.set_charge_sense_always(true);
+  i.core.begin();
+  CHECK(i.last_motion() == "creep");
+  i.battery(50);
+  i.contact();
+  CHECK(i.emitted({RobotEventType::DockConnected}) && i.status() == RobotStatus::Charging);
+  CHECK(i.last_motion() == "halt");
+  i.clear();
+  i.command(make(CommandType::ChargeComplete));  // no tag needed
+  CHECK(i.emitted({RobotEventType::ChargeComplete}) && i.status() == RobotStatus::Initializing);
+  CHECK(i.motion == std::vector<std::string>{"halt"});
+  i.command(make(CommandType::Resume));
+  CHECK(i.last_motion() == "creep");
+  // A tag read while charging places it: idle afterwards.
+  i.contact();
+  i.tag("cp-01");
+  CHECK(i.status() == RobotStatus::Charging);
+  i.contact_lost();
+  CHECK(i.status() == RobotStatus::Idle && i.node() == "cp-01");
 
   // On the real dock with the flag on: unplugged under 40% ends the charge
   // and carries on with the kept task, instead of backing on.

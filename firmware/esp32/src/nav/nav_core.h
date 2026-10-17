@@ -99,8 +99,9 @@ class NavCore {
   // CHARGE_SENSE_ALWAYS (config.h), for bench tests: set once by the nav task.
   void set_charge_sense_always(bool on) { charge_sense_always_ = on; }
   // Dock sequence: the charger contacts closed while `docking`. With
-  // charge_sense_always, also when they close while idle or stopped (a
-  // bench): it charges where it is, then goes back to that status.
+  // charge_sense_always, also when they close while idle, stopped or
+  // initializing (a bench): it charges where it is, then goes back to that
+  // status (initializing: halted, or idle if a tag was read meanwhile).
   void on_charge_contact();
   // Dock sequence: the contacts opened while `charging` (knocked off the
   // charger). At or above CHARGE_RESUME_PCT it's done charging, as at
@@ -194,8 +195,8 @@ class NavCore {
   float battery_pct_ = NAN;
   uint32_t charges_completed_ = 0;
   bool charge_sense_always_ = false;
-  // Charging on a bench (charge_sense_always), from bench_from_ (idle or
-  // stopped), where it goes back to when the charge ends.
+  // Charging on a bench (charge_sense_always), from bench_from_ (idle,
+  // stopped or initializing), where it goes back to when the charge ends.
   bool bench_charge_ = false;
   RobotStatus bench_from_ = RobotStatus::Idle;
   // Charging: the highest reading so far and since when, for watch_charge().

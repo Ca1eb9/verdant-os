@@ -105,7 +105,7 @@ While `charging`, a battery that rises less than `CHARGE_STALL_RISE_PCT` (1 poin
 To bench-test the contact and the charge flow off the dock, set `CHARGE_SENSE_ALWAYS` in `config.h`:
 
 - The pin is read in every status, and each change is logged with its voltage (`charge contact closed (2.21 V)`).
-- The contact closing while `idle` or `stopped` charges the robot where it is: `dock_connected`, then `charging`, with the usual `charge_complete` at `CHARGE_COMPLETE_PCT`, stall watch and **Charge complete** button. When the charge ends it goes back to `idle`, or `stopped` with its paused task. Only a closing contact starts it, so a charge that ended doesn't restart until the charger is unplugged and plugged in again. A full pack ends it at once (`dock_connected`, then `charge_complete`).
+- The contact closing while `idle`, `stopped` or `initializing` charges the robot where it is: `dock_connected`, then `charging`, with the usual `charge_complete` at `CHARGE_COMPLETE_PCT`, stall watch and **Charge complete** button. When the charge ends it goes back to `idle`, or `stopped` with its paused task. From `initializing` the tag search stops, and afterwards it waits halted in `initializing` (`resume` searches again), or goes `idle` if a tag was read meanwhile. Only a closing contact starts it, so a charge that ended doesn't restart until the charger is unplugged and plugged in again. A full pack ends it at once (`dock_connected`, then `charge_complete`).
 - Losing the contact while `charging` ends the charge (`charge_complete`) at any battery level, on the dock too: it never backs onto the dock, so unplugging the charger doesn't drive the motor.
 
 ## Motor driver
