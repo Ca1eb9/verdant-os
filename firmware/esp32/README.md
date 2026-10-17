@@ -102,7 +102,11 @@ A robot built without the docking parts never closes the contact, so a dock trip
 
 While `charging`, a battery that rises less than `CHARGE_STALL_RISE_PCT` (1 point) in `CHARGE_STALL_MS` (30 min) sends `charge_stalled` once, and the orchestrator raises a warning. At `CHARGE_RESUME_PCT` (40%) or more the robot then leaves the charger as if knocked off it (`charge_complete`); below it, it stays on and keeps watching. The `charge_complete` command (the dashboard's **Charge complete**) ends a dock trip the same way. Every one of these, and reaching `CHARGE_COMPLETE_PCT`, is the same `finish_charging()`: `battery_low` and the forced return re-arm after it, however full the battery got.
 
-To bench-test the contact, set `CHARGE_SENSE_ALWAYS` in `config.h`: the pin is then read in every status, and each change is logged with its voltage (`charge contact closed (2.21 V)`). Nothing else changes: the robot still only acts on it while docking or charging, and publishes `dock_connected` only then.
+To bench-test the contact and the charge flow off the dock, set `CHARGE_SENSE_ALWAYS` in `config.h`:
+
+- The pin is read in every status, and each change is logged with its voltage (`charge contact closed (2.21 V)`).
+- The contact closing while `idle` or `stopped` charges the robot where it is: `dock_connected`, then `charging`, with the usual `charge_complete` at `CHARGE_COMPLETE_PCT`, stall watch and **Charge complete** button. When the charge ends it goes back to `idle`, or `stopped` with its paused task. Only a closing contact starts it, so a charge that ended doesn't restart until the charger is unplugged and plugged in again. A full pack ends it at once (`dock_connected`, then `charge_complete`).
+- Losing the contact while `charging` ends the charge (`charge_complete`) at any battery level, on the dock too: it never backs onto the dock, so unplugging the charger doesn't drive the motor.
 
 ## Motor driver
 

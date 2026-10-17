@@ -50,7 +50,8 @@ static bool emitted_before_transition(RobotEventType type, RobotStatus s) {
     case RobotEventType::TaskComplete:
       return s == RobotStatus::Working || s == RobotStatus::Docking ||
              s == RobotStatus::ReturningToDock;
-    case RobotEventType::DockConnected: return s == RobotStatus::Docking;
+    case RobotEventType::DockConnected:  // idle or stopped: a bench charge (charge_sense_always)
+      return s == RobotStatus::Docking || s == RobotStatus::Idle || s == RobotStatus::Stopped;
     case RobotEventType::ChargeComplete:  // the charge_complete command ends any dock trip
       return s == RobotStatus::Charging || s == RobotStatus::Docking ||
              s == RobotStatus::ReturningToDock;
@@ -797,6 +798,109 @@ static void test_charge_complete_command() {
   CHECK(n.events.empty() && n.status() == RobotStatus::Idle);
 }
 
+static bool drove_to_dock(const Rig& r) {
+  for (const std::string& m : r.motion) {
+    if (m == "dock" || m.rfind("edge", 0) == 0) return true;
+  }
+  return false;
+}
+
+static void test_bench_charge() {
+  SCENARIO("charge_sense_always bench charge");
+  // Off: a contact while idle does nothing.
+  Rig off;
+  off.boot_at("cp-01");
+  off.contact();
+  CHECK(off.events.empty() && off.status() == RobotStatus::Idle);
+
+  // Idle: charges where it is, back to idle at CHARGE_COMPLETE_PCT.
+  Rig r;
+  r.core.set_charge_sense_always(true);
+  r.boot_at("cp-01");
+  r.battery(50);
+  r.contact();
+  CHECK(r.emitted({RobotEventType::DockConnected}) && r.status() == RobotStatus::Charging);
+  r.clear();
+  r.battery(CHARGE_COMPLETE_PCT);
+  r.advance(100);
+  CHECK(r.emitted({RobotEventType::ChargeComplete}) && r.status() == RobotStatus::Idle);
+  CHECK(!drove_to_dock(r));
+
+  // Unplugged under CHARGE_RESUME_PCT: the charge ends, it never backs on.
+  Rig u;
+  u.core.set_charge_sense_always(true);
+  u.boot_at("cp-01");
+  u.battery(20);
+  u.contact();
+  u.clear();
+  u.contact_lost();
+  CHECK(u.emitted({RobotEventType::ChargeComplete}) && u.status() == RobotStatus::Idle);
+  CHECK(!drove_to_dock(u));
+
+  // Stopped mid-task: back to stopped with the task and latch, then resume.
+  Rig s;
+  s.core.set_charge_sense_always(true);
+  s.boot_at("cp-01");
+  s.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  s.command(make(CommandType::Stop));
+  s.battery(30);
+  s.contact();
+  CHECK(s.status() == RobotStatus::Charging && s.task() == "t1");
+  s.clear();
+  s.contact_lost();
+  CHECK(s.emitted({RobotEventType::ChargeComplete}) && s.status() == RobotStatus::Stopped);
+  CHECK(s.task() == "t1" && s.latched() && !drove_to_dock(s));
+  s.command(make(CommandType::Resume));
+  CHECK(s.status() == RobotStatus::EnRoute && s.task() == "t1");
+
+  // Resumed while charging: carries on once the charge ends.
+  Rig c;
+  c.core.set_charge_sense_always(true);
+  c.boot_at("cp-01");
+  c.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  c.command(make(CommandType::Stop));
+  c.battery(30);
+  c.contact();
+  c.command(make(CommandType::Resume));
+  CHECK(c.status() == RobotStatus::Charging);
+  c.command(make(CommandType::ChargeComplete));
+  CHECK(c.status() == RobotStatus::EnRoute && c.task() == "t1");
+
+  // Stopped while charging, then resumed: still charging there, not to the dock.
+  Rig p;
+  p.core.set_charge_sense_always(true);
+  p.boot_at("cp-01");
+  p.battery(30);
+  p.contact();
+  p.command(make(CommandType::Stop));
+  p.clear();
+  p.command(make(CommandType::Resume));
+  CHECK(p.status() == RobotStatus::Charging && !drove_to_dock(p));
+  // A real dock trip replaces it.
+  p.command(make(CommandType::ReturnToDock));
+  CHECK(p.status() == RobotStatus::ReturningToDock);
+  p.tag("dock-1");
+  p.contact();
+  p.clear();
+  p.command(make(CommandType::ChargeComplete));
+  CHECK(p.emitted({RobotEventType::ChargeComplete}) && p.status() == RobotStatus::Idle);
+
+  // On the real dock with the flag on: unplugged under 40% ends the charge
+  // and carries on with the kept task, instead of backing on.
+  Rig d;
+  d.core.set_charge_sense_always(true);
+  d.boot_at("water-01");
+  d.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  d.command(make(CommandType::ReturnToDock));
+  d.drive({"cp-01", "dock-1"});
+  d.contact();
+  d.battery(20);
+  d.clear();
+  d.contact_lost();
+  CHECK(d.emitted({RobotEventType::ChargeComplete}) && d.status() == RobotStatus::EnRoute);
+  CHECK(d.task() == "t1");
+}
+
 static void test_stop_latch_through_dock_trip() {
   SCENARIO("stop latch survives a dock trip");
   Rig r;
@@ -1148,6 +1252,7 @@ int main() {
   test_charge_lost();
   test_charge_stalled();
   test_charge_complete_command();
+  test_bench_charge();
   test_stop_latch_through_dock_trip();
   test_survival_return();
   test_cancel();

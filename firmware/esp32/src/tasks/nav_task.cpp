@@ -200,6 +200,7 @@ void nav_task(void* /*param*/) {
   uint32_t seen_tag_seq = 0;
   uint32_t known_tag_ms = 0;
   uint32_t unknown_tag_ms = 0;
+  bool contact_was_closed = false;
   Adafruit_NeoPixel led(1, PIN_STATUS_LED, NEO_GRB + NEO_KHZ800);
   led.begin();
   led.setBrightness(STATUS_LED_BRIGHTNESS);
@@ -212,6 +213,7 @@ void nav_task(void* /*param*/) {
 
   LOG("nav", "graph '%s': %u nodes, dock %s", GRAPH_VERSION, GRAPH_NODE_COUNT,
       GRAPH_NODES[GRAPH_DOCK].id);
+  core.set_charge_sense_always(CHARGE_SENSE_ALWAYS);
   core.begin();
 
   for (;;) {
@@ -242,15 +244,21 @@ void nav_task(void* /*param*/) {
     Command cmd;
     while (xQueueReceive(g_command_queue, &cmd, 0) == pdTRUE) core.on_command(cmd, now);
 
-    // The contact's state, not its change: a robot sent to dock again while
-    // still on the charger (e.g. resumed after an error) has it closed already.
+    // Docking acts on the contact's state, not its change: a robot sent to
+    // dock again while still on the charger (e.g. resumed after an error) has
+    // it closed already. Anything else (CHARGE_SENSE_ALWAYS) only when it
+    // closes, so a bench charge that ended doesn't start again on the same plug.
+    bool contact = sensors.charge_sensed && sensors.charge_contact;
     if (!sensors.charge_sensed) {
       // Not read yet since docking or charging began.
-    } else if (sensors.charge_contact) {
-      if (core.status() == RobotStatus::Docking) core.on_charge_contact();
+    } else if (contact) {
+      if (core.status() == RobotStatus::Docking || (CHARGE_SENSE_ALWAYS && !contact_was_closed)) {
+        core.on_charge_contact();
+      }
     } else if (core.status() == RobotStatus::Charging) {
       core.on_charge_lost(now);
     }
+    contact_was_closed = contact;
 
     core.tick(now);
     const char* fault = out.motion.check(now, sensors, g_motor_kill_flag);

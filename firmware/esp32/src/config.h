@@ -134,8 +134,11 @@ constexpr uint8_t CHARGE_CONTACT_COUNT = 3;     // readings in a row to change s
 // At DOCK_STOP_CM with no contact this long: error, it can't charge.
 constexpr uint32_t CHARGE_CONTACT_TIMEOUT_MS = 2000;
 // Bench test: read the contact in every status and log each change with the
-// pin's voltage ("charge contact closed (2.21 V)"). Nav still only acts on it
-// while docking or charging. Logged at boot when on.
+// pin's voltage ("charge contact closed (2.21 V)"). A contact closing while
+// idle or stopped charges where the robot is: dock_connected, then the usual
+// charge flow (charge_complete at CHARGE_COMPLETE_PCT, stall watch), back to
+// idle or stopped after. Losing the contact while charging never backs it
+// onto the dock, at any battery level: the charge ends. Logged at boot when on.
 constexpr bool CHARGE_SENSE_ALWAYS = false;
 
 // ---- Air temperature + humidity (AHT20, drivers/env_sensor.h) ----------------------

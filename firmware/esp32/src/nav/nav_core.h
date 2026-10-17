@@ -96,11 +96,16 @@ class NavCore {
   // Timers: action duration, manual timeout, charge complete. Every nav loop.
   void tick(uint32_t now);
 
-  // Dock sequence: the charger contacts closed while `docking`.
+  // CHARGE_SENSE_ALWAYS (config.h), for bench tests: set once by the nav task.
+  void set_charge_sense_always(bool on) { charge_sense_always_ = on; }
+  // Dock sequence: the charger contacts closed while `docking`. With
+  // charge_sense_always, also when they close while idle or stopped (a
+  // bench): it charges where it is, then goes back to that status.
   void on_charge_contact();
   // Dock sequence: the contacts opened while `charging` (knocked off the
   // charger). At or above CHARGE_RESUME_PCT it's done charging, as at
-  // charge_complete; below it, it backs onto the dock again.
+  // charge_complete; below it, it backs onto the dock again. With
+  // charge_sense_always it never backs on: done charging at any level.
   void on_charge_lost(uint32_t now);
   // Charges completed since boot, whichever way they ended (CHARGE_COMPLETE_PCT,
   // knocked off, stalled, the charge_complete command): survival re-arms on it.
@@ -188,6 +193,11 @@ class NavCore {
 
   float battery_pct_ = NAN;
   uint32_t charges_completed_ = 0;
+  bool charge_sense_always_ = false;
+  // Charging on a bench (charge_sense_always), from bench_from_ (idle or
+  // stopped), where it goes back to when the charge ends.
+  bool bench_charge_ = false;
+  RobotStatus bench_from_ = RobotStatus::Idle;
   // Charging: the highest reading so far and since when, for watch_charge().
   bool charge_watched_ = false;
   bool charge_stall_reported_ = false;

@@ -168,10 +168,21 @@ void NavCore::tick(uint32_t now) {
 }
 
 void NavCore::on_charge_contact() {
+  // Bench test: a charger plugged into the pads of a robot that isn't moving
+  // on its own. Stopped keeps its paused task and latch for afterwards.
+  if (charge_sense_always_ && (status_ == RobotStatus::Idle || status_ == RobotStatus::Stopped)) {
+    out_.halt();
+    emit(RobotEventType::DockConnected, "charge_sense_always: charging off the dock");
+    bench_charge_ = true;
+    bench_from_ = status_;
+    status_ = RobotStatus::Charging;
+    return;
+  }
   if (status_ != RobotStatus::Docking) {
     out_.note("ignored: charge contact while not docking");
     return;
   }
+  bench_charge_ = false;
   out_.brake();
   emit(RobotEventType::DockConnected);
   // A dock task is done once connected; a kept task waits for the charge.
@@ -193,6 +204,11 @@ void NavCore::on_charge_lost(uint32_t now) {
     char details[EVENT_DETAILS_LEN];
     snprintf(details, sizeof(details), "%.1f%%, knocked off the charger", battery_pct_);
     finish_charging(details, now);
+    return;
+  }
+  // Bench test: unplugging the charger mustn't drive the motor.
+  if (charge_sense_always_) {
+    finish_charging("charge contact lost, charge_sense_always: not backing on", now);
     return;
   }
   // Slowly, until DOCK_STOP_CM. No contact there either is a fault (nav/motion):
@@ -249,6 +265,14 @@ void NavCore::end_charge(uint32_t now) {
 void NavCore::finish_charging(const char* details, uint32_t now) {
   charges_completed_++;
   emit(RobotEventType::ChargeComplete, details);
+  if (bench_charge_) {
+    bench_charge_ = false;
+    out_.halt();
+    // A resume while charging released the stop: carry on as it says.
+    if (bench_from_ == RobotStatus::Stopped && !ctx_.stop_latched) resume_paused(now);
+    else status_ = bench_from_;
+    return;
+  }
   // A stop that came in before or during the dock trip still holds.
   if (ctx_.stop_latched) {
     ctx_.has_paused_status = false;
@@ -328,7 +352,9 @@ void NavCore::navigate(const Command& cmd, uint32_t now) {
   // A new task leaves error (also one stopped or driven by hand meanwhile):
   // the Pi resolves its error alert on recovery.
   if (paused_or_current() == RobotStatus::Error) emit(RobotEventType::Recovery, "new task");
-  // Replaces everything: task, kept task, paused status, stop latch, manual.
+  // Replaces everything: task, kept task, paused status, stop latch, manual,
+  // a bench charge.
+  bench_charge_ = false;
   clear_task(ctx_.kept);
   ctx_.dock_task = false;
   ctx_.has_paused_status = false;
@@ -390,7 +416,8 @@ void NavCore::resume(uint32_t now) {
 }
 
 void NavCore::return_to_dock(const char* dock_task_id, uint32_t now) {
-  if (is_dock_trip(status_) || is_dock_trip(paused_or_current())) {
+  // A bench charge isn't a trip to the dock: the robot can still go there.
+  if (!bench_charge_ && (is_dock_trip(status_) || is_dock_trip(paused_or_current()))) {
     out_.note("ignored: already on a dock trip");
     return;
   }
@@ -418,6 +445,7 @@ void NavCore::return_to_dock(const char* dock_task_id, uint32_t now) {
   if (paused_or_current() == RobotStatus::Error) emit(RobotEventType::Recovery, "sent to the dock");
   // The stop latch stays: after charging the robot reports stopped.
   ctx_.has_paused_status = false;
+  bench_charge_ = false;
   go_to_dock(now);
 }
 
@@ -681,9 +709,18 @@ void NavCore::continue_from(RobotStatus from, uint32_t now) {
       if (BOOT_CREEP) out_.creep();
       else out_.halt();
       return;
+    case RobotStatus::Charging:
+      // A bench charge (stopped or driven by hand meanwhile) stays where it is;
+      // with the charger gone, on_charge_lost() ends it.
+      if (bench_charge_) {
+        out_.halt();
+        status_ = RobotStatus::Charging;
+        return;
+      }
+      go_to_dock(now);
+      return;
     case RobotStatus::ReturningToDock:
     case RobotStatus::Docking:
-    case RobotStatus::Charging:
       go_to_dock(now);
       return;
     case RobotStatus::Stopped:

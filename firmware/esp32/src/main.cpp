@@ -41,7 +41,7 @@ void setup() {
   if (!OBSTACLE_FAILSAFE) LOG("main", "WARNING: OBSTACLE_FAILSAFE off: a dead ToF sensor won't stop the motor");
   if (!BATTERY_FAILSAFE) LOG("main", "WARNING: BATTERY_FAILSAFE off: no motor cutoff at low battery");
   if (!BOOT_CREEP) LOG("main", "BOOT_CREEP off: waiting in place for the first tag");
-  if (CHARGE_SENSE_ALWAYS) LOG("main", "CHARGE_SENSE_ALWAYS on: reading the charge contact in every status");
+  if (CHARGE_SENSE_ALWAYS) LOG("main", "CHARGE_SENSE_ALWAYS on: charge contact read in every status, charges in idle or stopped");
 
   if (!create_queues()) {
     // Nothing can run without them; no task exists, so the motors stay off.
