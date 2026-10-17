@@ -368,7 +368,10 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
   front. Telemetry `obstacle_cm` comes from the sensor on the side of the last
   drive direction: front, or rear after reversing (kept while stopped). Note
   this is the drive direction, not `heading`, which doesn't change when the
-  robot reverses. The robot keeps its status (e.g. `en_route`) and publishes
+  robot reverses. It's `null` when nothing in range has given a distance the
+  sensor trusts for `TOF_HOLD_MS` (3 s); in a shorter gap (a near target
+  just left, or a weak far one) it keeps the last good distance, and the
+  obstacle flag holds too. The robot keeps its status (e.g. `en_route`) and publishes
   `obstacle_detected` once, also when a jog runs into it in `manual`. If it is
   still blocked after a timeout, it publishes `path_blocked` and keeps waiting.
   The orchestrator only raises alerts for these.

@@ -70,7 +70,8 @@ void update_rfid(uint32_t now) {
 // distance, so the robot doesn't stutter at the threshold. When nav changes
 // the stop distance, the next reading is judged against it straight away:
 // otherwise a robot stopped a few cm from the elevator wall would hold its
-// flag and never creep the rest of the way in.
+// flag and never creep the rest of the way in. A reading the sensor doesn't
+// trust keeps the last good distance for up to TOF_HOLD_MS.
 
 struct ObstacleState {
   TofSensor* tof;
@@ -78,6 +79,8 @@ struct ObstacleState {
   volatile float* stop_cm;
   float judged_stop_cm = OBSTACLE_STOP_CM;  // the stop distance last applied
   float cm = NAN;
+  uint32_t last_target_ms = 0;  // cm's reading, kept through gaps (TOF_HOLD_MS)
+  bool gap_logged = false;
   uint8_t clear_count = 0;
   uint32_t last_data_ms = 0;
   uint32_t last_reinit_ms = 0;
@@ -108,18 +111,37 @@ void update_obstacle(ObstacleState& obs, uint32_t now) {
     case TofReading::Clear: {
       obs.last_data_ms = now;
       obs.fault_logged = false;
-      obs.cm = (r == TofReading::Target) ? cm : NAN;
+      // A gap: the last good distance stands in, judged as nothing new.
+      bool held = false;
+      if (r == TofReading::Target) {
+        obs.cm = cm;
+        obs.last_target_ms = now;
+        obs.gap_logged = false;
+      } else if (!isnan(obs.cm) && now - obs.last_target_ms < TOF_HOLD_MS) {
+        held = true;
+      } else {
+        // Nothing in range is normal (open space); an untrusted target is
+        // worth knowing about while tuning.
+        uint8_t status = obs.tof->rejected_status();
+        if (!isnan(obs.cm) && status != VL53L4CX_RANGESTATUS_NONE && !obs.gap_logged) {
+          LOG("sensor", "%s ToF: no trusted distance for %lu ms (last: status %u at %d mm), "
+              "reporting none (logged once until it reads one)", obs.tof->name(),
+              (unsigned long)TOF_HOLD_MS, status, obs.tof->rejected_mm());
+          obs.gap_logged = true;
+        }
+        obs.cm = NAN;
+      }
+      bool target = !isnan(obs.cm);
       float stop_cm = *obs.stop_cm;
       bool rejudge = stop_cm != obs.judged_stop_cm;
       obs.judged_stop_cm = stop_cm;
-      if (r == TofReading::Target && cm < stop_cm) {
+      if (target && obs.cm < stop_cm) {
         obs.clear_count = 0;
         set_obstacle_flag(obs, true, "target in range");
       } else if (rejudge) {
         obs.clear_count = OBSTACLE_CLEAR_COUNT;
         set_obstacle_flag(obs, false, "stop distance changed");
-      } else if (r == TofReading::Clear ||
-                 cm > stop_cm + (OBSTACLE_CLEAR_CM - OBSTACLE_STOP_CM)) {
+      } else if (!held && (!target || obs.cm > stop_cm + (OBSTACLE_CLEAR_CM - OBSTACLE_STOP_CM))) {
         if (obs.clear_count < OBSTACLE_CLEAR_COUNT) obs.clear_count++;
         if (obs.clear_count >= OBSTACLE_CLEAR_COUNT) set_obstacle_flag(obs, false, "path clear");
       }
