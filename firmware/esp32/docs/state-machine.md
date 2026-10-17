@@ -100,7 +100,17 @@ stateDiagram-v2
   paused by `stop` leaves the robot `stopped` (it resumes to `idle`). Cancelling a
   task kept during a dock trip leaves the trip running, so the robot still
   charges.
-- **`return_to_dock`** is ignored while already returning, docking or charging.
+- **`return_to_dock`** is ignored while already returning, docking or charging
+  (a bench charge, below, excepted).
+- **`CHARGE_SENSE_ALWAYS`** (bench tests, `config.h`): the charge contact
+  closing while `idle` or `stopped` sends `dock_connected` and goes `charging`
+  where the robot is. Any way the charge ends (`charge_complete`) goes back to
+  that `idle` or `stopped`, its paused task and stop latch kept (a `resume`
+  while charging releases it as usual). A `stop` or manual control meanwhile
+  comes back to `charging` there, never driving to the dock; `navigate` and
+  `return_to_dock` replace it. With the flag on, losing the contact while
+  `charging` (bench or dock) always ends the charge instead of backing onto
+  the dock.
 - **`stop`** is accepted in any state, `initializing` included (the diagram
   shows the common ones), and ignored when already `stopped`. `resume` returns to the
   paused state, re-planning first if the robot was moved.
