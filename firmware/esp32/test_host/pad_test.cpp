@@ -134,10 +134,24 @@ static void test_buttons() {
   CHECK(held.update(REST, true, false, now += 40) == PadAction::Stop);
 }
 
+static void test_radio() {
+  SCENARIO("radio");
+  PadRadio r;
+  uint32_t now = 1000;
+  CHECK(!r.update(false, now));                         // never needed: stays off
+  CHECK(r.update(true, now += 40));                     // needed: on at once
+  CHECK(r.update(false, now += PAD_RADIO_OFF_MS - 1));  // just stopped needing it
+  CHECK(r.update(true, now += 40));                     // needed again: the wait restarts
+  CHECK(r.update(false, now += PAD_RADIO_OFF_MS - 1));
+  CHECK(!r.update(false, now += 1));                    // off PAD_RADIO_OFF_MS after
+  CHECK(!r.update(false, now += 40));
+}
+
 int main() {
   test_stick();
   test_centre_first();
   test_buttons();
+  test_radio();
   printf("pad_test: %s\n", failures ? "FAILED" : "passed");
   return failures ? 1 : 0;
 }
