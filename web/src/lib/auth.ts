@@ -8,12 +8,13 @@ export const LOGIN_PATH = "/login";
 
 // A hung Supabase Auth fails here instead of holding every page until the platform times out
 const AUTH_TIMEOUT_MS = 8_000;
+// How long the session cookies last after they were last written (sign-in, or a token refresh on a visit)
+const SESSION_COOKIE_MAX_AGE_S = 365 * 24 * 60 * 60;
 
 /**
  * Session cookies. httpOnly: nothing in the browser reads them (sign-in and
  * sign-out run on the server), so an injected script can't steal a session.
- * @supabase/ssr keeps its 400-day maxAge, and the middleware refreshes the
- * short-lived access token on every request, so operators stay signed in.
+ * Their lifetime is set in createAuthClient().
  */
 const AUTH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -47,13 +48,28 @@ export type SessionProblem = "unavailable" | "unconfigured";
 const timedFetch: typeof fetch = (input, init) =>
   fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(AUTH_TIMEOUT_MS) });
 
-/** Supabase Auth over the request's session cookies; null when this server has no Supabase keys */
+/**
+ * Supabase Auth over the request's session cookies; null when this server has
+ * no Supabase keys. The middleware rewrites the cookies whenever it refreshes
+ * the hour-long access token, so they last SESSION_COOKIE_MAX_AGE_S from the
+ * operator's last visit.
+ */
 export function createAuthClient(cookieMethods: CookieMethodsServer) {
   const { url, anonKey } = getSupabaseAuthConfig();
   if (!url || !anonKey) return null;
   return createServerClient(url, anonKey, {
     cookieOptions: AUTH_COOKIE_OPTIONS,
-    cookies: cookieMethods,
+    cookies: {
+      getAll: cookieMethods.getAll,
+      // @supabase/ssr always writes 400 days, ignoring cookieOptions.maxAge; removals (maxAge 0) pass through
+      setAll: (cookiesToSet, headers) =>
+        cookieMethods.setAll?.(
+          cookiesToSet.map((cookie) =>
+            cookie.options.maxAge ? { ...cookie, options: { ...cookie.options, maxAge: SESSION_COOKIE_MAX_AGE_S } } : cookie,
+          ),
+          headers,
+        ),
+    },
     global: { fetch: timedFetch },
   });
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { signIn, type SignInState } from "@/app/login/actions";
+import { clearStoredReadings } from "@/lib/stored-readings";
 import styles from "@/app/login/login.module.css";
 
 const INITIAL: SignInState = { error: null, email: "" };
@@ -9,6 +10,9 @@ const INITIAL: SignInState = { error: null, email: "" };
 export function LoginForm({ next, disabled }: { next: string; disabled: boolean }) {
   const [state, action, pending] = useActionState(signIn, INITIAL);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Signed out, by choice or because the session ended: nothing from the farm stays on this device
+  useEffect(clearStoredReadings, []);
 
   return (
     <form action={action} className={styles.form}>
