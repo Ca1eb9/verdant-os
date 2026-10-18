@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getSession, refuse } from "@/lib/auth";
 import { getSupabaseReadConfig } from "@/lib/supabase-config";
 import type { FarmIdentity } from "@/lib/types";
 
@@ -7,6 +8,9 @@ export const dynamic = "force-dynamic";
 
 /** The farms in Supabase's farms table, for the header's farm picker */
 export async function GET() {
+  const refused = refuse(await getSession());
+  if (refused) return refused;
+
   const config = getSupabaseReadConfig();
   if (!config.url || !config.key) {
     return NextResponse.json({ farms: [], error: "Supabase is not configured." });

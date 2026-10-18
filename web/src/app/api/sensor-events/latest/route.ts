@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getSession, refuse } from "@/lib/auth";
 import { FARM_ID_PATTERN } from "@/lib/farms";
 import { getSupabaseReadConfig } from "@/lib/supabase-config";
 import type { SensorEventRecord } from "@/lib/types";
@@ -8,6 +9,9 @@ export const dynamic = "force-dynamic";
 
 /** The newest sensor_events row for ?farm_id= */
 export async function GET(request: Request) {
+  const refused = refuse(await getSession());
+  if (refused) return refused;
+
   const farmId = new URL(request.url).searchParams.get("farm_id");
   if (!farmId || !FARM_ID_PATTERN.test(farmId)) {
     return NextResponse.json({ event: null, error: "farm_id is missing or invalid." }, { status: 400 });

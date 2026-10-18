@@ -1,6 +1,7 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getSession, refuse } from "@/lib/auth";
 import { FARM_ID_PATTERN } from "@/lib/farms";
 import { getSupabaseReadConfig } from "@/lib/supabase-config";
 import type { CommandRecord } from "@/lib/farm/data-source";
@@ -92,6 +93,9 @@ function parseCommand(body: unknown): { farmId: string; robotId: string; command
 }
 
 export async function GET(request: Request) {
+  const refused = refuse(await getSession());
+  if (refused) return refused;
+
   const config = getSupabaseReadConfig();
   if (!config.url || !config.key) {
     return NextResponse.json({ commands: [], error: "Supabase is not configured." });
@@ -118,11 +122,17 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!process.env.OPERATOR_KEY) {
-    return error("Remote commands are turned off. Set OPERATOR_KEY on the server to enable them.", 503);
-  }
-  if (!operatorKeyMatches(request.headers.get("x-operator-key"))) {
-    return error("Operator key is missing or wrong.", 401);
+  // a signed-in operator sends as themselves; with sign-in off, the operator key guards commands
+  const session = await getSession();
+  const refused = refuse(session);
+  if (refused) return refused;
+  if (!session) {
+    if (!process.env.OPERATOR_KEY) {
+      return error("Remote commands are turned off. Set OPERATOR_KEY on the server to enable them.", 503);
+    }
+    if (!operatorKeyMatches(request.headers.get("x-operator-key"))) {
+      return error("Operator key is missing or wrong.", 401);
+    }
   }
 
   const parsed = parseCommand(await request.json().catch(() => null));
@@ -137,7 +147,7 @@ export async function POST(request: Request) {
     id: randomUUID(),
     robot_id: parsed.robotId,
     command: parsed.command,
-    issued_by: "dashboard",
+    issued_by: session?.state === "signed-in" ? session.email : "dashboard",
     issued_at: Date.now(),
   };
 

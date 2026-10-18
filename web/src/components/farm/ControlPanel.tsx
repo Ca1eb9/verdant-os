@@ -14,6 +14,7 @@ import type {
   RobotCommand,
   RobotStatus,
 } from "@/lib/farm/types";
+import { useSignInRequired } from "@/components/auth/SignInContext";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import styles from "@/components/farm/ControlPanel.module.css";
 
@@ -138,7 +139,10 @@ export function ControlPanel({
   const [recent, setRecent] = useState<CommandRecord[]>([]);
   // On FarmNet commands go straight to the broker, which only the farm network reaches
   const localMode = source.mode === "local";
-  const needsKey = !localMode && !operatorKey;
+  // Where operators sign in, their session authorizes commands instead of the key
+  const signInRequired = useSignInRequired();
+  const usesKey = !localMode && !signInRequired;
+  const needsKey = usesKey && !operatorKey;
 
   useEffect(() => setOperatorKey(readKey()), []);
 
@@ -209,7 +213,7 @@ export function ControlPanel({
       void refreshRecent();
     } catch (err) {
       const text = err instanceof Error ? err.message : "Could not send the command.";
-      if (err instanceof CommandError && err.status === 401) setShowKey(true);
+      if (usesKey && err instanceof CommandError && err.status === 401) setShowKey(true);
       setMessage({ tone: "error", text });
     } finally {
       setBusy(false);
@@ -758,7 +762,7 @@ export function ControlPanel({
         )}
       </section>
 
-      {localMode ? null : (
+      {usesKey ? (
         <section className={styles.keyRow}>
           {showKey ? (
             <form
@@ -787,7 +791,7 @@ export function ControlPanel({
             </button>
           )}
         </section>
-      )}
+      ) : null}
     </aside>
   );
 }
