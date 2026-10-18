@@ -139,15 +139,50 @@ sequenceDiagram
     participant SB as Supabase bridge (Pi, planned)
     participant O as Orchestrator
 
-    U->>C: command + operator key
-    C->>A: POST, farm_id in the body
-    A->>A: check OPERATOR_KEY, validate (no jog)
-    A->>S: insert, status pending
+    U->>C: command
+    C->>A: POST, farm_id in the body (session cookie)
+    A->>A: check the signed-in operator (OPERATOR_KEY with sign-in off), validate (no jog)
+    A->>S: insert, status pending, issued_by = the operator's email
     A-->>C: the command record
     S--)SB: Realtime insert (and pending rows on reconnect)
     SB->>O: farm/commands/remote
     SB--)S: status sent, or failed
 ```
+
+## Sign-in (remote only)
+
+Operators sign in with Supabase Auth (email and password) everywhere but a
+farm's Pi: the FarmNet build (`NEXT_PUBLIC_MQTT_WS_URL`) never asks, and never
+calls Supabase Auth, so it works offline. `AUTH_DISABLED=true` turns sign-in off
+elsewhere too (`signInRequired()` in `src/lib/auth.ts`). The password only
+travels over HTTPS, to this app's server and on to Supabase Auth; the session
+lives in httpOnly cookies that no browser script can read.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as Operator's browser
+    participant M as middleware.ts
+    participant P as /login (server action)
+    participant SA as Supabase Auth
+
+    U->>M: any page or /api route
+    M->>SA: getClaims(): verify the session (cached signing keys), refresh it near expiry
+    alt signed in
+        M-->>U: the page, with refreshed cookies
+    else signed out
+        M-->>U: redirect to /login?next= (API: 401)
+    else Supabase Auth unreachable or slow (8 s)
+        M-->>U: redirect to /login?reason=unavailable (API: 503)
+    end
+    U->>P: email + password
+    P->>SA: signInWithPassword
+    P-->>U: httpOnly session cookies, redirect to next (this site only)
+```
+
+Each API route checks the session again itself (`getSession()`, `refuse()`).
+Fails closed: without the Supabase URL and publishable key, or with Supabase
+Auth down, only the login page loads, and it says why.
 
 ## Connection and loading
 

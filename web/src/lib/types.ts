@@ -1,5 +1,4 @@
 export type LiveStatus = "live" | "stale" | "waiting";
-export type HistoryRange = "24h" | "72h" | "7d";
 export type FloatSensorState = 0 | 1;
 
 /** A row of Supabase's farms table (or the Pi's own farm on FarmNet) */

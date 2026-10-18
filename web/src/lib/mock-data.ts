@@ -1,16 +1,9 @@
 import type {
   FarmIdentity,
   HistoryPoint,
-  HistoryRange,
   SensorEventPayload,
   TelemetrySnapshot,
 } from "@/lib/types";
-
-export const HISTORY_RANGE_HOURS: Record<HistoryRange, number> = {
-  "24h": 24,
-  "72h": 72,
-  "7d": 168,
-};
 
 // Generated readings and history for building the dashboard without a farm.
 // Off: the dashboard shows only real data (farms from Supabase or the Pi's

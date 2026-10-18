@@ -60,6 +60,15 @@ Also set `NEXT_PUBLIC_FARM_ID` and `NEXT_PUBLIC_FARM_NAME` to that Pi's farm (it
 
 Manual control is hidden for a robot that hasn't read its first tag yet (`initializing`). Set `NEXT_PUBLIC_JOG_WHILE_INITIALIZING=true` to offer it there too, e.g. to drive a robot onto a tag; the robot accepts those jogs either way. It's read at build time.
 
+## Operator Sign-In
+
+Remotely (Vercel), every page and API route needs an operator signed in with Supabase Auth: email and password on `/login`, which matches the rest of the app (theme, `VerdantMark`). `src/middleware.ts` checks the session on each request and refreshes it, so operators stay signed in until they sign out from **Settings**, or for 365 days without a visit (the session cookies' lifetime, `SESSION_COOKIE_MAX_AGE_S` in `src/lib/auth.ts`). The login page forgets the farm readings saved in the browser, so the next person at a shared device doesn't see them. Remote commands are authorized by the session (no operator key) and record the operator's email as `issued_by`. Setup, including adding operators and turning off public sign-ups: [docs/SUPABASE-SETUP.md](../docs/SUPABASE-SETUP.md) step 6.
+
+- **On FarmNet there's no sign-in.** A build with `NEXT_PUBLIC_MQTT_WS_URL` (the Pi's, or `npm run dev` with the example env) never asks and never calls Supabase Auth, so the farm works offline. To try sign-in locally, leave that value unset and set the Supabase URL and publishable key. Whoever replaces the `NEXT_PUBLIC_MQTT_WS_URL` switch with runtime detection keeps `signInRequired()` in `src/lib/auth.ts` in step.
+- **`AUTH_DISABLED=true`** turns sign-in off anywhere (redeploy on Vercel); commands then need `OPERATOR_KEY` again. Unset or anything else: sign-in stays on.
+- **Fails closed.** Without the Supabase URL and publishable key, or while Supabase Auth is unreachable (each call gives up after 8 s), only the login page loads and it says why; API routes answer 401 / 503. Each route also checks the session itself.
+- **Security.** The password goes over HTTPS to this app's server (a server action) and on to Supabase Auth; it's never logged. Session cookies are httpOnly, Secure and SameSite=Lax, `?next=` only leads to paths on this site, and `vercel.json` sends HSTS and forbids framing. The service worker never caches `/login`, `/settings` (it shows the email) or a redirect, and sign-out clears its cached pages.
+
 ## Farms
 
 One Supabase project serves every farm, and each farm has its own Pi. Every Supabase row has a `farm_id`, which the farm's Supabase bridge stamps on it; MQTT carries no farm id. Remotely (Vercel), the header's farm picker lists the `farms` table (`/api/farms`), and switching farms swaps the data source for that farm's (`selectFarm()` in `src/lib/farm/data-source.ts`). Readings and commands are scoped to the selected farm. The pages show why when there's no farm to show: the list is loading, empty or failed, or the Pi's `NEXT_PUBLIC_FARM_ID` is missing.
@@ -86,9 +95,10 @@ That runs lint, TypeScript, and production build validation.
 
 - `/` - live dashboard: shelf readings, robots, alerts and the farm map
 - `/farm` - the farm map and each robot's control panel (commands, manual control)
-- `/history` - shelf readings over time (`FarmDataSource.subscribeShelfHistory`: on FarmNet the last 7 days from the Dashboard API, then live)
-- `/alerts` - alerts from the farm's robots, shelves and services (`FarmDataSource.subscribeAlerts`: live from `farm/alerts` on FarmNet, not available remotely yet), newest first. An alert another one resolved (`FarmAlert.resolves`) is faded with its resolve time (`listAlerts` in `src/hooks/useFarmAlerts.ts`); the Dashboard's Alerts card and sensor dots follow the same alerts. The dashboard checks no sensor ranges itself: that's the alert engine's job. `npm run clear-alerts` on the Pi (`farm/alerts/clear`) empties the list
-- `/settings` - theme, units and other preferences, kept in this browser
+- `/history` - shelf readings over time (`FarmDataSource.subscribeShelfHistory`: on FarmNet the last 7 days from the Dashboard API, then live), over the last 15 minutes, hour, 6 hours, 24 hours or 7 days. One chart per measurement (air temperature, humidity, water temperature, pH, light), each on its own axis: the time axis always spans the whole window, so missing readings show as empty time, and the value axis fits the readings with a minimum span so sensor noise doesn't look like a swing. Each chart but light shows its average over the window in its top right; light has none, since the grow lights switch on and off and an average of the two means nothing. History and Alerts share that window, kept with the other preferences on the device (`src/lib/time-windows.ts`, `TimeWindowPicker`)
+- `/alerts` - alerts from the farm's robots, shelves and services (`FarmDataSource.subscribeAlerts`: live from `farm/alerts` on FarmNet, not available remotely yet). Open warnings and critical alerts are always pinned on top, whatever the window; below them, newest first and 25 at a time, every other alert raised or resolved in the window. Alert times are the farm's clock and the window the browser's (there's no clock sync), which is why open alerts never depend on it. An alert another one resolved (`FarmAlert.resolves`) is faded with its resolve time (`listAlerts` in `src/hooks/useFarmAlerts.ts`); the Dashboard's Alerts card and sensor dots follow the same alerts. The dashboard checks no sensor ranges itself: that's the alert engine's job. `npm run clear-alerts` on the Pi (`farm/alerts/clear`) empties the list. **Devices** lists every robot and shelf sensor with when the browser last heard from it, silent ones first, and the summary counts how many are reporting (`useDeviceHeartbeats`). A robot is silent after 30 s (the orchestrator's `heartbeat_timeout_ms`), a shelf after 20 s (the shelf bridge's `silence_timeout_ms`). Robots come from the robot list, shelves from their live readings and the stored history, so one that went quiet before the page opened shows as "not heard since this page opened". Remotely there are no device heartbeats yet, and the card shows the latest sensor reading's time instead
+- `/settings` - theme, units and other preferences, kept in this browser; signed in, the account and **Sign out**
+- `/login` - operator sign-in (remote only)
 - `/api/farms` - the farms in Supabase's `farms` table
 - `/api/sensor-events/latest?farm_id=` - a farm's latest Supabase sensor event
 - `/api/commands?farm_id=` - a farm's recent remote commands (GET), or send one (POST, with `farm_id` in the body)
@@ -101,7 +111,7 @@ The shelf sensor node (Arduino Uno R3) publishes over MQTT on the Pi through the
 
 - Import the repository into Vercel as a Next.js project.
 - Use Node.js 20 or newer.
-- Set the Supabase keys, `OPERATOR_KEY` and the `NEXT_PUBLIC_SUPABASE_*` values in the project environment: [docs/SUPABASE-SETUP.md](../docs/SUPABASE-SETUP.md) step 5 lists each one. The tables are in [`supabase/`](./supabase).
+- Set the Supabase keys and the `NEXT_PUBLIC_SUPABASE_*` values in the project environment: [docs/SUPABASE-SETUP.md](../docs/SUPABASE-SETUP.md) step 5 lists each one, and step 6 sets up operator sign-in. `OPERATOR_KEY` is only needed with `AUTH_DISABLED=true`. The tables are in [`supabase/`](./supabase).
 - The included [`vercel.json`](./vercel.json) sets cache behavior for the service worker, manifest, and `/images` assets so the PWA works cleanly in deployment.
 - No custom server is required. Vercel can build and deploy the app directly with the default `next build` flow.
 

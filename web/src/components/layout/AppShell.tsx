@@ -1,4 +1,8 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { FarmProvider } from "@/components/farms/FarmContext";
 import { FarmLoadingOverlay } from "@/components/layout/FarmLoadingOverlay";
 import { FarmStatusBanner } from "@/components/layout/FarmStatusBanner";
 import { SideNav } from "@/components/layout/SideNav";
@@ -6,16 +10,21 @@ import { TopNav } from "@/components/layout/TopNav";
 import styles from "@/components/layout/AppShell.module.css";
 
 export function AppShell({ children }: { children: ReactNode }) {
+  // the login page stands alone: no navigation, and no farm list to load while signed out
+  if (usePathname() === "/login") return <>{children}</>;
+
   return (
-    <div className={styles.shell}>
-      <SideNav />
-      <div className={styles.column}>
-        <TopNav />
-        <FarmStatusBanner />
-        <main className={styles.main}>
-          <FarmLoadingOverlay>{children}</FarmLoadingOverlay>
-        </main>
+    <FarmProvider>
+      <div className={styles.shell}>
+        <SideNav />
+        <div className={styles.column}>
+          <TopNav />
+          <FarmStatusBanner />
+          <main className={styles.main}>
+            <FarmLoadingOverlay>{children}</FarmLoadingOverlay>
+          </main>
+        </div>
       </div>
-    </div>
+    </FarmProvider>
   );
 }

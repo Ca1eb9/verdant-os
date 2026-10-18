@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getFarmDataSource, onFarmDataSourceChange, type ShelfReading } from "@/lib/farm/data-source";
 import { MOCK_DATA_ENABLED, buildLiveTelemetry } from "@/lib/mock-data";
+import { readingStorageKey } from "@/lib/stored-readings";
 import type {
   LiveStatus,
   SensorEventRecord,
@@ -12,10 +13,6 @@ import type {
 
 const STALE_AFTER_MS = 10_000;
 const POLL_INTERVAL_MS = 2_000;
-
-function storageKey(farmId: string) {
-  return `verdantos:v4:last-reading:${farmId}`;
-}
 
 function eventToReading(event: SensorEventRecord): SensorReading {
   return {
@@ -74,7 +71,7 @@ function isReading(value: unknown): value is SensorReading {
 // The last reading per farm, so a reload while the feed is down still shows it (as stale)
 function readStoredReading(farmId: string): SensorReading | null {
   try {
-    const value = window.localStorage.getItem(storageKey(farmId));
+    const value = window.localStorage.getItem(readingStorageKey(farmId));
     const parsed: unknown = value ? JSON.parse(value) : null;
     return isReading(parsed) ? parsed : null;
   } catch {
@@ -84,7 +81,7 @@ function readStoredReading(farmId: string): SensorReading | null {
 
 function storeReading(farmId: string, reading: SensorReading) {
   try {
-    window.localStorage.setItem(storageKey(farmId), JSON.stringify(reading));
+    window.localStorage.setItem(readingStorageKey(farmId), JSON.stringify(reading));
   } catch {
     // the reading just isn't cached
   }

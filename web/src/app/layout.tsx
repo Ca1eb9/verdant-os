@@ -2,10 +2,11 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "@/app/globals.css";
 import { Analytics } from "@vercel/analytics/next";
-import { FarmProvider } from "@/components/farms/FarmContext";
+import { SignInProvider } from "@/components/auth/SignInContext";
 import { PreferencesProvider } from "@/components/preferences/PreferencesProvider";
 import { AppShell } from "@/components/layout/AppShell";
 import { PwaRegistrar } from "@/components/pwa/PwaRegistrar";
+import { signInRequired } from "@/lib/auth";
 import { SPLASH_SCREENS } from "@/lib/splash-screens";
 
 // applies the saved theme and sidebar state before first paint so neither flashes.
@@ -103,9 +104,9 @@ export default function RootLayout({
       <body>
         <PwaRegistrar />
         <PreferencesProvider>
-          <FarmProvider>
+          <SignInProvider required={signInRequired()}>
             <AppShell>{children}</AppShell>
-          </FarmProvider>
+          </SignInProvider>
         </PreferencesProvider>
         {/* Vercel's analytics script is only served on Vercel: not on a Pi */}
         {process.env.VERCEL ? <Analytics /> : null}

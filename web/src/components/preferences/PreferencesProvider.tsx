@@ -29,7 +29,7 @@ interface PreferencesContextValue {
     temp: (celsius: number | null, precision?: number) => string;
     tempValue: (celsius: number) => number;
     tempUnit: string;
-    tick: (value: string, compact?: boolean) => string;
+    tick: (value: string | number, compact?: boolean) => string;
   };
 }
 
@@ -100,8 +100,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 
   const reset = useCallback(() => {
     setPrefs((current) => {
-      // keep the sidebar where the user left it
-      const next = { ...DEFAULT_PREFERENCES, sidebarCollapsed: current.sidebarCollapsed };
+      // keep what's set outside Settings: the sidebar, and the History and Alerts window
+      const next = { ...DEFAULT_PREFERENCES, sidebarCollapsed: current.sidebarCollapsed, timeWindow: current.timeWindow };
       writeStored(next);
       return next;
     });

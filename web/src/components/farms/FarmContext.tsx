@@ -46,6 +46,8 @@ function initialList(): FarmList {
 async function fetchFarmList(): Promise<FarmList> {
   try {
     const response = await fetch("/api/farms", { cache: "no-store" });
+    // the session ended (e.g. revoked): reloading takes the operator to the login page
+    if (response.status === 401) window.location.reload();
     const payload = (await response.json()) as { farms?: FarmIdentity[]; error?: string };
     if (payload.error) {
       console.warn(`[farms] /api/farms: ${payload.error}`);

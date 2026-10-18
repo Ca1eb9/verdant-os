@@ -16,3 +16,11 @@ export function getSupabaseReadConfig() {
     hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
   };
 }
+
+/** Keys for Supabase Auth. Never the service role key: sign-in runs as the operator. */
+export function getSupabaseAuthConfig() {
+  return {
+    url: firstValue(process.env.SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_URL),
+    anonKey: firstValue(process.env.SUPABASE_ANON_KEY, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY),
+  };
+}

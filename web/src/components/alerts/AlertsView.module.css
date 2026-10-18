@@ -15,37 +15,10 @@
   margin-top: 1rem;
 }
 
-.selectorGroup {
-  display: grid;
-  gap: 0.55rem;
-}
-
-.metaLabel,
 .summaryLabel,
 .summaryDetail,
 .alertMeta {
   color: var(--muted);
-}
-
-.rangeRow {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem;
-}
-
-.rangeButton {
-  min-height: 2.9rem;
-  padding: 0.7rem 1rem;
-  border-radius: var(--radius-control);
-  border: 1px solid rgb(var(--line-rgb) / 0.12);
-  background: rgb(var(--surface-rgb) / 0.72);
-  color: var(--muted);
-}
-
-.rangeActive {
-  color: var(--text);
-  background: rgb(var(--cyan-rgb) / 0.14);
-  border-color: rgb(var(--cyan-rgb) / 0.3);
 }
 
 .summaryGrid {
@@ -75,6 +48,41 @@
   display: grid;
   gap: 0.85rem;
   margin-top: 1rem;
+}
+
+.listTitle {
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.quiet {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.more {
+  justify-self: center;
+  min-height: 2.6rem;
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--line-strong);
+  background: rgb(var(--surface-rgb) / 0.7);
+  color: var(--text);
+  transition: border-color 160ms ease;
+}
+
+.more:hover {
+  border-color: rgb(var(--cyan-rgb) / 0.4);
+}
+
+.more:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
 }
 
 .alertHead {
@@ -130,6 +138,59 @@
 
 .emptyState {
   align-items: start;
+}
+
+/* Every robot and shelf sensor, silent ones first */
+.devices {
+  display: grid;
+  margin: 0;
+  padding: 0.25rem 1rem;
+  list-style: none;
+}
+
+.device {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.device:last-child {
+  border-bottom: 0;
+}
+
+.device :global(.statusDot) {
+  flex: none;
+  width: 0.55rem;
+  height: 0.55rem;
+}
+
+.deviceName {
+  display: grid;
+  gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.deviceName span,
+.deviceSeen {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.deviceSeen {
+  text-align: right;
+}
+
+.reporting {
+  color: var(--teal);
+}
+
+.deviceSeen.silent,
+.silent {
+  color: var(--danger);
 }
 
 @media (min-width: 760px) {

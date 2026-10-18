@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getFarmDataSource, onFarmDataSourceChange, type ShelfReading } from "@/lib/farm/data-source";
-import type { HistoryPoint, HistoryRange } from "@/lib/types";
+import { TIME_WINDOWS, type TimeWindow } from "@/lib/time-windows";
+import type { HistoryPoint } from "@/lib/types";
 
 const MINUTE_MS = 60_000;
-const RANGE_MS: Record<HistoryRange, number> = { "24h": 24 * 60 * MINUTE_MS, "72h": 72 * 60 * MINUTE_MS, "7d": 7 * 24 * 60 * MINUTE_MS };
 /** Bucket sizes to pick from: the smallest that keeps a chart under MAX_POINTS */
 const BUCKET_STEPS_MS = [5_000, 15_000, 30_000, MINUTE_MS, 5 * MINUTE_MS, 15 * MINUTE_MS, 30 * MINUTE_MS, 60 * MINUTE_MS];
 const MAX_POINTS = 300;
+// slides the window along even while no reading arrives
+const CLOCK_MS = 15_000;
 
 function mean(readings: ShelfReading[], read: (r: ShelfReading) => number | null) {
   const values = readings.map(read).filter((v): v is number => v !== null);
@@ -16,14 +18,14 @@ function mean(readings: ShelfReading[], read: (r: ShelfReading) => number | null
 }
 
 /**
- * Averages the readings in each time bucket of the range. Buckets are sized to
- * the readings there are, not to the whole range, so a few minutes since the
+ * Averages the readings in each time bucket of the window. Buckets are sized to
+ * the readings there are, not to the whole window, so a few minutes since the
  * page opened still draw a line. Every shelf counts
  * towards the farm's line, as on the dashboard; times are the browser's
  * receive times (there's no clock sync with the Pi).
  */
-function toPoints(readings: ShelfReading[], range: HistoryRange, now: number): HistoryPoint[] {
-  const from = now - RANGE_MS[range];
+function toPoints(readings: ShelfReading[], timeWindow: TimeWindow, now: number): HistoryPoint[] {
+  const from = now - TIME_WINDOWS[timeWindow].ms;
   const inRange = readings.filter((reading) => reading.receivedAt >= from);
   if (!inRange.length) return [];
   const span = now - inRange[0].receivedAt;
@@ -47,15 +49,20 @@ function toPoints(readings: ShelfReading[], range: HistoryRange, now: number): H
  * Chart points from the data source's shelf readings: stored ones (on FarmNet,
  * from the Pi's Dashboard API), then those received since the dashboard
  * opened. `live` is false when the source has no live shelf feed (remote, for
- * now), and the points are then empty.
+ * now), and the points are then empty. `now` is the window's end.
  */
-export function useShelfHistory(range: HistoryRange) {
+export function useShelfHistory(timeWindow: TimeWindow) {
   const [source, setSource] = useState(getFarmDataSource);
   const [readings, setReadings] = useState<ShelfReading[] | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => onFarmDataSourceChange(() => setSource(getFarmDataSource())), []);
   useEffect(() => source.subscribeShelfHistory(setReadings), [source]);
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), CLOCK_MS);
+    return () => window.clearInterval(id);
+  }, []);
 
-  const points = useMemo(() => (readings ? toPoints(readings, range, Date.now()) : []), [range, readings]);
-  return { points, live: readings !== null };
+  const points = useMemo(() => (readings ? toPoints(readings, timeWindow, now) : []), [now, readings, timeWindow]);
+  return { points, live: readings !== null, now };
 }
