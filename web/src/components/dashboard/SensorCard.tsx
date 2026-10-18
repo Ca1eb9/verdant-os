@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { AssetImage } from "@/components/ui/AssetImage";
+import { AppIcon, type AppIconName } from "@/components/ui/AppIcon";
 import { MetricValue } from "@/components/ui/MetricValue";
 import styles from "@/components/dashboard/DashboardView.module.css";
 
@@ -34,8 +34,7 @@ interface SensorCardMetric {
 
 interface SensorCardProps {
   title: string;
-  icon: string;
-  fallback: string;
+  icon: AppIconName;
   accent: CardAccent;
   heroLabel: string;
   heroValue: string;
@@ -52,7 +51,6 @@ const accentMap: Record<CardAccent, string> = {
 
 export function SensorCard({
   accent,
-  fallback,
   heroLabel,
   heroTone,
   heroValue,
@@ -67,13 +65,7 @@ export function SensorCard({
     >
       <div className={styles.sensorTop}>
         <div className={styles.iconWrap}>
-          <AssetImage
-            src={icon}
-            alt={`${title} icon`}
-            fallback={fallback}
-            className={styles.sensorIcon}
-            fallbackClassName={`${styles.sensorIcon} assetFallback`}
-          />
+          <AppIcon name={icon} className={styles.sensorIcon} />
         </div>
         <h2 className={styles.sensorTitle}>{title}</h2>
       </div>

@@ -247,11 +247,6 @@ img {
   box-shadow: inset 0 0 0 1px rgb(var(--cyan-rgb) / 0.28);
 }
 
-/* the app's icons are drawn for dark backgrounds; deepen them on light */
-html[data-theme="light"] img[src$="-icon.svg"] {
-  filter: brightness(0.72) saturate(1.6);
-}
-
 .eyebrow {
   display: inline-flex;
   align-items: center;
