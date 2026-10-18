@@ -39,12 +39,12 @@ const plexMono = localFont({
 
 export const metadata: Metadata = {
   title: {
-    default: "VerdantOS Control Room",
+    default: "VerdantOS",
     template: "%s | VerdantOS",
   },
   description:
     "Premium progressive web app for vertical farm monitoring, live sensor ingestion, and historical environmental analysis.",
-  applicationName: "VerdantOS Control Room",
+  applicationName: "VerdantOS",
   manifest: "/manifest.webmanifest",
   icons: {
     // favicon.svg switches to its glowing dark version on a dark browser theme;

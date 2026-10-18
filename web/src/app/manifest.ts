@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "VerdantOS Control Room",
+    name: "VerdantOS",
     short_name: "VerdantOS",
     description:
       "Installable control and monitoring dashboard for modern vertical farm operations.",
