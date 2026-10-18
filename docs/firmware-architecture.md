@@ -410,9 +410,10 @@ path. The orchestrator gives a `manual` robot no work, never sends it to the
 dock, and drops its planned route so the tags it passes aren't reported as
 deviations.
 
-- **Dashboard (`jog`):** each held button sends a `jog` about every 400 ms, just
+- **Dashboard (`jog`):** each held button sends a `jog` every 150 ms, well
   under the 500 ms pulse, so the robot drives smoothly while the button is held
-  and stops within 500 ms of release, or of a lost message. Jogging is only
+  even when WiFi power saving delays a message by a few hundred ms, and stops
+  within 500 ms of release, or of the messages stopping. Jogging is only
   offered on the farm network (the orchestrator rejects jogs that come through
   Supabase).
 - **Bluetooth controller:** the strongest override, since its operator is at

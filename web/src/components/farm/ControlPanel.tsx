@@ -19,8 +19,12 @@ import styles from "@/components/farm/ControlPanel.module.css";
 
 const KEY_STORAGE = "verdantos:operator-key";
 const POLL_MS = 5_000;
-/** Resend while a jog button is held; under the robot's 500 ms pulse so it drives smoothly */
-const JOG_REPEAT_MS = 400;
+/**
+ * Resend while a jog button is held, well under the robot's 500 ms pulse: its
+ * WiFi power saving (needed alongside Bluetooth) can hold a message back for
+ * 100-300 ms, and a late one lets the pulse run out mid-drive.
+ */
+const JOG_REPEAT_MS = 150;
 /** Same as MANUAL_TIMEOUT_MS on the robot: a session ends after this long without a jog */
 const MANUAL_TIMEOUT_S = 5;
 /** Same as PAD_CONNECT_WINDOW_MS on the robot: how long it looks for its controller */
