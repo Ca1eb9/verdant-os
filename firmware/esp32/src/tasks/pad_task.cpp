@@ -72,13 +72,28 @@ void start_bluetooth(XboxSeriesXControllerESP32_asukiaaa::Core& pad) {
   LOG("pad", "Bluetooth on (WiFi power saving on)");
 }
 
+bool s_stop_failed_logged = false;  // a failed stop is retried every loop
+
 // Only with no controller connected or found: that frees what the library
-// points into.
-void stop_bluetooth() {
+// points into. False if Bluetooth is still running.
+bool stop_bluetooth() {
   stop_scanning();
-  NimBLEDevice::deinit(true);
+  // The library hands each client its one callbacks object to delete with
+  // the client; detach it first, or the next connection uses freed memory.
+  for (NimBLEClient* client; (client = NimBLEDevice::getDisconnectedClient()) != nullptr;) {
+    client->setClientCallbacks(nullptr);
+    if (!NimBLEDevice::deleteClient(client)) break;
+  }
+  XboxSeriesXControllerESP32_asukiaaa::pConnectedClient = nullptr;
+  if (!NimBLEDevice::deinit(true)) {
+    if (!s_stop_failed_logged) LOG("pad", "Bluetooth didn't stop: WiFi power saving stays on (retrying quietly)");
+    s_stop_failed_logged = true;
+    return false;
+  }
+  s_stop_failed_logged = false;
   if (WIFI_POWER_SAVE == WifiPowerSave::Auto) WiFi.setSleep(false);
   LOG("pad", "Bluetooth off%s", WIFI_POWER_SAVE == WifiPowerSave::Auto ? " (WiFi power saving off)" : "");
+  return true;
 }
 
 void send(CommandType type, int16_t speed = 0) {
@@ -157,13 +172,11 @@ void pad_task(void* /*param*/) {
     // its power saving adds.
     bool in_use = look || pad.isConnected() || XboxSeriesXControllerESP32_asukiaaa::advDevice != nullptr;
     bool want_radio = radio.update(in_use, loop_ms);
-    if (want_radio != radio_on) {
-      radio_on = want_radio;
-      if (radio_on) {
-        start_bluetooth(pad);
-      } else {
-        stop_bluetooth();
-      }
+    if (want_radio && !radio_on) {
+      start_bluetooth(pad);
+      radio_on = true;
+    } else if (!want_radio && radio_on) {
+      radio_on = !stop_bluetooth();  // tried again next loop
     }
     if (radio_on) {
       if (look) {
