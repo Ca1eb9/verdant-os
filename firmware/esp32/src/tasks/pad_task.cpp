@@ -4,6 +4,7 @@
 #include "pad_task.h"
 
 #include <Arduino.h>
+#include <WiFi.h>
 #include <XboxSeriesXControllerESP32_asukiaaa.hpp>
 
 #include "../config.h"
@@ -63,6 +64,23 @@ void stop_scanning() {
   if (scan->isScanning()) scan->stop();
 }
 
+// WiFi power saving has to be on before Bluetooth starts: the ESP32 won't
+// run both with it off. This task is the only one that sets it.
+void start_bluetooth(XboxSeriesXControllerESP32_asukiaaa::Core& pad) {
+  WiFi.setSleep(true);
+  pad.begin();
+  LOG("pad", "Bluetooth on (WiFi power saving on)");
+}
+
+// Only with no controller connected or found: that frees what the library
+// points into.
+void stop_bluetooth() {
+  stop_scanning();
+  NimBLEDevice::deinit(true);
+  if (WIFI_POWER_SAVE == WifiPowerSave::Auto) WiFi.setSleep(false);
+  LOG("pad", "Bluetooth off%s", WIFI_POWER_SAVE == WifiPowerSave::Auto ? " (WiFi power saving off)" : "");
+}
+
 void send(CommandType type, int16_t speed = 0) {
   Command cmd = {};
   cmd.type = type;
@@ -78,8 +96,13 @@ void send(CommandType type, int16_t speed = 0) {
 
 void pad_task(void* /*param*/) {
   XboxSeriesXControllerESP32_asukiaaa::Core pad(PAD_ADDRESS);
-  pad.begin();
-  if (PAD_ADDRESS[0]) {
+  const bool bluetooth = WIFI_POWER_SAVE != WifiPowerSave::Off;
+  // Auto: on until Bluetooth has run and stopped (it starts at boot, as the
+  // broker isn't connected yet)
+  WiFi.setSleep(bluetooth);
+  if (!bluetooth) {
+    LOG("pad", "WIFI_POWER_SAVE is Off: no Bluetooth, so no controller");
+  } else if (PAD_ADDRESS[0]) {
     LOG("pad", "accepting only controller %s", PAD_ADDRESS);
   } else {
     LOG("pad", "accepting any Xbox controller: set PAD_ADDRESS in secrets.h");
@@ -94,6 +117,8 @@ void pad_task(void* /*param*/) {
   bool window_open = false;
   uint32_t window_opened_ms = 0;
   bool looking = false;
+  PadRadio radio;
+  bool radio_on = false;
 
   for (;;) {
     vTaskDelay(pdMS_TO_TICKS(PAD_LOOP_MS));
@@ -103,7 +128,9 @@ void pad_task(void* /*param*/) {
     uint32_t requests = g_pad_connect_requests;
     if (requests != seen_requests) {
       seen_requests = requests;
-      if (pad.isConnected()) {
+      if (!bluetooth) {
+        LOG("pad", "connect_controller: WIFI_POWER_SAVE is Off, so no Bluetooth");
+      } else if (pad.isConnected()) {
         LOG("pad", "connect_controller: a controller is already connected");
       } else {
         window_open = true;
@@ -117,7 +144,7 @@ void pad_task(void* /*param*/) {
 
     // Only look while the robot is on its own (no broker: there's no
     // heartbeat to tell otherwise) or during a connect_controller window.
-    bool look = !pad.isConnected() && (!g_mqtt_connected || window_open);
+    bool look = bluetooth && !pad.isConnected() && (!g_mqtt_connected || window_open);
     if (look != looking) {
       looking = look;
       if (look) {
@@ -126,15 +153,27 @@ void pad_task(void* /*param*/) {
         LOG("pad", "stopped looking for a controller");
       }
     }
-    if (look) {
-      keep_scanning(pad);
-    } else {
-      stop_scanning();
+    // Bluetooth runs only while in use: off, WiFi answers without the delays
+    // its power saving adds.
+    bool in_use = look || pad.isConnected() || XboxSeriesXControllerESP32_asukiaaa::advDevice != nullptr;
+    bool want_radio = radio.update(in_use, loop_ms);
+    if (want_radio != radio_on) {
+      radio_on = want_radio;
+      if (radio_on) {
+        start_bluetooth(pad);
+      } else {
+        stop_bluetooth();
+      }
     }
-    // onLoop() connects to a controller a scan found, but with none it starts
-    // a scan of its own: only while looking, or to finish connecting.
-    if (pad.isConnected() || look || XboxSeriesXControllerESP32_asukiaaa::advDevice != nullptr) {
-      pad.onLoop();
+    if (radio_on) {
+      if (look) {
+        keep_scanning(pad);
+      } else {
+        stop_scanning();
+      }
+      // onLoop() connects to a controller a scan found, but with none it
+      // starts a scan of its own: only while looking, or to finish connecting.
+      if (in_use) pad.onLoop();
     }
 
     bool ready = pad.isConnected() && !pad.isWaitingForFirstNotification();

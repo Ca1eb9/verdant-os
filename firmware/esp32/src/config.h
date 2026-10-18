@@ -258,6 +258,16 @@ constexpr uint32_t PAD_LINK_LOST_MS = 400;
 // while it can't reach the Pi's broker (with no heartbeat, the only sign it's
 // on its own), or for PAD_CONNECT_WINDOW_MS after a connect_controller command.
 constexpr uint32_t PAD_CONNECT_WINDOW_MS = 10000;
+// Bluetooth only runs while it's in use (looking for the controller, or one
+// connected), then turns off this long after, so a broker that drops for a
+// moment doesn't start and stop it each time.
+constexpr uint32_t PAD_RADIO_OFF_MS = 10000;
+// WiFi power saving (modem sleep) delays messages to the robot, a stop
+// included, by up to a few hundred ms. The ESP32 can't run Bluetooth without
+// it. Auto: on only while Bluetooth runs. On: always. Off: never, and the
+// controller can't be used at all.
+enum class WifiPowerSave : uint8_t { Auto, On, Off };
+constexpr WifiPowerSave WIFI_POWER_SAVE = WifiPowerSave::Auto;
 constexpr uint16_t PAD_SCAN_MS = 97;            // scan interval = window: always listening
 constexpr uint32_t PAD_SCAN_CHUNK_MS = 10000;   // each scan this long, then a fresh one
 // On each connection the controller rumbles once, to confirm it at the robot.
