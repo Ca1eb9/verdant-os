@@ -2,6 +2,8 @@
 
 A production-oriented Next.js App Router Progressive Web App for monitoring and operating a vertical farm environment. The UI is designed as a premium dark industrial dashboard with offline-capable shell caching and persistent history.
 
+How the dashboard gets farm data and sends commands, as diagrams: [`docs/architecture.md`](./docs/architecture.md).
+
 ## Stack
 
 - Next.js App Router
