@@ -9,14 +9,6 @@ export function average(values: number[]) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-export function maximum(values: number[]) {
-  return Math.max(...values);
-}
-
-export function minimum(values: number[]) {
-  return Math.min(...values);
-}
-
 /** How long ago, coarsely: "just now", "12s ago", "4m ago", "3h ago", "2d ago" */
 export function formatAgo(ms: number) {
   const s = Math.max(0, Math.round(ms / 1000));

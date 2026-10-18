@@ -10,8 +10,8 @@ import {
   YAxis,
 } from "recharts";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
-import { formatMetric } from "@/lib/format";
-import type { TimeWindow } from "@/lib/time-windows";
+import { average, formatMetric } from "@/lib/format";
+import { TIME_WINDOWS, type TimeWindow } from "@/lib/time-windows";
 import type { HistoryPoint } from "@/lib/types";
 import styles from "@/components/history/HistoryView.module.css";
 
@@ -27,6 +27,8 @@ interface SeriesConfig {
   unit: string;
   precision: number;
   axisId?: "left" | "right";
+  /** Show the series' average over the window in the chart's header */
+  showAverage?: boolean;
 }
 
 interface MetricChartPanelProps {
@@ -79,6 +81,35 @@ function ChartTooltip({
   );
 }
 
+/** A series' value at a point, from its dotted key (e.g. "air.temperature") */
+function valueAt(point: HistoryPoint, key: string) {
+  const value = key.split(".").reduce<unknown>((node, part) => (node as Record<string, unknown> | undefined)?.[part], point);
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** Each averaged series' mean over the window, top right of the chart; "—" when it never read */
+function ChartAverages({ data, series, timeWindow }: { data: HistoryPoint[]; series: SeriesConfig[]; timeWindow: TimeWindow }) {
+  const averaged = series.filter((item) => item.showAverage);
+  if (!averaged.length) return null;
+
+  return (
+    <dl className={styles.chartStats} title={`Averages over the last ${TIME_WINDOWS[timeWindow].label}`}>
+      {averaged.map((item) => {
+        const values = data.map((point) => valueAt(point, item.key)).filter((value): value is number => value !== null);
+        return (
+          <div key={item.key} className={styles.chartStat}>
+            <dt>
+              <i className={styles.legendSwatch} style={{ backgroundColor: item.color }} aria-hidden />
+              Avg {item.label}
+            </dt>
+            <dd>{values.length ? formatMetric(average(values), item.unit, item.precision) : "—"}</dd>
+          </div>
+        );
+      })}
+    </dl>
+  );
+}
+
 /** One axis's series names, with their units, on that axis's side of the chart */
 function AxisLegend({ series, side }: { series: SeriesConfig[]; side: "left" | "right" }) {
   return (
@@ -113,8 +144,11 @@ export function MetricChartPanel({
   return (
     <article className={`glassPanel ${styles.chartPanel}`}>
       <div className={styles.chartHeader}>
-        <h2 className={styles.chartTitle}>{title}</h2>
-        <p className={styles.chartDescription}>{description}</p>
+        <div className={styles.chartHeading}>
+          <h2 className={styles.chartTitle}>{title}</h2>
+          <p className={styles.chartDescription}>{description}</p>
+        </div>
+        <ChartAverages data={data} series={series} timeWindow={timeWindow} />
       </div>
 
       <div className={styles.axisLegend}>

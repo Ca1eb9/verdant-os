@@ -11,12 +11,6 @@ import {
   MOCK_DATA_ENABLED,
   buildHistoricalSeries,
 } from "@/lib/mock-data";
-import {
-  average,
-  formatMetric,
-  maximum,
-  minimum,
-} from "@/lib/format";
 import { TIME_WINDOWS } from "@/lib/time-windows";
 import styles from "@/components/history/HistoryView.module.css";
 
@@ -27,8 +21,6 @@ const SERIES_COLORS = {
   dark: { cyan: "#67dfff", teal: "#6ff7c3", amber: "#ffc45f", lime: "#d8ff72" },
   light: { cyan: "#0891b2", teal: "#059669", amber: "#d97706", lime: "#65a30d" },
 } as const;
-const RANGE_ARROW = "\u2192";
-const MID_DOT = "\u00B7";
 
 export function HistoryView() {
   const { activeFarmId, farm } = useSelectedFarm();
@@ -57,37 +49,6 @@ export function HistoryView() {
     }));
   }, [activeFarmId, fmt, livePoints, prefs.temperatureUnit, timeWindow]);
 
-  const summary = useMemo(() => {
-    if (!data.length) return [];
-    // a sensor that never read in the window shows "No reading"
-    const read = (values: (number | null)[]) => values.filter((value): value is number => value !== null);
-    const airTemp = read(data.map((point) => point.air.temperature));
-    const humidity = read(data.map((point) => point.air.humidity));
-    const waterTemp = read(data.map((point) => point.water.temperature));
-    const waterPh = read(data.map((point) => point.water.ph));
-    const lux = read(data.map((point) => point.light.lux));
-    const metric = (values: number[], pick: (values: number[]) => number, unit: string, precision: number) =>
-      values.length ? formatMetric(pick(values), unit, precision) : "No reading";
-
-    return [
-      {
-        label: "Climate average",
-        value: `${metric(airTemp, average, DEGREE, 1)} ${MID_DOT} ${metric(humidity, average, "%", 0)}`,
-        detail: "Average air temperature and humidity",
-      },
-      {
-        label: "Reservoir",
-        value: `${metric(waterTemp, average, DEGREE, 1)} ${MID_DOT} ${metric(waterPh, average, "pH", 2)}`,
-        detail: "Average water temperature and pH",
-      },
-      {
-        label: "Light range",
-        value: lux.length ? `${metric(lux, minimum, "lux", 0)} ${RANGE_ARROW} ${metric(lux, maximum, "lux", 0)}` : "No reading",
-        detail: "Lowest and highest light reading",
-      },
-    ];
-  }, [DEGREE, data]);
-
   const charts = [
     {
       title: "Air Climate",
@@ -95,6 +56,7 @@ export function HistoryView() {
       series: [
         {
           key: "air.temperature",
+          showAverage: true,
           label: "Air Temp",
           color: color.cyan,
           unit: DEGREE,
@@ -103,6 +65,7 @@ export function HistoryView() {
         },
         {
           key: "air.humidity",
+          showAverage: true,
           label: "Humidity",
           color: color.teal,
           unit: "%",
@@ -117,6 +80,7 @@ export function HistoryView() {
       series: [
         {
           key: "water.temperature",
+          showAverage: true,
           label: "Water Temp",
           color: color.cyan,
           unit: DEGREE,
@@ -125,6 +89,7 @@ export function HistoryView() {
         },
         {
           key: "water.ph",
+          showAverage: true,
           label: "pH",
           color: color.lime,
           unit: "",
@@ -135,6 +100,7 @@ export function HistoryView() {
     },
     {
       title: "Light",
+      // no average: the grow lights switch on and off, so a mean of the two says nothing
       description: "Light at the shelf, for spotting lights that are off or dimming.",
       series: [
         {
@@ -166,16 +132,6 @@ export function HistoryView() {
           </div>
 
           <TimeWindowPicker />
-        </div>
-
-        <div className={styles.summaryGrid}>
-          {summary.map((item) => (
-            <article key={item.label} className={styles.summaryCard}>
-              <span className={styles.summaryLabel}>{item.label}</span>
-              <strong className={styles.summaryValue}>{item.value}</strong>
-              <span className={styles.summaryDetail}>{item.detail}</span>
-            </article>
-          ))}
         </div>
       </header>
 
