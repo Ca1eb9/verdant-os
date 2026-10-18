@@ -69,7 +69,7 @@ Remotely (Vercel), every page and API route needs an operator signed in with Sup
 3. To remove someone, delete their user (or ban them) here. A session they already have stays valid until its access token expires (an hour by default).
 4. Optional: **Authentication → Rate Limits** caps sign-in attempts (brute force). The dashboard signs in from its server, so all operators share Vercel's addresses: if they see "Too many sign-in attempts", raise the sign-in limit a little.
 
-Sessions refresh on every page load, so operators stay signed in until they sign out (**Settings → Sign out**, this device only). Leave **Authentication → Sessions → time-box / inactivity timeout** off, or set them to how often operators should sign in again.
+Sessions refresh as operators use the dashboard, so they stay signed in until they sign out (**Settings → Sign out**, this device only), or until 365 days pass without a visit. Leave **Authentication → Sessions → time-box / inactivity timeout** off, or set them to how often operators should sign in again.
 
 To turn sign-in off on Vercel (e.g. while Supabase Auth has an outage that won't clear), set `AUTH_DISABLED=true` and **redeploy**; delete it and redeploy to turn sign-in back on. Anything else, or no value, keeps sign-in on. With sign-in off, anyone with the dashboard's URL can open it, and commands fall back to `OPERATOR_KEY`.
 
