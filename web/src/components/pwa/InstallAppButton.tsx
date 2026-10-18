@@ -43,11 +43,8 @@ export function InstallAppButton({ className }: { className?: string }) {
     };
   }, []);
 
-  if (installed) {
-    return <span className={className}>Installed</span>;
-  }
-
-  if (!promptEvent) {
+  // nothing to offer inside the installed app
+  if (installed || !promptEvent) {
     return null;
   }
 

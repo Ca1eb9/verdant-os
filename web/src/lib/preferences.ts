@@ -104,6 +104,12 @@ export function formatTemperature(celsius: number | null, prefs: Preferences, pr
   return `${value.toFixed(precision)} ${temperatureLabel(prefs.temperatureUnit)}`;
 }
 
+/**
+ * Browser chrome colour per theme (mobile address bar, installed app title
+ * bar): the page background, so the bar runs into the page
+ */
+export const THEME_COLORS: Record<ResolvedTheme, string> = { dark: "#07131d", light: "#eef2f6" };
+
 /** Light only when chosen, or when the browser explicitly prefers light; dark otherwise */
 export function resolveTheme(pref: ThemePreference, systemPrefersLight: boolean): ResolvedTheme {
   if (pref === "system") return systemPrefersLight ? "light" : "dark";

@@ -7,11 +7,12 @@ import { PreferencesProvider } from "@/components/preferences/PreferencesProvide
 import { AppShell } from "@/components/layout/AppShell";
 import { PwaRegistrar } from "@/components/pwa/PwaRegistrar";
 import { signInRequired } from "@/lib/auth";
+import { THEME_COLORS } from "@/lib/preferences";
 import { SPLASH_SCREENS } from "@/lib/splash-screens";
 
-// applies the saved theme and sidebar state before first paint so neither flashes.
+// applies the saved theme (page and browser chrome) and sidebar state before first paint so neither flashes.
 // Theme: saved choice, else the browser's preference, else dark.
-const PREPAINT_SCRIPT = `(function(){var d=document.documentElement,p={};try{p=JSON.parse(localStorage.getItem("verdantos:preferences")||"{}")||{}}catch(e){}var t=p.theme==="light"||p.theme==="dark"?p.theme:(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");d.dataset.theme=t;d.dataset.sidebar=p.sidebarCollapsed===true?"collapsed":"expanded"})()`;
+const PREPAINT_SCRIPT = `(function(){var d=document.documentElement,p={};try{p=JSON.parse(localStorage.getItem("verdantos:preferences")||"{}")||{}}catch(e){}var t=p.theme==="light"||p.theme==="dark"?p.theme:(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");d.dataset.theme=t;d.dataset.sidebar=p.sidebarCollapsed===true?"collapsed":"expanded";var m=document.createElement("meta");m.name="theme-color";document.head.appendChild(m);m.content=t==="light"?${JSON.stringify(THEME_COLORS.light)}:${JSON.stringify(THEME_COLORS.dark)}})()`;
 
 // IBM Plex, stored in the repo (app/fonts, SIL Open Font License) so the app
 // builds and runs on a farm network with no internet access
@@ -84,10 +85,6 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#07131d" },
-    { media: "(prefers-color-scheme: light)", color: "#eef2f6" },
-  ],
   colorScheme: "dark light",
 };
 
@@ -99,6 +96,9 @@ export default function RootLayout({
   return (
     <html lang="en" data-theme="dark" className={`${plexSans.variable} ${plexMono.variable}`} suppressHydrationWarning>
       <head>
+        {/* Also adds the theme-color tag, outside React: as viewport.themeColor, Next rewrote it
+            on every navigation, back to the device's colour scheme; rendered here, React would
+            add a second one when the app's theme differs. PreferencesProvider keeps it in step. */}
         <script dangerouslySetInnerHTML={{ __html: PREPAINT_SCRIPT }} />
       </head>
       <body>
