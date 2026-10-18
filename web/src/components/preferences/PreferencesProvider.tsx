@@ -12,6 +12,7 @@ import {
   toDisplayTemp,
   type Preferences,
   type ResolvedTheme,
+  THEME_COLORS,
 } from "@/lib/preferences";
 
 export const PREFERENCES_KEY = "verdantos:preferences";
@@ -81,7 +82,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     root.dataset.theme = next;
     // browser chrome (mobile address bar, installed app title bar) follows the chosen theme
     document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
-      meta.setAttribute("content", next === "light" ? "#eef2f6" : "#07131d");
+      meta.setAttribute("content", THEME_COLORS[next]);
     });
   }, [prefs.theme, ready, systemLight]);
 
