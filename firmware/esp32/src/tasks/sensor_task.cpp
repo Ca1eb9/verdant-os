@@ -111,15 +111,12 @@ void update_obstacle(ObstacleState& obs, uint32_t now) {
     case TofReading::Clear: {
       obs.last_data_ms = now;
       obs.fault_logged = false;
-      // A gap: the last good distance stands in, judged as nothing new.
-      bool held = false;
+      // A gap: the last good distance stands in for up to TOF_HOLD_MS.
       if (r == TofReading::Target) {
         obs.cm = cm;
         obs.last_target_ms = now;
         obs.gap_logged = false;
-      } else if (!isnan(obs.cm) && now - obs.last_target_ms < TOF_HOLD_MS) {
-        held = true;
-      } else {
+      } else if (isnan(obs.cm) || now - obs.last_target_ms >= TOF_HOLD_MS) {
         // Nothing in range is normal (open space); an untrusted target is
         // worth knowing about while tuning.
         uint8_t status = obs.tof->rejected_status();
@@ -141,7 +138,7 @@ void update_obstacle(ObstacleState& obs, uint32_t now) {
       } else if (rejudge) {
         obs.clear_count = OBSTACLE_CLEAR_COUNT;
         set_obstacle_flag(obs, false, "stop distance changed");
-      } else if (!held && (!target || obs.cm > stop_cm + (OBSTACLE_CLEAR_CM - OBSTACLE_STOP_CM))) {
+      } else if (!target || obs.cm > stop_cm + (OBSTACLE_CLEAR_CM - OBSTACLE_STOP_CM)) {
         if (obs.clear_count < OBSTACLE_CLEAR_COUNT) obs.clear_count++;
         if (obs.clear_count >= OBSTACLE_CLEAR_COUNT) set_obstacle_flag(obs, false, "path clear");
       }

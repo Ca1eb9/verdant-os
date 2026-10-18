@@ -97,8 +97,8 @@ constexpr float OBSTACLE_CLEAR_CM = 20.0f;
 constexpr uint8_t OBSTACLE_CLEAR_COUNT = 3;     // consecutive clear readings needed
 // No trusted distance (the sensor flags a reading it's unsure of, e.g. just
 // after a near target leaves, or a weak far one): keep the last good distance
-// this long, about 3 telemetry periods, before reporting none. Meanwhile it
-// neither sets nor clears the obstacle flag: a near obstacle stays one.
+// this long, about 3 telemetry periods, before reporting none. Meanwhile it's
+// judged like a reading: a near obstacle keeps its flag, a clear path clears.
 constexpr uint32_t TOF_HOLD_MS = 3000;
 constexpr uint32_t TOF_TIMING_BUDGET_US = 33000;
 // I2C clock for each sensor's bus. Every signal edge must rise within the
