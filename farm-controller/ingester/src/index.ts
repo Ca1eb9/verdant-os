@@ -35,6 +35,10 @@ const STATS_INTERVAL_MS = 60_000;
 const db = new Database(DB_PATH);
 
 db.pragma("journal_mode = WAL"); // better concurrent read performance
+// Each insert would otherwise wait on its own flush to the SD card. With WAL
+// the card is flushed per checkpoint instead, a batch of rows at a time; a
+// power cut can lose the last moments of rows, never corrupt the file.
+db.pragma("synchronous = NORMAL");
 
 // Tables from before task_id / nullable columns are rebuilt and their rows copied
 const robotCols = db.prepare(`PRAGMA table_info(robot_telemetry)`).all() as { name: string }[];
