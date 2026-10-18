@@ -121,6 +121,7 @@ The shelf sensor node (Arduino Uno R3) publishes over MQTT on the Pi through the
 
 - Runtime visuals are served from [`public/images`](./public/images), which maps to the `/images` URL path used throughout the app.
 - The logo is [`VerdantMark`](./src/components/brand/VerdantMark.tsx): its colours follow the app theme and its grow lights pulse (`animation="grow"` is the loading version). `public/images/app-icon.svg` and `favicon.svg` are static copies of the same drawing (the favicon switches to its glowing version on a dark browser theme), and the PNG icons and the splash screens (one per iPhone and iPad screen in `public/images/splash/`, listed in `src/lib/splash-screens.ts`) are rendered from them, so redraw all of these together.
+- The navigation and sensor icons are [`AppIcon`](./src/components/ui/AppIcon.tsx), drawn inline in the theme's accent colours (`--cyan`, `--teal`, `--lime`, `--amber`), so they switch with the theme like the rest of the app. `public/images/dashboard-icon.svg` and `history-icon.svg` are static dark-theme copies for the PWA manifest's shortcuts.
 - Supabase reads require explicit environment values. The app does not fall back to a bundled project key.
 - The latest reading stays on screen when no new one arrives, marked stale after 10 s without one.
 - With mock data on, readings come from a TypeScript `MockSensorGenerator` and the history page uses deterministic time-series data for the selected farm.

@@ -1,5 +1,5 @@
-const SHELL_CACHE = "verdantos-shell-v8";
-const RUNTIME_CACHE = "verdantos-runtime-v8";
+const SHELL_CACHE = "verdantos-shell-v9";
+const RUNTIME_CACHE = "verdantos-runtime-v9";
 
 // Pages aren't precached: where operators sign in, they redirect to /login
 // until then. They're cached as the operator visits them (handleNavigation).
@@ -12,13 +12,8 @@ const PRECACHE_URLS = [
   "/images/app-icon.svg",
   "/images/favicon.svg",
   "/images/favicon-48.png",
-  "/images/air-icon.svg",
-  "/images/water-icon.svg",
-  "/images/light-icon.svg",
   "/images/dashboard-icon.svg",
-  "/images/farm-icon.svg",
   "/images/history-icon.svg",
-  "/images/settings-icon.svg",
   "/images/icon-192.png",
   "/images/icon-512.png",
   "/images/icon-maskable-512.png",

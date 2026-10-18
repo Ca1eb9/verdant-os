@@ -14,10 +14,6 @@ import { formatMetric } from "@/lib/format";
 import type { AlertSeverity } from "@/lib/farm/types";
 import styles from "@/components/dashboard/DashboardView.module.css";
 
-const AIR_FALLBACK = "\uD83C\uDF2C\uFE0F";
-const WATER_FALLBACK = "\uD83D\uDCA7";
-const LIGHT_FALLBACK = "\uD83D\uDCA1";
-
 function formatOptionalMetric(value: number | null, unit: string, precision = 1) {
   return value === null ? "No reading" : formatMetric(value, unit, precision);
 }
@@ -62,8 +58,7 @@ export function DashboardView() {
     () => [
       {
         title: "Air",
-        icon: "/images/air-icon.svg",
-        fallback: AIR_FALLBACK,
+        icon: "air" as const,
         accent: "cyan" as const,
         heroLabel: "Air Temperature",
         heroValue: fmt.temp(airTemperature, 1),
@@ -78,8 +73,7 @@ export function DashboardView() {
       },
       {
         title: "Water",
-        icon: "/images/water-icon.svg",
-        fallback: WATER_FALLBACK,
+        icon: "water" as const,
         accent: "teal" as const,
         heroLabel: "Water Temperature",
         heroValue: fmt.temp(waterTemperature, 1),
@@ -99,8 +93,7 @@ export function DashboardView() {
       },
       {
         title: "Light",
-        icon: "/images/light-icon.svg",
-        fallback: LIGHT_FALLBACK,
+        icon: "light" as const,
         accent: "lime" as const,
         heroLabel: "Light",
         heroValue: formatOptionalMetric(lightLux, "lux", 0),

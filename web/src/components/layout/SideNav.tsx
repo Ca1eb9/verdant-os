@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { isActive, NAV_ITEMS } from "@/components/layout/nav-items";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { VerdantMark } from "@/components/brand/VerdantMark";
+import { AppIcon } from "@/components/ui/AppIcon";
 import { AssetImage } from "@/components/ui/AssetImage";
 import styles from "@/components/layout/SideNav.module.css";
 
@@ -75,13 +76,17 @@ export function SideNav() {
               aria-label={item.label}
               title={item.label}
             >
-              <AssetImage
-                src={item.icon}
-                alt=""
-                fallback={item.fallback}
-                className={styles.icon}
-                fallbackClassName={`${styles.icon} assetFallback`}
-              />
+              {"icon" in item ? (
+                <AppIcon name={item.icon} className={styles.icon} />
+              ) : (
+                <AssetImage
+                  src={item.image}
+                  alt=""
+                  fallback={item.fallback}
+                  className={styles.icon}
+                  fallbackClassName={`${styles.icon} assetFallback`}
+                />
+              )}
               <span className={styles.label}>{item.label}</span>
             </Link>
           );

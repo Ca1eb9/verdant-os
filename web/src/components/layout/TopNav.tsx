@@ -6,6 +6,7 @@ import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { isActive, NAV_ITEMS } from "@/components/layout/nav-items";
 import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 import { VerdantMark } from "@/components/brand/VerdantMark";
+import { AppIcon } from "@/components/ui/AppIcon";
 import { AssetImage } from "@/components/ui/AssetImage";
 import { useFarmConnection } from "@/hooks/useFarmConnection";
 import styles from "@/components/layout/TopNav.module.css";
@@ -76,13 +77,17 @@ export function TopNav() {
               className={`${styles.navItem} ${active ? styles.active : ""}`}
               aria-current={active ? "page" : undefined}
             >
-              <AssetImage
-                src={item.icon}
-                alt=""
-                fallback={item.fallback}
-                className={styles.navIcon}
-                fallbackClassName={`${styles.navIcon} assetFallback`}
-              />
+              {"icon" in item ? (
+                <AppIcon name={item.icon} className={styles.navIcon} />
+              ) : (
+                <AssetImage
+                  src={item.image}
+                  alt=""
+                  fallback={item.fallback}
+                  className={styles.navIcon}
+                  fallbackClassName={`${styles.navIcon} assetFallback`}
+                />
+              )}
               <span>{item.label}</span>
             </Link>
           );
