@@ -1,6 +1,8 @@
 // Display preferences: how times and temperatures are shown.
 // Stored per device (see PreferencesProvider); these helpers are pure.
 
+import { isTimeWindow, type TimeWindow } from "@/lib/time-windows";
+
 export type ThemePreference = "system" | "light" | "dark";
 export type ResolvedTheme = "light" | "dark";
 export type TemperatureUnit = "C" | "F";
@@ -26,6 +28,8 @@ export interface Preferences {
   showSeconds: boolean;
   /** Desktop sidebar state; changed from the sidebar itself */
   sidebarCollapsed: boolean;
+  /** History and Alerts window; changed on those pages */
+  timeWindow: TimeWindow;
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -35,6 +39,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   timeZone: "local",
   showSeconds: true,
   sidebarCollapsed: false,
+  timeWindow: "1h",
 };
 
 /** Keep only valid stored values; anything unknown falls back to its default */
@@ -50,6 +55,7 @@ export function normalizePreferences(raw: unknown): Preferences {
     timeZone: pick("timeZone", (v) => TIME_ZONES.some((zone) => zone.value === v)),
     showSeconds: pick("showSeconds", (v) => typeof v === "boolean"),
     sidebarCollapsed: pick("sidebarCollapsed", (v) => typeof v === "boolean"),
+    timeWindow: pick("timeWindow", isTimeWindow),
   };
 }
 

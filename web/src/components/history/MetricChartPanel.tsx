@@ -11,7 +11,8 @@ import {
 } from "recharts";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { formatMetric } from "@/lib/format";
-import type { HistoryPoint, HistoryRange } from "@/lib/types";
+import type { TimeWindow } from "@/lib/time-windows";
+import type { HistoryPoint } from "@/lib/types";
 import styles from "@/components/history/HistoryView.module.css";
 
 // Axis ticks are 44px wide: light readings run to five digits, so 16,500 shows as 17K
@@ -32,7 +33,7 @@ interface MetricChartPanelProps {
   title: string;
   description: string;
   data: HistoryPoint[];
-  range: HistoryRange;
+  timeWindow: TimeWindow;
   series: SeriesConfig[];
 }
 
@@ -96,16 +97,16 @@ function AxisLegend({ series, side }: { series: SeriesConfig[]; side: "left" | "
 export function MetricChartPanel({
   data,
   description,
-  range,
   series,
+  timeWindow,
   title,
 }: MetricChartPanelProps) {
   const leftSeries = series.filter((item) => (item.axisId ?? "left") === "left");
   const rightSeries = series.filter((item) => item.axisId === "right");
   const hasRightAxis = rightSeries.length > 0;
-  // times of day, unless the points cover more than a day of the 7-day range
+  // times of day, unless the points cover more than a day of the 7-day window
   const spanMs = data.length ? new Date(data[data.length - 1].timestamp).getTime() - new Date(data[0].timestamp).getTime() : 0;
-  const showTime = range !== "7d" || spanMs < DAY_MS;
+  const showTime = timeWindow !== "7d" || spanMs < DAY_MS;
   const { fmt, theme } = usePreferences();
   const axis = theme === "light" ? { grid: "rgba(15,23,42,0.08)", tick: "#56667a" } : { grid: "rgba(255,255,255,0.06)", tick: "#8aa3bc" };
 

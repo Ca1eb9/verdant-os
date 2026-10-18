@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { NoFarmNotice } from "@/components/farms/NoFarmNotice";
 import { MetricChartPanel } from "@/components/history/MetricChartPanel";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
+import { TimeWindowPicker } from "@/components/ui/TimeWindowPicker";
 import { useShelfHistory } from "@/hooks/useShelfHistory";
 import {
-  HISTORY_RANGE_HOURS,
   MOCK_DATA_ENABLED,
   buildHistoricalSeries,
 } from "@/lib/mock-data";
@@ -17,10 +17,10 @@ import {
   maximum,
   minimum,
 } from "@/lib/format";
-import type { HistoryRange } from "@/lib/types";
+import { TIME_WINDOWS } from "@/lib/time-windows";
 import styles from "@/components/history/HistoryView.module.css";
 
-const rangeOptions: HistoryRange[] = ["24h", "72h", "7d"];
+const HOUR_MS = 60 * 60 * 1000;
 
 // series colours per theme (light uses deeper tones so lines read on white)
 const SERIES_COLORS = {
@@ -32,19 +32,22 @@ const MID_DOT = "\u00B7";
 
 export function HistoryView() {
   const { activeFarmId, farm } = useSelectedFarm();
-  const [range, setRange] = useState<HistoryRange>("72h");
   const { fmt, prefs, theme } = usePreferences();
+  const timeWindow = prefs.timeWindow;
   const color = SERIES_COLORS[theme];
   const DEGREE = fmt.tempUnit;
 
   // On FarmNet: the Pi's stored shelf readings, then those received since the
   // dashboard opened. Remote (Supabase) history comes with the remote source.
-  const { points: livePoints, live } = useShelfHistory(range);
+  const { points: livePoints, live } = useShelfHistory(timeWindow);
 
   // temperatures are stored in °C; convert once for display
   const data = useMemo(() => {
     if (!activeFarmId) return [];
-    const series = MOCK_DATA_ENABLED ? buildHistoricalSeries(activeFarmId, HISTORY_RANGE_HOURS[range]) : livePoints;
+    // mock history is hourly: at least two points, so even 15 minutes draws a line
+    const series = MOCK_DATA_ENABLED
+      ? buildHistoricalSeries(activeFarmId, Math.max(2, Math.ceil(TIME_WINDOWS[timeWindow].ms / HOUR_MS)))
+      : livePoints;
     if (prefs.temperatureUnit === "C") return series;
     const toUnit = (celsius: number | null) => (celsius === null ? null : fmt.tempValue(celsius));
     return series.map((point) => ({
@@ -52,11 +55,11 @@ export function HistoryView() {
       air: { ...point.air, temperature: toUnit(point.air.temperature) },
       water: { ...point.water, temperature: toUnit(point.water.temperature) },
     }));
-  }, [activeFarmId, fmt, livePoints, prefs.temperatureUnit, range]);
+  }, [activeFarmId, fmt, livePoints, prefs.temperatureUnit, timeWindow]);
 
   const summary = useMemo(() => {
     if (!data.length) return [];
-    // a sensor that never read in the range shows "No reading"
+    // a sensor that never read in the window shows "No reading"
     const read = (values: (number | null)[]) => values.filter((value): value is number => value !== null);
     const airTemp = read(data.map((point) => point.air.temperature));
     const humidity = read(data.map((point) => point.air.humidity));
@@ -88,7 +91,7 @@ export function HistoryView() {
   const charts = [
     {
       title: "Air Climate",
-      description: "Temperature and humidity over the selected operating window.",
+      description: "Temperature and humidity over the selected window.",
       series: [
         {
           key: "air.temperature",
@@ -162,23 +165,7 @@ export function HistoryView() {
             </p>
           </div>
 
-          <div className={styles.controlStack}>
-            <div className={styles.controlGroup}>
-              <span className={styles.metaLabel}>Window</span>
-              <div className={styles.rangeRow}>
-                {rangeOptions.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className={`${styles.rangeButton} ${range === option ? styles.rangeActive : ""}`}
-                    onClick={() => setRange(option)}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          <TimeWindowPicker />
         </div>
 
         <div className={styles.summaryGrid}>
@@ -194,10 +181,10 @@ export function HistoryView() {
 
       {data.length === 0 ? (
         <div className={`glassPanel ${styles.emptyState}`} role="status">
-          <strong>No sensor history yet.</strong>
+          <strong>{live ? `No sensor readings in the last ${TIME_WINDOWS[timeWindow].label}.` : "No sensor history yet."}</strong>
           <span>
             {live
-              ? `The charts fill as ${farm.name}'s shelf sensors report.`
+              ? `The charts fill as ${farm.name}'s shelf sensors report. A longer window shows earlier readings.`
               : `The dashboard doesn't read stored history for ${farm.name} yet; it will once the history feed is built.`}
           </span>
         </div>
@@ -210,7 +197,7 @@ export function HistoryView() {
             title={chart.title}
             description={chart.description}
             data={data}
-            range={range}
+            timeWindow={timeWindow}
             series={chart.series}
           />
         ))}

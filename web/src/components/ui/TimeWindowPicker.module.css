@@ -1,0 +1,52 @@
+.picker {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.label {
+  color: var(--muted);
+}
+
+/* one row from 320px up: five tap-sized buttons */
+.row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.option {
+  min-height: 2.9rem;
+  padding: 0.7rem 0.4rem;
+  border-radius: var(--radius-control);
+  border: 1px solid rgb(var(--line-rgb) / 0.12);
+  background: rgb(var(--surface-rgb) / 0.72);
+  color: var(--muted);
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.option:hover {
+  transform: translateY(-1px);
+  border-color: rgb(var(--cyan-rgb) / 0.24);
+}
+
+.option:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.option[aria-pressed="true"] {
+  color: var(--text);
+  background: rgb(var(--cyan-rgb) / 0.14);
+  border-color: rgb(var(--cyan-rgb) / 0.3);
+}
+
+@media (min-width: 1180px) {
+  .row {
+    display: inline-flex;
+  }
+
+  .option {
+    min-width: 4rem;
+    padding: 0.7rem 0.9rem;
+  }
+}
