@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { NoFarmNotice } from "@/components/farms/NoFarmNotice";
-import { MetricChartPanel } from "@/components/history/MetricChartPanel";
+import { MetricChartPanel, type MetricConfig } from "@/components/history/MetricChartPanel";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { TimeWindowPicker } from "@/components/ui/TimeWindowPicker";
 import { useShelfHistory } from "@/hooks/useShelfHistory";
@@ -31,7 +31,7 @@ export function HistoryView() {
 
   // On FarmNet: the Pi's stored shelf readings, then those received since the
   // dashboard opened. Remote (Supabase) history comes with the remote source.
-  const { points: livePoints, live } = useShelfHistory(timeWindow);
+  const { points: livePoints, live, now } = useShelfHistory(timeWindow);
 
   // temperatures are stored in °C; convert once for display
   const data = useMemo(() => {
@@ -49,69 +49,57 @@ export function HistoryView() {
     }));
   }, [activeFarmId, fmt, livePoints, prefs.temperatureUnit, timeWindow]);
 
-  const charts = [
+  // smallest y-axis spans are set in °C; a °F axis spans 9/5 as many degrees
+  const degrees = (celsius: number) => (prefs.temperatureUnit === "F" ? (celsius * 9) / 5 : celsius);
+  // one chart per measurement, each on its own axis: the climate pair, the reservoir pair, then light
+  const metrics: MetricConfig[] = [
     {
-      title: "Air Climate",
-      description: "Temperature and humidity over the selected window.",
-      series: [
-        {
-          key: "air.temperature",
-          showAverage: true,
-          label: "Air Temp",
-          color: color.cyan,
-          unit: DEGREE,
-          precision: 1,
-          axisId: "left" as const,
-        },
-        {
-          key: "air.humidity",
-          showAverage: true,
-          label: "Humidity",
-          color: color.teal,
-          unit: "%",
-          precision: 0,
-          axisId: "right" as const,
-        },
-      ],
+      key: "air.temperature",
+      title: "Air temperature",
+      description: "At the shelf",
+      color: color.cyan,
+      unit: DEGREE,
+      precision: 1,
+      minSpan: degrees(2),
+      showAverage: true,
     },
     {
-      title: "Reservoir",
-      description: "Water temperature and pH of the nutrient reservoir.",
-      series: [
-        {
-          key: "water.temperature",
-          showAverage: true,
-          label: "Water Temp",
-          color: color.cyan,
-          unit: DEGREE,
-          precision: 1,
-          axisId: "left" as const,
-        },
-        {
-          key: "water.ph",
-          showAverage: true,
-          label: "pH",
-          color: color.lime,
-          unit: "",
-          precision: 2,
-          axisId: "right" as const,
-        },
-      ],
+      key: "air.humidity",
+      title: "Humidity",
+      description: "At the shelf",
+      color: color.teal,
+      unit: "%",
+      precision: 0,
+      minSpan: 10,
+      showAverage: true,
     },
     {
+      key: "water.temperature",
+      title: "Water temperature",
+      description: "In the nutrient reservoir",
+      color: color.cyan,
+      unit: DEGREE,
+      precision: 1,
+      minSpan: degrees(2),
+      showAverage: true,
+    },
+    {
+      key: "water.ph",
+      title: "pH",
+      description: "In the nutrient reservoir",
+      color: color.lime,
+      unit: "",
+      precision: 2,
+      minSpan: 0.5,
+      showAverage: true,
+    },
+    // no average: the grow lights switch on and off, so a mean of the two says nothing
+    {
+      key: "light.lux",
       title: "Light",
-      // no average: the grow lights switch on and off, so a mean of the two says nothing
-      description: "Light at the shelf, for spotting lights that are off or dimming.",
-      series: [
-        {
-          key: "light.lux",
-          label: "Light",
-          color: color.amber,
-          unit: "lux",
-          precision: 0,
-          axisId: "left" as const,
-        },
-      ],
+      color: color.amber,
+      unit: "lux",
+      precision: 0,
     },
   ];
 
@@ -147,16 +135,8 @@ export function HistoryView() {
       ) : null}
 
       <div className={styles.chartGrid}>
-        {data.length > 0 && charts.map((chart) => (
-          <MetricChartPanel
-            key={chart.title}
-            title={chart.title}
-            description={chart.description}
-            data={data}
-            timeWindow={timeWindow}
-            series={chart.series}
-          />
-        ))}
+        {data.length > 0 &&
+          metrics.map((metric) => <MetricChartPanel key={metric.key} metric={metric} data={data} timeWindow={timeWindow} end={now} />)}
       </div>
     </section>
   );

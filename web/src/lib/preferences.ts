@@ -78,7 +78,7 @@ export function formatTime(value: string | number | Date, prefs: Preferences, op
 }
 
 /** Short axis label for charts */
-export function formatChartTick(value: string, prefs: Preferences, compact = false) {
+export function formatChartTick(value: string | number, prefs: Preferences, compact = false) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   const zone = prefs.timeZone === "local" ? {} : { timeZone: prefs.timeZone };

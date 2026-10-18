@@ -29,7 +29,7 @@ interface PreferencesContextValue {
     temp: (celsius: number | null, precision?: number) => string;
     tempValue: (celsius: number) => number;
     tempUnit: string;
-    tick: (value: string, compact?: boolean) => string;
+    tick: (value: string | number, compact?: boolean) => string;
   };
 }
 

@@ -14,39 +14,6 @@
   gap: 0.55rem;
 }
 
-/* each series name sits over its own axis: left-axis series left, right-axis series right */
-.axisLegend {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-  flex-wrap: wrap;
-  font-size: 13px;
-}
-
-.axisLegendGroup {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.9rem;
-}
-
-.axisLegendRight {
-  margin-left: auto;
-  justify-content: flex-end;
-}
-
-.legendLabel {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  color: var(--muted);
-}
-
-.legendSwatch {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
 .emptyState {
   margin-top: 1rem;
   padding: 1rem 1.05rem;
@@ -61,50 +28,43 @@
   gap: 1rem;
 }
 
+/* an odd chart out (light, after the two pairs) takes the whole row rather than leaving a hole */
+.chartGrid > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
 .chartPanel {
   min-width: 0;
   padding: 1rem;
   display: grid;
   gap: 1rem;
-  /* the header lays out by the panel's width, not the screen's (one or two charts per row) */
-  container-type: inline-size;
 }
 
-/* title on the left, the window's averages on the right; they stack in a narrow panel */
+/* title on the left, the window's average on the right: short enough to share a row at any width */
 .chartHeader {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem 1.5rem;
+  gap: 1rem;
 }
 
 .chartHeading {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.2rem;
   min-width: 0;
-}
-
-.chartStats {
-  display: flex;
-  flex: none;
-  gap: 1.25rem;
-  margin: 0;
-  text-align: right;
 }
 
 .chartStat {
   display: grid;
-  gap: 0.2rem;
+  flex: none;
+  gap: 0.15rem;
+  margin: 0;
+  text-align: right;
 }
 
 .chartStat dt {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.35rem;
   color: var(--muted);
   font-size: 0.72rem;
-  white-space: nowrap;
 }
 
 .chartStat dd {
@@ -116,41 +76,36 @@
   white-space: nowrap;
 }
 
-@container (max-width: 24rem) {
-  .chartHeader {
-    flex-direction: column;
-  }
-
-  .chartStats {
-    text-align: left;
-  }
-
-  .chartStat dt {
-    justify-content: flex-start;
-  }
-}
-
 .chartTitle {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 600;
 }
 
+.chartUnit {
+  margin-left: 0.4em;
+  color: var(--muted);
+  font-size: 0.8em;
+  font-weight: 500;
+}
+
+/* extra context, a step below the title */
 .chartDescription {
   margin: 0;
   color: var(--muted);
-  line-height: 1.6;
+  font-size: 0.8rem;
 }
 
 /* a definite height so the chart can size itself on the first measure */
 .chartBody {
-  height: 16rem;
+  height: 13rem;
   min-width: 0;
 }
 
 .tooltip {
-  min-width: 12rem;
+  display: grid;
+  gap: 0.3rem;
   padding: 0.9rem;
   border-radius: var(--radius-sm);
   border: 1px solid rgb(var(--line-rgb) / 0.18);
@@ -159,31 +114,8 @@
 }
 
 .tooltipHeader {
-  display: block;
-  margin-bottom: 0.7rem;
-  font-size: 0.92rem;
-}
-
-.tooltipRow {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 0.55rem;
-  align-items: center;
   color: var(--muted);
-}
-
-.tooltipRow + .tooltipRow {
-  margin-top: 0.45rem;
-}
-
-.tooltipRow strong {
-  color: var(--text);
-}
-
-.tooltipSwatch {
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 999px;
+  font-size: 0.8rem;
 }
 
 @media (min-width: 760px) {
@@ -198,10 +130,5 @@
     align-items: flex-end;
     justify-content: space-between;
     flex-wrap: wrap;
-  }
-
-  .chartGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1rem;
   }
 }
