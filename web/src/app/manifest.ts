@@ -35,18 +35,20 @@ export default function manifest(): MetadataRoute.Manifest {
         type: "image/svg+xml",
       },
     ],
+    // ?v=2: browsers that saved the original dark-tiled icons under the old year-long
+    // cache keep them until the URL changes. Bump it when redrawing either icon.
     shortcuts: [
       {
         name: "Dashboard",
         short_name: "Dashboard",
         url: "/",
-        icons: [{ src: "/images/dashboard-icon.svg", sizes: "any" }],
+        icons: [{ src: "/images/dashboard-icon.svg?v=2", sizes: "any" }],
       },
       {
         name: "History",
         short_name: "History",
         url: "/history",
-        icons: [{ src: "/images/history-icon.svg", sizes: "any" }],
+        icons: [{ src: "/images/history-icon.svg?v=2", sizes: "any" }],
       },
       {
         name: "Alerts",
