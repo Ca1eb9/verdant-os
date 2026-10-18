@@ -215,10 +215,24 @@ The firmware reads the WiFi credentials from `firmware/esp32/src/secrets.h` (git
 
 Firmware uses the IP, not `farmnet`, for the MQTT broker. DNS adds a failure point for no benefit on microcontrollers.
 
+## FarmNet's channel
+
+**By hand (pinned):** `sudo nmcli connection modify FarmNet 802-11-wireless.channel 6` (or 1, 11), then `sudo nmcli connection up FarmNet`. It stays there across reboots. A phone WiFi-analyser app, or `nmcli device wifi list` on a laptop, shows which channel is quietest.
+
+**At each boot (optional):** `farmnet-channel.service` scans before the farm's devices are on, scores channels 1, 6 and 11 by the networks it hears (their signal, less for ones a few channels away), and starts FarmNet on the quietest. It only switches when another channel is clearly quieter. The access point has to be off to scan, so FarmNet drops for about 10 s each boot. Whatever fails (the scan, setting the channel, a timeout), FarmNet starts again on the channel it had: the script brings it back up on its way out, and the unit checks once more after the script ends. ESP32s and laptops find FarmNet on any channel. The deploy script installs the unit; it's off until you enable it:
+
+```bash
+sudo systemctl enable farmnet-channel     # pick at every boot
+sudo systemctl start farmnet-channel      # pick now (FarmNet drops for ~10 s)
+journalctl -u farmnet-channel -b          # what it heard and chose, e.g. "scores 1:80 6:110 11:0", "channel 7 -> 11"
+```
+
+To stop it and pin a channel (e.g. for a demo): `sudo systemctl disable farmnet-channel`, then pin by hand as above. FarmNet keeps the last channel the script chose until you change it. `bash scripts/farmnet-channel-test.sh` tests the script without a Pi.
+
 ## Notes
 
 - **Change the password** in the `FarmNet` connection and every robot's `secrets.h` before Showcase.
-- **Channel 7** is a reasonable default. If interference is an issue, try 1 or 11 (`sudo nmcli connection modify FarmNet 802-11-wireless.channel 11`).
+- **Channel.** Only 1, 6 and 11 don't overlap; channel 7 picks up interference from networks on both 6 and 11. Pick the quietest by hand, or have the Pi pick at each boot (below).
 - **Use `farmnet.local` or `192.168.4.1`** from laptops. Bare `farmnet` resolves through dnsmasq, but Windows doesn't always send single-word names to DNS.
 - A laptop only joins FarmNet on its own when no other known network is in range, or when you pick it. FarmNet has no internet, so Windows and macOS rank it below networks that do.
 - If the Pi has no Ethernet connected, the farm still works — local MQTT, local dashboard, SSH over FarmNet, everything except Supabase sync.
