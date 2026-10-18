@@ -14,7 +14,7 @@ export const HISTORY_RANGE_HOURS: Record<HistoryRange, number> = {
 
 // Generated readings and history for building the dashboard without a farm.
 // Off: the dashboard shows only real data (farms from Supabase or the Pi's
-// own, readings from sensor_events). Turn on to see the UI filled in.
+// own, readings from the farm's shelves). Turn on to see the UI filled in.
 export const MOCK_DATA_ENABLED = false;
 
 export const FARMS: FarmIdentity[] = [
@@ -117,10 +117,7 @@ function mapEventToTelemetrySnapshot(farmId: string, event: SensorEventPayload):
   return {
     farmId,
     deviceId: event.device,
-    sequence: event.seq,
     timestamp: event.ts,
-    connectionState: "online",
-    rawEvent: event,
     air: {
       temperature: event.air.t_c,
       humidity: event.air.rh_pct,

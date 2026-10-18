@@ -19,6 +19,18 @@
 
 enum class PadAction : uint8_t { None, Drive, Stop, Resume };
 
+// Whether Bluetooth should run: on as soon as it's needed, off
+// PAD_RADIO_OFF_MS after it last was.
+class PadRadio {
+ public:
+  // `needed`: looking for the controller, or one connected or connecting.
+  bool update(bool needed, uint32_t now);
+
+ private:
+  bool on_ = false;
+  uint32_t last_needed_ms_ = 0;
+};
+
 class PadCore {
  public:
   // The controller (re)connected, or its link stalled: forget everything.

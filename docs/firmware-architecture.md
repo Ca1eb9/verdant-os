@@ -251,7 +251,7 @@ The robot never queues commands: each one acts on the current state right away.
 | `resume` | In `manual`: leave manual control (see [Manual control](#manual-control)) and clear the stop latch. In `initializing`, halted after a manual timeout or a search that gave up: look for a tag again. Otherwise only acts if the stop latch is set: clear it and restore the paused status (the action timer continues with the remaining time). If it was on a task, re-plan from the current node first, since manual control may have moved it while stopped; a robot still at its target keeps working. If the robot is stopped at the dock with a kept task, re-plan and continue it. |
 | `return_to_dock` | Ignored if already returning, docking or charging. Otherwise head to the dock. A task in progress or paused is kept and resumed after charging. With no task and a `task_id` on the command, adopt it as a dock task and publish `task_complete` for it once connected to the charger. If already at the dock but not charging, run the dock sequence again (straight to `docking`, no `arrived`). No path to the dock: publish `task_failed` for a dock task's `task_id`, else ignore it. A latched stop stays latched. |
 | `jog` | Manual driving from the dashboard; `direction` is `forward` or `backward`. Accepted in `idle`, `en_route`, `working`, `stopped`, `error`, `manual` and `initializing` (no tag needed: e.g. to drive it onto one); ignored on dock trips and below the motor cutoff. The dashboard only offers it before the first tag when `NEXT_PUBLIC_JOG_WHILE_INITIALIZING` is on. The Bluetooth controller's jogs (robot-only) are also accepted on a dock trip. The first jog enters `manual`. Each jog drives for a fixed **500 ms** from when it is received (`JOG_PULSE_MS` in `config.h`); a jog arriving while driving restarts the 500 ms. When the window runs out, the motors stop by themselves. `backward` reverses without turning; the heading doesn't change. |
-| `connect_controller` | Look for the Bluetooth controller for `PAD_CONNECT_WINDOW_MS` (10 s), in any status, `initializing` included. Otherwise the robot only looks while it can't reach the broker. No reply: `controller_connected` in telemetry turns `true` when one connects, and the controller rumbles once. Farm network only, like `jog`. |
+| `connect_controller` | Look for the Bluetooth controller for `PAD_CONNECT_WINDOW_MS` (10 s), in any status, `initializing` included. Otherwise the robot only looks while it can't reach the broker. Bluetooth (and the WiFi power saving it needs) only runs while it's looking or connected, so commands aren't delayed the rest of the time (`WIFI_POWER_SAVE` in `config.h`). No reply: `controller_connected` in telemetry turns `true` when one connects, and the controller rumbles once. Farm network only, like `jog`. |
 | `charge_complete` | End a dock trip (on the way, docking or charging) as if the charge had completed: `charge_complete` and on with a kept task, or `idle` (`stopped` if latched). A dock task is completed first. Ignored otherwise. From the dashboard, locally or remotely. Below 15% the forced return sends it straight back. |
 | `cancel` | Drop the task with this `task_id` if it is the current, paused or kept task: clear it without setting `last_completed_task_id` and without an event. A cancelled task that was moving or working goes to `idle` (or stays `stopped`). Cancelling a dock task stops the trip to the dock. Cancelling a kept task leaves the dock trip running, so the robot still charges. Ignore it if the id doesn't match. The orchestrator resends it whenever telemetry still shows the cancelled task, e.g. after the robot was offline. |
 
@@ -368,7 +368,10 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
   front. Telemetry `obstacle_cm` comes from the sensor on the side of the last
   drive direction: front, or rear after reversing (kept while stopped). Note
   this is the drive direction, not `heading`, which doesn't change when the
-  robot reverses. The robot keeps its status (e.g. `en_route`) and publishes
+  robot reverses. It's `null` when nothing in range has given a distance the
+  sensor trusts for `TOF_HOLD_MS` (3 s); in a shorter gap (a near target
+  just left, or a weak far one) it keeps the last good distance, judged
+  like a reading: a near obstacle keeps its flag. The robot keeps its status (e.g. `en_route`) and publishes
   `obstacle_detected` once, also when a jog runs into it in `manual`. If it is
   still blocked after a timeout, it publishes `path_blocked` and keeps waiting.
   The orchestrator only raises alerts for these.
@@ -407,9 +410,10 @@ path. The orchestrator gives a `manual` robot no work, never sends it to the
 dock, and drops its planned route so the tags it passes aren't reported as
 deviations.
 
-- **Dashboard (`jog`):** each held button sends a `jog` about every 400 ms, just
+- **Dashboard (`jog`):** each held button sends a `jog` every 150 ms, well
   under the 500 ms pulse, so the robot drives smoothly while the button is held
-  and stops within 500 ms of release, or of a lost message. Jogging is only
+  even when WiFi power saving delays a message by a few hundred ms, and stops
+  within 500 ms of release, or of the messages stopping. Jogging is only
   offered on the farm network (the orchestrator rejects jogs that come through
   Supabase).
 - **Bluetooth controller:** the strongest override, since its operator is at

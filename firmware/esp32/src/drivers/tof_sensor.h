@@ -27,6 +27,10 @@ class TofSensor {
 
   // Non-blocking. Call every sensor cycle.
   TofReading poll(float* cm_out);
+  // After a Clear: the first target the sensor reported but didn't trust, for
+  // the log (VL53L4CX_RANGESTATUS_*; VL53L4CX_RANGESTATUS_NONE if none).
+  uint8_t rejected_status() const { return rejected_status_; }
+  int16_t rejected_mm() const { return rejected_mm_; }
 
  private:
   const char* name_;
@@ -38,4 +42,6 @@ class TofSensor {
   bool ok_ = false;
   bool wire_started_ = false;
   bool fail_logged_ = false;  // log a missing sensor once, not every retry
+  uint8_t rejected_status_ = VL53L4CX_RANGESTATUS_NONE;
+  int16_t rejected_mm_ = 0;
 };

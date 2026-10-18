@@ -8,7 +8,7 @@ import { useFarmConnection } from "@/hooks/useFarmConnection";
 import { MOCK_DATA_ENABLED } from "@/lib/mock-data";
 import styles from "@/components/layout/FarmLoadingOverlay.module.css";
 
-// Pages that show farm data; Settings and Config work without the farm
+// Pages that show farm data; Settings works without the farm
 const FARM_PAGES = ["/", "/farm", "/history", "/alerts"];
 // A quick load or reconnect shouldn't flash the overlay
 const SHOW_AFTER_MS = 400;

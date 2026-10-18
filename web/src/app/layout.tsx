@@ -107,7 +107,8 @@ export default function RootLayout({
             <AppShell>{children}</AppShell>
           </FarmProvider>
         </PreferencesProvider>
-        <Analytics />
+        {/* Vercel's analytics script is only served on Vercel: not on a Pi */}
+        {process.env.VERCEL ? <Analytics /> : null}
       </body>
     </html>
   );

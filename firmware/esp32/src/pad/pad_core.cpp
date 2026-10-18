@@ -59,3 +59,13 @@ PadAction PadCore::update(float stick, bool stop, bool resume, uint32_t now) {
   // After the drive, so letting go of the stick onto Resume can't be missed.
   return resume_pressed ? PadAction::Resume : PadAction::None;
 }
+
+bool PadRadio::update(bool needed, uint32_t now) {
+  if (needed) {
+    on_ = true;
+    last_needed_ms_ = now;
+  } else if (on_ && now - last_needed_ms_ >= PAD_RADIO_OFF_MS) {
+    on_ = false;
+  }
+  return on_;
+}

@@ -61,16 +61,6 @@
   font-size: 0.82rem;
 }
 
-.online {
-  color: var(--teal);
-  background: rgb(var(--teal-rgb) / 0.1);
-}
-
-.offline {
-  color: var(--danger);
-  background: rgb(var(--danger-rgb) / 0.1);
-}
-
 .live {
   color: var(--cyan);
   background: rgb(var(--cyan-rgb) / 0.12);

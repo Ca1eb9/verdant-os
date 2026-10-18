@@ -57,13 +57,23 @@ TofReading TofSensor::poll(float* cm_out) {
     return TofReading::Error;
   }
 
-  // The sensor can report several targets. Use the nearest valid one.
+  // The sensor can report several targets. Use the nearest valid one. Also
+  // valid: closer than the sensor's minimum range (clipped to it), and a
+  // merged pulse (several echoes, one range). The rest (sigma, signal and
+  // wraparound fails) are guesses the sensor doesn't trust.
   int16_t best_mm = INT16_MAX;
+  rejected_status_ = VL53L4CX_RANGESTATUS_NONE;
+  rejected_mm_ = 0;
   for (int i = 0; i < data.NumberOfObjectsFound; i++) {
     const auto& r = data.RangeData[i];
-    if (r.RangeStatus == VL53L4CX_RANGESTATUS_RANGE_VALID && r.RangeMilliMeter > 0 &&
-        r.RangeMilliMeter < best_mm) {
+    bool valid = r.RangeStatus == VL53L4CX_RANGESTATUS_RANGE_VALID ||
+                 r.RangeStatus == VL53L4CX_RANGESTATUS_RANGE_VALID_MIN_RANGE_CLIPPED ||
+                 r.RangeStatus == VL53L4CX_RANGESTATUS_RANGE_VALID_MERGED_PULSE;
+    if (valid && r.RangeMilliMeter > 0 && r.RangeMilliMeter < best_mm) {
       best_mm = r.RangeMilliMeter;
+    } else if (!valid && rejected_status_ == VL53L4CX_RANGESTATUS_NONE) {
+      rejected_status_ = r.RangeStatus;
+      rejected_mm_ = r.RangeMilliMeter;
     }
   }
   if (best_mm == INT16_MAX) return TofReading::Clear;

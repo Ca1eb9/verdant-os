@@ -1,0 +1,16 @@
+# Starts FarmNet on the quietest 2.4 GHz channel, once at boot. Off unless
+# enabled: sudo systemctl enable farmnet-channel (docs/WIFI-SETUP.md).
+[Unit]
+Description=VerdantOS FarmNet channel pick
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/verdant-os/scripts/farmnet-channel.sh
+# However the pick ended (a failure or a timeout included), FarmNet is up after.
+ExecStopPost=/bin/bash /opt/verdant-os/scripts/farmnet-channel.sh --ensure-up
+TimeoutStartSec=90
+
+[Install]
+WantedBy=multi-user.target

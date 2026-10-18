@@ -164,7 +164,7 @@ An Xbox Wireless Controller (model 1914, firmware 5.x) pairs with the robot itse
 
 Otherwise it doesn't look, so with the Pi up a controller that turns on, or drops out, stays disconnected until **Connect to RC**. It stops looking once one connects. On each connection the controller rumbles once (`PAD_RUMBLE_PCT`, `PAD_RUMBLE_MS`), and telemetry's `controller_connected` turns `true` straight away, so the dashboard shows **Controller: Connected** and confirms **Connect to RC**. The boot log says `looking for a controller (...)` and `stopped looking for a controller`; a window that finds nothing logs `connect_controller: no controller found`.
 
-**One radio.** WiFi and Bluetooth share it, so WiFi modem sleep stays on (`comms_task`); commands from the Pi can arrive a little later than before.
+**One radio.** WiFi and Bluetooth share it, and the ESP32 only runs Bluetooth with WiFi power saving (modem sleep) on, which delays messages from the Pi, a stop included, by up to a few hundred ms. So Bluetooth only runs while it's in use: looking for the controller (no broker, or a **Connect to RC** window) or connected to one. `PAD_RADIO_OFF_MS` (10 s) after that it turns off, and with it power saving, so commands arrive without the delay; the log says `Bluetooth on (WiFi power saving on)` and `Bluetooth off (WiFi power saving off)`. `WIFI_POWER_SAVE` in `config.h` overrides it: `On` keeps power saving on all the time, `Off` keeps it off and Bluetooth with it (no controller at all; **Connect to RC** is ignored).
 
 `pio run -e padtest -t upload` runs the controller alone and prints its stick, buttons and link checks.
 

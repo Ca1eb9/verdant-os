@@ -95,6 +95,11 @@ constexpr float OBSTACLE_STOP_CM = 15.0f;       // set that side's obstacle flag
 // distance is lower; the clear distance moves with it (same 5 cm gap).
 constexpr float OBSTACLE_CLEAR_CM = 20.0f;
 constexpr uint8_t OBSTACLE_CLEAR_COUNT = 3;     // consecutive clear readings needed
+// No trusted distance (the sensor flags a reading it's unsure of, e.g. just
+// after a near target leaves, or a weak far one): keep the last good distance
+// this long, about 3 telemetry periods, before reporting none. Meanwhile it's
+// judged like a reading: a near obstacle keeps its flag, a clear path clears.
+constexpr uint32_t TOF_HOLD_MS = 3000;
 constexpr uint32_t TOF_TIMING_BUDGET_US = 33000;
 // I2C clock for each sensor's bus. Every signal edge must rise within the
 // speed's limit, and longer wires slow the edges: the front sensor's 400 mm
@@ -253,6 +258,16 @@ constexpr uint32_t PAD_LINK_LOST_MS = 400;
 // while it can't reach the Pi's broker (with no heartbeat, the only sign it's
 // on its own), or for PAD_CONNECT_WINDOW_MS after a connect_controller command.
 constexpr uint32_t PAD_CONNECT_WINDOW_MS = 10000;
+// Bluetooth only runs while it's in use (looking for the controller, or one
+// connected), then turns off this long after, so a broker that drops for a
+// moment doesn't start and stop it each time.
+constexpr uint32_t PAD_RADIO_OFF_MS = 10000;
+// WiFi power saving (modem sleep) delays messages to the robot, a stop
+// included, by up to a few hundred ms. The ESP32 can't run Bluetooth without
+// it. Auto: on only while Bluetooth runs. On: always. Off: never, and the
+// controller can't be used at all.
+enum class WifiPowerSave : uint8_t { Auto, On, Off };
+constexpr WifiPowerSave WIFI_POWER_SAVE = WifiPowerSave::Auto;
 constexpr uint16_t PAD_SCAN_MS = 97;            // scan interval = window: always listening
 constexpr uint32_t PAD_SCAN_CHUNK_MS = 10000;   // each scan this long, then a fresh one
 // On each connection the controller rumbles once, to confirm it at the robot.

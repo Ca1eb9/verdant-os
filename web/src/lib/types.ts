@@ -1,4 +1,3 @@
-export type ConnectionState = "online" | "offline";
 export type LiveStatus = "live" | "stale" | "waiting";
 export type HistoryRange = "24h" | "72h" | "7d";
 export type FloatSensorState = 0 | 1;
@@ -25,10 +24,7 @@ export interface SensorReading {
 export interface TelemetrySnapshot {
   farmId: string;
   deviceId: string;
-  sequence: number;
   timestamp: string;
-  connectionState: ConnectionState;
-  rawEvent: SensorEventPayload;
   air: {
     temperature: number;
     humidity: number;

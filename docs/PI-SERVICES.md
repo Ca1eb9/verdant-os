@@ -198,11 +198,28 @@ sudo -u farm -H bash -c 'cd /opt/verdant-os/farm-controller/orchestrator && set 
 SD cards fail from sudden power loss during a write and from wear. With this setup:
 
 - **Always shut down with `sudo poweroff`** before unplugging. This matters more than anything else here.
-- Logs are capped (step 5). The ingester's database is the main writer, about one row per robot per second; it keeps 7 days (`RETENTION_DAYS` in `ingester.env`) and deletes older rows daily, so it stops growing after a week. Every service logs a recurring problem (bad messages, a broker that's down) once until it clears.
+- Logs are capped (step 5). The ingester's database is the main writer, about one row per robot per second, flushed to the card in batches (SQLite's `synchronous = NORMAL`: a power cut can lose the last moments of rows, never the file); it keeps 7 days (`RETENTION_DAYS` in `ingester.env`) and deletes older rows daily, so it stops growing after a week. Every service logs a recurring problem (bad messages, a broker that's down) once until it clears.
 - Use a quality A2-rated card from a known brand.
 - Back up now and then:
   - the data: `sudo tar czf ~/verdant-backup-$(date +%F).tgz /var/lib/verdant /etc/verdant`, then copy it off the Pi
   - the whole card: Raspberry Pi OS's **SD Card Copier** onto a spare card, so a dead card is a two-minute swap
+
+## Running lighter (optional)
+
+The farm needs none of the desktop, Bluetooth, printing or mobile-modem services, and they take memory and CPU from the farm's. Each step below is undone with the command after it; reboot after either.
+
+- **Boot without the desktop** (SSH and the farm keep working):
+  `sudo systemctl set-default multi-user.target`
+  Undo: `sudo systemctl set-default graphical.target`
+- **Bluetooth off.** The Pi's Bluetooth shares an antenna with its WiFi, so FarmNet gets that airtime back.
+  `sudo systemctl disable --now bluetooth`, then add `dtoverlay=disable-bt` on a Pi 4, or `dtoverlay=disable-bt-pi5` on a Pi 5, at the end of `/boot/firmware/config.txt` (`ls /boot/firmware/overlays | grep disable-bt` lists the ones your Pi has). On a Pi 4 also `sudo systemctl disable hciuart`.
+  Undo: delete that line, then `sudo systemctl enable --now bluetooth` (and `sudo systemctl enable hciuart` on a Pi 4).
+- **Printing** (only on the desktop image): `sudo systemctl disable --now cups cups-browsed`
+  Undo: `sudo systemctl enable --now cups cups-browsed`
+- **Mobile-modem support:** `sudo systemctl disable --now ModemManager`
+  Undo: `sudo systemctl enable --now ModemManager`
+
+Disabling keeps the packages, so nothing is lost. Leave `avahi-daemon` (it's what makes `ssh pi@<name>.local` work), `NetworkManager`, `dnsmasq` and `mosquitto` alone. `systemctl list-units --type=service --state=running` shows what's running, and `free -h` the memory it frees.
 
 ## Things to know
 
@@ -234,12 +251,3 @@ SD cards fail from sudden power loss during a write and from wear. With this set
 | `farm-dashboard-api` fails with `Failed to load environment files` | `/etc/verdant/dashboard-api.env` is missing (a Pi set up before the Dashboard API): create it as in step 4 and rerun the deploy script. |
 | Dashboard shows no earlier commands; the browser console says CORS or "no command history from the Dashboard API" | Check `curl http://192.168.4.1:3001/health` from the laptop. If that works, add the address the dashboard is opened from to `CORS_ORIGINS` in `/etc/verdant/dashboard-api.env` and `sudo systemctl restart farm-dashboard-api`. `"database":false` means the ingester hasn't created its database yet (`journalctl -u farm-ingester`). |
 | Dashboard map shows "Default farm layout" | The orchestrator isn't running, or Mosquitto lost its retained messages (persistence off): restart the orchestrator. |
-
-## TBD
-
-Known problems, not fixed yet:
-
-- **The dashboard's config status shows another farm's newest reading**:
-  `web/src/app/api/config/status/route.ts` reads the newest `sensor_events`
-  row from any farm, not the selected one, so with several farms in Supabase
-  its "latest event" and age can belong to a different farm.

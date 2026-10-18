@@ -11,7 +11,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/farm", label: "Farm", icon: "/images/farm-icon.svg", fallback: "🤖" },
   { href: "/history", label: "History", icon: "/images/history-icon.svg", fallback: "📈" },
   { href: "/alerts", label: "Alerts", icon: "/images/alert-danger.webp", fallback: "⚠️" },
-  { href: "/config", label: "Config", icon: "/images/config-icon.svg", fallback: "🔧" },
   { href: "/settings", label: "Settings", icon: "/images/settings-icon.svg", fallback: "⚙️" },
 ];
 
