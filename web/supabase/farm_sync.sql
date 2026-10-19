@@ -148,3 +148,23 @@ select cron.schedule('trim-alerts', '10 3 * * *',
   $$delete from public.alerts where created_at < now() - interval '90 days'$$);
 select cron.schedule('trim-remote-commands', '15 3 * * *',
   $$delete from public.remote_commands where created_at < now() - interval '30 days'$$);
+
+-- ---- updated_at -----------------------------------------------------------------
+-- robot_state and farm_topology are upserted: stamp updated_at on every
+-- update with Supabase's clock (the bridge can't send now() through the API)
+
+create or replace function public.touch_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end $$;
+
+drop trigger if exists touch_updated_at on public.robot_state;
+create trigger touch_updated_at before update on public.robot_state
+  for each row execute function public.touch_updated_at();
+drop trigger if exists touch_updated_at on public.farm_topology;
+create trigger touch_updated_at before update on public.farm_topology
+  for each row execute function public.touch_updated_at();
