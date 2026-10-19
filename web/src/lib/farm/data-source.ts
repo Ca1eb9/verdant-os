@@ -1,14 +1,15 @@
 // The seam between the farm UI and wherever farm data comes from.
 //
-// The planned dashboard data service (local Pi / MQTT over WebSocket when on
-// the farm network, Supabase when on Vercel) implements FarmDataSource and is
-// registered with setFarmDataSource(). The map and control panel only ever
-// talk to this interface, so they work unchanged in both modes.
+// Two sources implement FarmDataSource: local-source.ts (MQTT over WebSocket
+// to the Pi's broker, on the farm network) and remote-source.ts (Supabase,
+// from anywhere). The UI only ever talks to this interface, so it works
+// unchanged in both modes.
 //
 // A source serves one farm. On FarmNet that's the Pi's own farm; remotely,
 // selectFarm() swaps in a source for the farm picked in the header.
 
 import { createLocalSource } from "@/lib/farm/local-source";
+import { createRemoteSource } from "@/lib/farm/remote-source";
 import type { RobotView } from "@/lib/farm/robots";
 import type { FarmAlert, FarmTopology, RobotCommand, ShelfSensorData, ThresholdLimits } from "@/lib/farm/types";
 
@@ -32,8 +33,9 @@ export interface CommandRequest {
 
 /** A shelf's latest reading */
 export interface ShelfReading {
-  data: ShelfSensorData;
-  /** Browser receive time: there's no clock sync with the Pi */
+  /** Without the shelf's level remotely: Supabase doesn't keep it */
+  data: Omit<ShelfSensorData, "level">;
+  /** Browser receive time (Supabase's created_at for one loaded from it): there's no clock sync with the Pi */
   receivedAt: number;
 }
 
@@ -95,7 +97,8 @@ export class CommandError extends Error {
   }
 }
 
-async function readJson<T>(response: Response): Promise<T> {
+/** A JSON response's body, or throws a CommandError with its error */
+export async function readJson<T>(response: Response): Promise<T> {
   const payload = (await response.json().catch(() => ({}))) as T & { error?: string };
   if (!response.ok) {
     throw new CommandError(payload.error ?? `Request failed (${response.status})`, response.status);
@@ -112,59 +115,6 @@ export async function listCommandsFrom(endpoint: string, robotId?: string, farmI
   const response = await fetch(query ? `${endpoint}?${query}` : endpoint, { cache: "no-store" });
   const payload = await readJson<{ commands: CommandRecord[] }>(response);
   return payload.commands;
-}
-
-/**
- * Remote source for one farm until the data service lands: default topology,
- * no robot stream, and that farm's commands through this app's /api/commands
- * route (Supabase).
- */
-export function createDashboardApiSource(farmId: string): FarmDataSource {
-  return {
-    mode: "remote",
-    async getTopology() {
-      return null;
-    },
-    subscribeRobots(onRobots) {
-      onRobots([]);
-      return () => undefined;
-    },
-    async sendCommand(request, operatorKey) {
-      const response = await fetch("/api/commands", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-operator-key": operatorKey },
-        body: JSON.stringify({ ...request, farm_id: farmId }),
-      });
-      const payload = await readJson<{ command: CommandRecord }>(response);
-      return payload.command;
-    },
-    listRecentCommands(robotId) {
-      return listCommandsFrom("/api/commands", robotId, farmId);
-    },
-    subscribeConnection(onChange) {
-      onChange({
-        state: "offline",
-        reason: "Remote access isn't available yet.",
-      });
-      return () => undefined;
-    },
-    subscribeAlerts(onAlerts) {
-      onAlerts(null);
-      return () => undefined;
-    },
-    subscribeShelves(onShelves) {
-      onShelves(null);
-      return () => undefined;
-    },
-    subscribeShelfHistory(onHistory) {
-      onHistory(null);
-      return () => undefined;
-    },
-    subscribeThresholds(onThresholds) {
-      onThresholds(null);
-      return () => undefined;
-    },
-  };
 }
 
 /** Remote, with no farm picked (the farm list is loading, empty or failed) */
@@ -207,7 +157,7 @@ function noFarmSource(connection: FarmConnection): FarmDataSource {
   };
 }
 
-// Until the data service detects local vs remote on its own: set
+// Until the dashboard detects local vs remote on its own: set
 // NEXT_PUBLIC_MQTT_WS_URL (e.g. ws://192.168.4.1:9001) for the live local source,
 // and NEXT_PUBLIC_DASHBOARD_API_URL for its command history.
 const LOCAL_MQTT_URL = process.env.NEXT_PUBLIC_MQTT_WS_URL;
@@ -224,7 +174,7 @@ export function getFarmDataSource() {
   return activeSource;
 }
 
-/** Swap in another data source (e.g. the local/remote data service) */
+/** Swap in another data source */
 export function setFarmDataSource(source: FarmDataSource) {
   activeSource = source;
   listeners.forEach((listener) => listener());
@@ -236,7 +186,7 @@ export function setFarmDataSource(source: FarmDataSource) {
  */
 export function selectFarm(farmId: string | null, reason = "No farm selected.") {
   if (ON_FARMNET) return;
-  setFarmDataSource(farmId ? createDashboardApiSource(farmId) : noFarmSource({ state: "offline", reason }));
+  setFarmDataSource(farmId ? createRemoteSource(farmId) : noFarmSource({ state: "offline", reason }));
 }
 
 export function onFarmDataSourceChange(listener: () => void) {

@@ -79,10 +79,15 @@ export function isThresholdLimits(v: unknown): v is ThresholdLimits {
     v.critical_min <= v.warning_min && v.warning_min < v.warning_max && v.warning_max <= v.critical_max;
 }
 
-export function isShelfData(v: unknown): v is ShelfSensorData {
+/** A shelf's readings without its level, which Supabase's sensor_events doesn't keep */
+export function isShelfValues(v: unknown): v is Omit<ShelfSensorData, "level"> {
   return isRecord(v) && typeof v.shelf_id === "string" && v.shelf_id.length > 0 &&
-    Number.isInteger(v.level) && isNumOrNull(v.temperature_c) && isNumOrNull(v.humidity_pct) &&
+    isNumOrNull(v.temperature_c) && isNumOrNull(v.humidity_pct) &&
     isNumOrNull(v.light_lux) && isNumOrNull(v.water_temp_c) &&
     (v.water_level_ok === null || typeof v.water_level_ok === "boolean") && isNumOrNull(v.ph) &&
     isNum(v.timestamp);
+}
+
+export function isShelfData(v: unknown): v is ShelfSensorData {
+  return isShelfValues(v) && Number.isInteger((v as Record<string, unknown>).level);
 }

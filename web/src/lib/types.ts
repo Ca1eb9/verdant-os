@@ -38,20 +38,6 @@ export interface TelemetrySnapshot {
   };
 }
 
-export interface SensorEventRecord {
-  id?: string;
-  created_at?: string;
-  device: string | null;
-  source: string | null;
-  ts: string | null;
-  air_temp_c: number | null;
-  humidity_pct: number | null;
-  water_temp_c: number | null;
-  water_level_ok: boolean | null;
-  ph: number | null;
-  light_lux: number | null;
-}
-
 /** One point of a history chart: the average of the readings in its time bucket, null where none read */
 export interface HistoryPoint {
   timestamp: string;

@@ -27,7 +27,7 @@ export function isSilent(beat: Heartbeat, now: number) {
  * those the orchestrator knows of that haven't reported since the page
  * opened); shelves from their live readings, plus any in the stored history,
  * so a shelf that went quiet before the page opened shows as silent too.
- * Null when the data source has no device feed (remote, for now).
+ * Null when the data source has no device feed (remotely, without Supabase set up).
  */
 export function useDeviceHeartbeats() {
   const [source, setSource] = useState(getFarmDataSource);
