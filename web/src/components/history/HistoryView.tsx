@@ -3,9 +3,10 @@
 import { useMemo } from "react";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
 import { NoFarmNotice } from "@/components/farms/NoFarmNotice";
-import { MetricChartPanel, type MetricConfig } from "@/components/history/MetricChartPanel";
+import { MetricChartPanel, type ChartLimits, type MetricConfig } from "@/components/history/MetricChartPanel";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { TimeWindowPicker } from "@/components/ui/TimeWindowPicker";
+import { useAlertThresholds } from "@/hooks/useAlertThresholds";
 import { useShelfHistory } from "@/hooks/useShelfHistory";
 import {
   MOCK_DATA_ENABLED,
@@ -49,12 +50,25 @@ export function HistoryView() {
     }));
   }, [activeFarmId, fmt, livePoints, prefs.temperatureUnit, timeWindow]);
 
+  // The alert engine's limits, in the chart's unit (temperature limits are °C)
+  const thresholds = useAlertThresholds();
+  const limitsFor = (metric: MetricConfig): ChartLimits | null => {
+    const found = thresholds?.find((limits) => limits.metric === metric.alertMetric);
+    if (!found) return null;
+    const toUnit = (value: number) => (metric.unit === DEGREE ? fmt.tempValue(value) : value);
+    return {
+      warning: [toUnit(found.warning_min), toUnit(found.warning_max)],
+      critical: [toUnit(found.critical_min), toUnit(found.critical_max)],
+    };
+  };
+
   // smallest y-axis spans are set in °C; a °F axis spans 9/5 as many degrees
   const degrees = (celsius: number) => (prefs.temperatureUnit === "F" ? (celsius * 9) / 5 : celsius);
   // one chart per measurement, each on its own axis: the climate pair, the reservoir pair, then light
   const metrics: MetricConfig[] = [
     {
       key: "air.temperature",
+      alertMetric: "temperature_c",
       title: "Air temperature",
       description: "At the shelf",
       color: color.cyan,
@@ -65,6 +79,7 @@ export function HistoryView() {
     },
     {
       key: "air.humidity",
+      alertMetric: "humidity_pct",
       title: "Humidity",
       description: "At the shelf",
       color: color.teal,
@@ -75,6 +90,7 @@ export function HistoryView() {
     },
     {
       key: "water.temperature",
+      alertMetric: "water_temp_c",
       title: "Water temperature",
       description: "In the nutrient reservoir",
       color: color.cyan,
@@ -85,6 +101,7 @@ export function HistoryView() {
     },
     {
       key: "water.ph",
+      alertMetric: "ph",
       title: "pH",
       description: "In the nutrient reservoir",
       color: color.lime,
@@ -136,7 +153,16 @@ export function HistoryView() {
 
       <div className={styles.chartGrid}>
         {data.length > 0 &&
-          metrics.map((metric) => <MetricChartPanel key={metric.key} metric={metric} data={data} timeWindow={timeWindow} end={now} />)}
+          metrics.map((metric) => (
+            <MetricChartPanel
+              key={metric.key}
+              metric={metric}
+              data={data}
+              timeWindow={timeWindow}
+              end={now}
+              limits={limitsFor(metric)}
+            />
+          ))}
       </div>
     </section>
   );

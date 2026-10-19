@@ -62,6 +62,7 @@ flowchart LR
 
 - **On FarmNet** the local source reads everything live from the broker:
   `farm/robot/+/telemetry` and `farm/robot/+/state`, `farm/system/topology`,
+  `farm/system/alert-thresholds`,
   `farm/shelf/+/sensors`, `farm/alerts` (and `farm/alerts/clear`), and every
   command on `farm/commands/+`. The Dashboard API fills in what happened
   before the page opened: recent commands per robot, the latest 500 alerts,

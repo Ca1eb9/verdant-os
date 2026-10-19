@@ -18,6 +18,7 @@ import {
   extractIdFromTopic,
   readStateFile,
   writeStateFile,
+  type AlertThresholds,
   type FarmAlert,
   type TypedMqttClient,
 } from "@farm/shared";
@@ -63,6 +64,21 @@ async function main() {
   console.log(`[ALERT]   metrics:    ${config.thresholds.map((t) => t.metric).join(", ")}, water_level_ok`);
   console.log(`[ALERT]   hold:       ${config.hold_ms}ms, cooldown ${config.cooldown_ms}ms`);
   console.log(`[ALERT]   email:      ${email ? `critical alerts to ${email.to.length} address(es)` : "off"}`);
+
+  // retained, so a dashboard that opens later still gets them; republished on every start, so config edits reach it
+  mqtt.publish<AlertThresholds>(
+    TOPICS.system.alertThresholds,
+    {
+      thresholds: config.thresholds.map(({ metric, warning_min, warning_max, critical_min, critical_max }) => ({
+        metric,
+        warning_min,
+        warning_max,
+        critical_min,
+        critical_max,
+      })),
+    },
+    true,
+  );
 
   subscribe(mqtt, TOPICS.robot.telemetryAll, "robot", "robot_id", isRobotTelemetry, evaluator);
   subscribe(mqtt, TOPICS.shelf.sensorsAll, "shelf", "shelf_id", isShelfSensorData, evaluator);

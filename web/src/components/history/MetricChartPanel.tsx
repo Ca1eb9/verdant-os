@@ -4,6 +4,7 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -42,6 +43,8 @@ const Y_PADDING = 0.1;
 const Y_TICKS = 4;
 // Tick steps are one of these times a power of ten: 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10…
 const NICE_STEPS = [1, 2, 2.5, 5, 10];
+// Limit lines are context, not data: faint, under the reading's line
+const LIMIT_OPACITY = 0.55;
 
 /** One measurement: one chart, one axis */
 export interface MetricConfig {
@@ -60,6 +63,14 @@ export interface MetricConfig {
   minSpan?: number;
   /** Show the average over the window, top right */
   showAverage?: boolean;
+  /** The alert engine's metric for this chart, whose limits it draws */
+  alertMetric?: string;
+}
+
+/** A metric's alert limits, in the chart's unit */
+export interface ChartLimits {
+  warning: [number, number];
+  critical: [number, number];
 }
 
 interface MetricChartPanelProps {
@@ -68,6 +79,8 @@ interface MetricChartPanelProps {
   timeWindow: TimeWindow;
   /** The window's end (now): the time axis always spans the whole window */
   end: number;
+  /** Drawn as faint dashed lines; null when the alert engine's limits aren't known */
+  limits: ChartLimits | null;
 }
 
 /** The metric's value at a point, from its dotted key */
@@ -137,7 +150,7 @@ function ChartTooltip({
   );
 }
 
-export function MetricChartPanel({ data, end, metric, timeWindow }: MetricChartPanelProps) {
+export function MetricChartPanel({ data, end, limits, metric, timeWindow }: MetricChartPanelProps) {
   const values = data.map((point) => valueAt(point, metric.key)).filter((value): value is number => value !== null);
   // A time axis over the whole window: missing readings show as empty time,
   // not squeezed out, and "15m" always spans fifteen minutes
@@ -148,7 +161,15 @@ export function MetricChartPanel({ data, end, metric, timeWindow }: MetricChartP
   const xTicks = timeTicks(start, axisEnd);
   // times of day, dates across a week
   const showTime = timeWindow !== "7d";
-  const yAxis = fitYAxis(values, metric.minSpan);
+  // The warning band is always in view, so the line reads against its safe range; the
+  // critical limits outside it only show once the readings come near them
+  const yAxis = fitYAxis(limits && values.length ? [...values, ...limits.warning] : values, metric.minSpan);
+  const limitLines = limits
+    ? [
+        ...limits.warning.map((y, i) => ({ y, kind: "Warning", color: "var(--amber)", above: i === 1 })),
+        ...limits.critical.map((y, i) => ({ y, kind: "Critical", color: "var(--danger)", above: i === 1 })),
+      ]
+    : [];
   const formatTick = (value: number) =>
     Math.abs(value) >= 1000 ? AXIS_THOUSANDS.format(value) : value.toFixed(yAxis.decimals);
   const { fmt, theme } = usePreferences();
@@ -198,6 +219,24 @@ export function MetricChartPanel({ data, end, metric, timeWindow }: MetricChartP
               tick={{ fill: axis.tick, fontSize: 12 }}
               tickFormatter={formatTick}
             />
+            {/* under the reading's line; a limit outside the axis isn't drawn */}
+            {limitLines.map((limit) => (
+              <ReferenceLine
+                key={`${limit.kind}-${limit.y}`}
+                y={limit.y}
+                stroke={limit.color}
+                strokeOpacity={LIMIT_OPACITY}
+                strokeWidth={1}
+                strokeDasharray="4 4"
+                // one label per kind, on the upper line, at the oldest end where readings are fewest;
+                // the colour names the lower one
+                label={
+                  limit.above
+                    ? { value: limit.kind, position: "insideTopLeft", fill: limit.color, fillOpacity: LIMIT_OPACITY, fontSize: 10 }
+                    : undefined
+                }
+              />
+            ))}
             <Tooltip content={<ChartTooltip metric={metric} />} />
             <Line
               dataKey={metric.key}

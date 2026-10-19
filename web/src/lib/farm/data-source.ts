@@ -10,7 +10,7 @@
 
 import { createLocalSource } from "@/lib/farm/local-source";
 import type { RobotView } from "@/lib/farm/robots";
-import type { FarmAlert, FarmTopology, RobotCommand, ShelfSensorData } from "@/lib/farm/types";
+import type { FarmAlert, FarmTopology, RobotCommand, ShelfSensorData, ThresholdLimits } from "@/lib/farm/types";
 
 export type CommandStatus = "pending" | "sent" | "failed";
 
@@ -79,6 +79,11 @@ export interface FarmDataSource {
    * arrives; null when this source has no live shelf feed. Returns unsubscribe.
    */
   subscribeShelfHistory(onHistory: (readings: ShelfReading[] | null) => void): () => void;
+  /**
+   * Streams the alert engine's limits per metric, as it publishes them; null
+   * until they're known, or when this source has none. Returns unsubscribe.
+   */
+  subscribeThresholds(onThresholds: (thresholds: ThresholdLimits[] | null) => void): () => void;
 }
 
 export class CommandError extends Error {
@@ -155,6 +160,10 @@ export function createDashboardApiSource(farmId: string): FarmDataSource {
       onHistory(null);
       return () => undefined;
     },
+    subscribeThresholds(onThresholds) {
+      onThresholds(null);
+      return () => undefined;
+    },
   };
 }
 
@@ -189,6 +198,10 @@ function noFarmSource(connection: FarmConnection): FarmDataSource {
     },
     subscribeShelfHistory(onHistory) {
       onHistory(null);
+      return () => undefined;
+    },
+    subscribeThresholds(onThresholds) {
+      onThresholds(null);
       return () => undefined;
     },
   };
