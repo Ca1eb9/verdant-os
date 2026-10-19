@@ -196,9 +196,30 @@ function subscribeCommands() {
 
 let statusChannel: RealtimeChannel | null = null;
 let statusJoined = false;
+let presenceBusy = false;
+let presenceAgain = false;
 
-/** Tracks while the broker is connected, untracks while it isn't */
+/**
+ * Tracks while the broker is connected, untracks while it isn't. One at a
+ * time: a track and an untrack finishing out of order would leave the wrong one
+ */
 async function updatePresence() {
+  if (presenceBusy) {
+    presenceAgain = true;
+    return;
+  }
+  presenceBusy = true;
+  try {
+    do {
+      presenceAgain = false;
+      await applyPresence();
+    } while (presenceAgain);
+  } finally {
+    presenceBusy = false;
+  }
+}
+
+async function applyPresence() {
   if (!statusChannel || !statusJoined) return;
   const online = mqtt?.raw.connected ?? false;
   const result = online
