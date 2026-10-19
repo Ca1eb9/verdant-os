@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createServerClient, type CookieMethodsServer } from "@supabase/ssr";
 import { isAuthRetryableFetchError, type AuthError } from "@supabase/supabase-js";
+import { LOCAL_FARM } from "@/lib/farms";
 import { getSupabaseAuthConfig } from "@/lib/supabase-config";
 
 export const LOGIN_PATH = "/login";
@@ -24,14 +25,14 @@ const AUTH_COOKIE_OPTIONS = {
 
 /**
  * Whether the dashboard asks operators to sign in. Never on a farm's Pi: its
- * build talks to the broker on FarmNet (NEXT_PUBLIC_MQTT_WS_URL, the same
- * switch as ON_FARMNET in lib/farm/data-source.ts) and has to keep working
- * with no internet. Everywhere else, Vercel included, unless AUTH_DISABLED is
- * "true". Vercel is never treated as FarmNet, so a stray MQTT URL there can't
- * open the dashboard.
+ * build names the Pi's farm (NEXT_PUBLIC_FARM_ID, which Vercel doesn't set)
+ * and has to keep working with no internet. The server can't see how a page
+ * was opened, so this goes by the build, not by isFarmNet(). Everywhere else,
+ * Vercel included, unless AUTH_DISABLED is "true". Vercel is never treated as
+ * a Pi, so a stray farm id there can't open the dashboard.
  */
 export function signInRequired() {
-  if (process.env.NEXT_PUBLIC_MQTT_WS_URL && !process.env.VERCEL) return false;
+  if (LOCAL_FARM && !process.env.VERCEL) return false;
   return process.env.AUTH_DISABLED?.trim().toLowerCase() !== "true";
 }
 
