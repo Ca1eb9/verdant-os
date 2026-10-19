@@ -168,16 +168,19 @@ export function MetricChartPanel({ data, end, limits, metric, timeWindow }: Metr
   const showTime = timeWindow !== "7d";
   // The warning band is always in view, so the line reads against its safe range; the
   // critical limits outside it only show once the readings come near them
-  const yAxis = fitYAxis(limits && values.length ? [...values, ...limits.warning] : values, metric.minSpan);
-  const limitLines = limits
+  const { fmt, prefs, theme } = usePreferences();
+  // both optional (Settings): with the limits off, the axis fits the readings alone
+  const shownLimits = prefs.showLimitLines ? limits : null;
+  const showAverageLine = prefs.showAverageLine && metric.showAverage && mean !== null;
+  const yAxis = fitYAxis(shownLimits && values.length ? [...values, ...shownLimits.warning] : values, metric.minSpan);
+  const limitLines = shownLimits
     ? [
-        ...limits.warning.map((y, i) => ({ y, kind: "Warning", color: "var(--amber)", above: i === 1 })),
-        ...limits.critical.map((y, i) => ({ y, kind: "Critical", color: "var(--danger)", above: i === 1 })),
+        ...shownLimits.warning.map((y, i) => ({ y, kind: "Warning", color: "var(--amber)", above: i === 1 })),
+        ...shownLimits.critical.map((y, i) => ({ y, kind: "Critical", color: "var(--danger)", above: i === 1 })),
       ]
     : [];
   const formatTick = (value: number) =>
     Math.abs(value) >= 1000 ? AXIS_THOUSANDS.format(value) : value.toFixed(yAxis.decimals);
-  const { fmt, theme } = usePreferences();
   const axis = theme === "light" ? { grid: "rgba(15,23,42,0.08)", tick: "#56667a" } : { grid: "rgba(255,255,255,0.06)", tick: "#8aa3bc" };
 
   return (
@@ -200,7 +203,7 @@ export function MetricChartPanel({ data, end, limits, metric, timeWindow }: Metr
 
       <div className={styles.chartBody}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={points} margin={{ top: 4, right: metric.showAverage ? AVERAGE_LABEL_ROOM : 8, bottom: 0, left: -8 }}>
+          <LineChart data={points} margin={{ top: 4, right: showAverageLine ? AVERAGE_LABEL_ROOM : 8, bottom: 0, left: -8 }}>
             <CartesianGrid stroke={axis.grid} vertical={false} />
             <XAxis
               dataKey="time"
@@ -224,7 +227,7 @@ export function MetricChartPanel({ data, end, limits, metric, timeWindow }: Metr
               tick={{ fill: axis.tick, fontSize: 12 }}
               tickFormatter={formatTick}
             />
-            {metric.showAverage && mean !== null ? (
+            {showAverageLine && mean !== null ? (
               <ReferenceLine
                 y={mean}
                 stroke={metric.color}

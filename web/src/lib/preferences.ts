@@ -26,6 +26,10 @@ export interface Preferences {
   timeFormat: TimeFormat;
   timeZone: TimeZoneSetting;
   showSeconds: boolean;
+  /** History charts: draw the alert engine's warning and critical limits */
+  showLimitLines: boolean;
+  /** History charts: draw the window's average as a line */
+  showAverageLine: boolean;
   /** Desktop sidebar state; changed from the sidebar itself */
   sidebarCollapsed: boolean;
   /** History and Alerts window; changed on those pages */
@@ -38,6 +42,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   timeFormat: "12h",
   timeZone: "local",
   showSeconds: true,
+  showLimitLines: true,
+  showAverageLine: false,
   sidebarCollapsed: false,
   timeWindow: "1h",
 };
@@ -54,6 +60,8 @@ export function normalizePreferences(raw: unknown): Preferences {
     timeFormat: pick("timeFormat", (v) => v === "12h" || v === "24h"),
     timeZone: pick("timeZone", (v) => TIME_ZONES.some((zone) => zone.value === v)),
     showSeconds: pick("showSeconds", (v) => typeof v === "boolean"),
+    showLimitLines: pick("showLimitLines", (v) => typeof v === "boolean"),
+    showAverageLine: pick("showAverageLine", (v) => typeof v === "boolean"),
     sidebarCollapsed: pick("sidebarCollapsed", (v) => typeof v === "boolean"),
     timeWindow: pick("timeWindow", isTimeWindow),
   };
