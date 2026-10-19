@@ -109,12 +109,13 @@ drop policy if exists "Dashboard reads" on public.farm_topology;
 create policy "Dashboard reads" on public.farm_topology for select to anon, authenticated using (true);
 
 -- ---- Realtime -------------------------------------------------------------------
--- Changes the dashboard follows live, plus remote_commands for the bridge.
+-- Changes the dashboard follows live (sensor_events from sensor_events.sql),
+-- plus remote_commands for the bridge.
 
 do $$
 declare t text;
 begin
-  foreach t in array array['robot_telemetry', 'robot_state', 'alerts', 'farm_topology', 'remote_commands'] loop
+  foreach t in array array['robot_telemetry', 'robot_state', 'alerts', 'farm_topology', 'sensor_events', 'remote_commands'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
@@ -156,6 +157,7 @@ select cron.schedule('trim-remote-commands', '15 3 * * *',
 create or replace function public.touch_updated_at()
 returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
   new.updated_at = now();

@@ -51,19 +51,10 @@ alter table public.sensor_events enable row level security;
 grant select on public.sensor_events to anon, authenticated;
 grant select, insert, update, delete on public.sensor_events to service_role;
 
-do $$
-begin
-  if not exists (
-    select 1
-    from pg_policies
-    where schemaname = 'public'
-      and tablename = 'sensor_events'
-      and policyname = 'Allow public dashboard reads'
-  ) then
-    create policy "Allow public dashboard reads"
-      on public.sensor_events
-      for select
-      to anon
-      using (true);
-  end if;
-end $$;
+-- Signed-in operators read as authenticated, everyone else as anon
+drop policy if exists "Allow public dashboard reads" on public.sensor_events;
+create policy "Allow public dashboard reads"
+  on public.sensor_events
+  for select
+  to anon, authenticated
+  using (true);
