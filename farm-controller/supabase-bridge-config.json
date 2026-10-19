@@ -1,4 +1,5 @@
 {
   "retry_interval_ms": 5000,
-  "stale_command_ms": 60000
+  "stale_command_ms": 60000,
+  "shutdown_timeout_ms": 3000
 }

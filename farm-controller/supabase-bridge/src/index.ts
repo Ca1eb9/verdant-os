@@ -11,7 +11,7 @@
 
 import { fileURLToPath } from "url";
 import { setTimeout as sleep } from "timers/promises";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type RealtimeChannel } from "@supabase/supabase-js";
 import { createMqttClient, LogOnce, TOPICS, type TypedMqttClient } from "@farm/shared";
 
 import { toRemoteCommand } from "./commands.js";
@@ -174,6 +174,48 @@ function subscribeCommands() {
     });
 }
 
+// --- Presence: farm online ----------------------------------
+//
+// The remote dashboard shows a farm online while its key is in the
+// farm-status channel's presence state. The farm is the MQTT bus, so the
+// bridge tracks only while it's connected to the broker. If the bridge
+// loses the internet, Supabase drops the key on its own.
+
+let statusChannel: RealtimeChannel | null = null;
+let statusJoined = false;
+
+/** Tracks while the broker is connected, untracks while it isn't */
+async function updatePresence() {
+  if (!statusChannel || !statusJoined) return;
+  const online = mqtt?.raw.connected ?? false;
+  const result = online
+    ? await statusChannel.track({ farm_id: env.farmId, service: "supabase-bridge", online_at: new Date().toISOString() })
+    : await statusChannel.untrack();
+  if (result === "ok") {
+    logs.ok("presence");
+    console.log(`[PRESENCE] Farm ${online ? "online" : "offline (broker down)"}`);
+  } else {
+    // The channel retracks when it rejoins
+    logs.warn("presence", `[PRESENCE] Couldn't ${online ? "track" : "untrack"} (${result}), retrying on rejoin (logged once)`);
+  }
+}
+
+function joinStatusChannel() {
+  statusChannel = supabase.channel("farm-status", {
+    config: { private: true, presence: { key: env.farmId } },
+  });
+  statusChannel.subscribe((status, err) => {
+    // Presence is lost with the connection: track again on every join
+    statusJoined = status === "SUBSCRIBED";
+    if (statusJoined) {
+      logs.ok("status channel");
+      void updatePresence();
+    } else if (!shuttingDown) {
+      logs.warn("status channel", `[PRESENCE] Channel ${status.toLowerCase()}${err ? `: ${err.message}` : ""}, rejoining (logged once)`);
+    }
+  });
+}
+
 // --- Main ----------------------------------------------------
 
 async function main() {
@@ -188,16 +230,24 @@ async function main() {
   mqtt = await createMqttClient({
     serviceName: "supabase-bridge",
     brokerUrl: env.brokerUrl,
-    // Commands that waited for the broker
-    onConnect: () => void drainCommands(),
+    onConnect: () => {
+      void updatePresence();
+      // Commands that waited for the broker
+      void drainCommands();
+    },
+    onDisconnect: () => void updatePresence(),
   });
+  joinStatusChannel();
   subscribeCommands();
   console.log("[BRIDGE] Running");
 
   const shutdown = async () => {
+    // A second Ctrl+C, or SIGTERM after SIGINT, mustn't start another
+    if (shuttingDown) return;
     shuttingDown = true;
     console.log("[BRIDGE] Shutting down");
-    await supabase.removeAllChannels();
+    // Leaving farm-status takes the farm offline right away
+    await Promise.race([supabase.removeAllChannels(), sleep(config.shutdown_timeout_ms)]);
     await mqtt.disconnect();
     process.exit(0);
   };
