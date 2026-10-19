@@ -45,6 +45,10 @@ const Y_TICKS = 4;
 const NICE_STEPS = [1, 2, 2.5, 5, 10];
 // Limit lines are context, not data: faint, under the reading's line
 const LIMIT_OPACITY = 0.55;
+// The average: dotted (limits are dashed), in the reading's own colour, as faint as the limits
+const AVERAGE_DASH = "1 4";
+// Room right of the plot for the average's label
+const AVERAGE_LABEL_ROOM = 30;
 
 /** One measurement: one chart, one axis */
 export interface MetricConfig {
@@ -152,6 +156,7 @@ function ChartTooltip({
 
 export function MetricChartPanel({ data, end, limits, metric, timeWindow }: MetricChartPanelProps) {
   const values = data.map((point) => valueAt(point, metric.key)).filter((value): value is number => value !== null);
+  const mean = values.length ? average(values) : null;
   // A time axis over the whole window: missing readings show as empty time,
   // not squeezed out, and "15m" always spans fifteen minutes
   const points = data.map((point) => ({ ...point, time: new Date(point.timestamp).getTime() }));
@@ -188,14 +193,14 @@ export function MetricChartPanel({ data, end, limits, metric, timeWindow }: Metr
         {metric.showAverage ? (
           <dl className={styles.chartStat} title={`Average over the last ${TIME_WINDOWS[timeWindow].label}`}>
             <dt>Avg</dt>
-            <dd>{values.length ? formatMetric(average(values), metric.unit, metric.precision) : "—"}</dd>
+            <dd>{mean !== null ? formatMetric(mean, metric.unit, metric.precision) : "—"}</dd>
           </dl>
         ) : null}
       </div>
 
       <div className={styles.chartBody}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={points} margin={{ top: 4, right: 8, bottom: 0, left: -8 }}>
+          <LineChart data={points} margin={{ top: 4, right: metric.showAverage ? AVERAGE_LABEL_ROOM : 8, bottom: 0, left: -8 }}>
             <CartesianGrid stroke={axis.grid} vertical={false} />
             <XAxis
               dataKey="time"
@@ -219,6 +224,18 @@ export function MetricChartPanel({ data, end, limits, metric, timeWindow }: Metr
               tick={{ fill: axis.tick, fontSize: 12 }}
               tickFormatter={formatTick}
             />
+            {metric.showAverage && mean !== null ? (
+              <ReferenceLine
+                y={mean}
+                stroke={metric.color}
+                strokeOpacity={LIMIT_OPACITY}
+                strokeWidth={1.5}
+                strokeDasharray={AVERAGE_DASH}
+                strokeLinecap="round"
+                // past the line's right end, clear of the limit labels on the left
+                label={{ value: "Avg", position: "right", fill: metric.color, fillOpacity: LIMIT_OPACITY, fontSize: 10 }}
+              />
+            ) : null}
             {/* under the reading's line; a limit outside the axis isn't drawn */}
             {limitLines.map((limit) => (
               <ReferenceLine
