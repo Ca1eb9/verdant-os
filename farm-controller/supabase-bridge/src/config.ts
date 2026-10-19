@@ -20,6 +20,16 @@ export interface BridgeConfig {
   stale_command_ms: number;
   /** Longest wait for Supabase when stopping; with no internet it would never answer */
   shutdown_timeout_ms: number;
+  /** At most one telemetry row per robot, and one reading per shelf, this often (a robot's status or node change goes at once) */
+  sample_interval_ms: number;
+  /** How often buffered rows go to Supabase */
+  flush_interval_ms: number;
+  /** Rows per request */
+  max_batch_rows: number;
+  /** Rows kept while Supabase is unreachable; beyond it the oldest telemetry and readings are dropped */
+  max_buffer_rows: number;
+  /** How often the rows sent are logged */
+  stats_interval_ms: number;
 }
 
 /** Same rule as farms.id in web/supabase/farms.sql */
@@ -55,7 +65,10 @@ const isPos = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v >
 /** Throws with the reason */
 export function loadConfig(path: string): BridgeConfig {
   const c = JSON.parse(readFileSync(path, "utf-8"));
-  for (const key of ["retry_interval_ms", "stale_command_ms", "shutdown_timeout_ms"]) {
+  for (const key of [
+    "retry_interval_ms", "stale_command_ms", "shutdown_timeout_ms", "sample_interval_ms",
+    "flush_interval_ms", "max_batch_rows", "max_buffer_rows", "stats_interval_ms",
+  ]) {
     if (!isPos(c[key])) throw new Error(`${key} must be a positive number`);
   }
   return c as BridgeConfig;

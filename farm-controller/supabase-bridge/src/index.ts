@@ -11,11 +11,16 @@
 
 import { fileURLToPath } from "url";
 import { setTimeout as sleep } from "timers/promises";
+import { performance } from "perf_hooks";
 import { createClient, type RealtimeChannel } from "@supabase/supabase-js";
-import { createMqttClient, LogOnce, TOPICS, type TypedMqttClient } from "@farm/shared";
+import { createMqttClient, extractIdFromTopic, LogOnce, TOPICS, type TypedMqttClient } from "@farm/shared";
 
 import { toRemoteCommand } from "./commands.js";
 import { loadConfig, loadEnv, type BridgeConfig, type BridgeEnv } from "./config.js";
+import { Outbox } from "./outbox.js";
+import {
+  isAlert, isAlertsCleared, isRobotStateUpdate, isRobotTelemetry, isShelfSensorData, isTopology,
+} from "./validate.js";
 
 // --- Config --------------------------------------------------
 
@@ -216,6 +221,146 @@ function joinStatusChannel() {
   });
 }
 
+// --- Outbound: mirror the farm --------------------------------
+//
+// Every row carries this farm's id: MQTT has none (one Pi, one farm).
+// Ids come from the topic, as the ingester and orchestrator take them.
+
+let outbox: Outbox;
+
+interface Sample {
+  /** Monotonic ms (performance.now); the Pi's wall clock can jump */
+  at: number;
+  status?: string;
+  node?: string | null;
+}
+const lastTelemetry = new Map<string, Sample>();
+const lastReading = new Map<string, Sample>();
+
+/** Keeps a row per interval, or at once when the robot's status or node changed */
+function due(samples: Map<string, Sample>, id: string, now: number, status?: string, node?: string | null) {
+  const last = samples.get(id);
+  const changed = last !== undefined && (last.status !== status || last.node !== node);
+  if (last && !changed && now - last.at < config.sample_interval_ms) return false;
+  samples.set(id, { at: now, status, node });
+  return true;
+}
+
+/** A malformed message logs once per topic until a valid one arrives */
+function invalid(topic: string, what: string) {
+  logs.warn(`invalid ${topic}`, `[OUT] Ignoring malformed ${what} on ${topic} (logged once until it's valid again)`);
+}
+
+function subscribeOutbound() {
+  mqtt.subscribe<unknown>(TOPICS.robot.telemetryAll, (msg, topic) => {
+    if (!isRobotTelemetry(msg)) return invalid(topic, "telemetry");
+    logs.ok(`invalid ${topic}`);
+    const id = extractIdFromTopic(topic) ?? msg.robot_id;
+    if (!due(lastTelemetry, id, performance.now(), msg.status, msg.current_node)) return;
+    outbox.add({
+      kind: "telemetry",
+      row: {
+        farm_id: env.farmId,
+        robot_id: id,
+        status: msg.status,
+        current_node: msg.current_node,
+        task_id: msg.task_id,
+        last_completed_task_id: msg.last_completed_task_id,
+        battery_pct: msg.battery_pct,
+        heading: msg.heading,
+        obstacle_cm: msg.obstacle_cm ?? null,
+        temperature_c: msg.temperature_c ?? null,
+        humidity_pct: msg.humidity_pct ?? null,
+        light_lux: msg.light_lux ?? null,
+        timestamp: msg.timestamp,
+        // The Pi's receive time: a robot's timestamp is its uptime
+        received_at: Date.now(),
+      },
+    });
+  });
+
+  mqtt.subscribe<unknown>(TOPICS.robot.stateAll, (msg, topic) => {
+    if (!isRobotStateUpdate(msg)) return invalid(topic, "robot state");
+    logs.ok(`invalid ${topic}`);
+    const id = extractIdFromTopic(topic) ?? msg.robot_id;
+    outbox.add({
+      kind: "state",
+      key: id,
+      row: {
+        farm_id: env.farmId,
+        robot_id: id,
+        status: msg.status,
+        task: msg.task,
+        expected_path: msg.expected_path,
+        timestamp: msg.timestamp,
+      },
+    });
+  });
+
+  mqtt.subscribe<unknown>(TOPICS.alerts, (msg, topic) => {
+    if (!isAlert(msg)) return invalid(topic, "alert");
+    logs.ok(`invalid ${topic}`);
+    outbox.add({
+      kind: "alert",
+      row: {
+        farm_id: env.farmId,
+        alert_id: msg.alert_id,
+        severity: msg.severity,
+        source: msg.source,
+        source_type: msg.source_type,
+        message: msg.message,
+        metric: msg.metric,
+        value: msg.value,
+        threshold: msg.threshold,
+        timestamp: msg.timestamp,
+        resolves: msg.resolves,
+      },
+    });
+  });
+
+  mqtt.subscribe<unknown>(TOPICS.alertsClear, (msg, topic) => {
+    if (!isAlertsCleared(msg)) return invalid(topic, "alert clear");
+    logs.ok(`invalid ${topic}`);
+    outbox.add({ kind: "clear" });
+    console.log("[OUT] Alerts cleared: this farm's alerts will be deleted from Supabase");
+  });
+
+  mqtt.subscribe<unknown>(TOPICS.system.topology, (msg, topic) => {
+    if (!isTopology(msg)) return invalid(topic, "topology");
+    logs.ok(`invalid ${topic}`);
+    outbox.add({ kind: "topology", key: env.farmId, row: { farm_id: env.farmId, topology: msg } });
+  });
+
+  mqtt.subscribe<unknown>(TOPICS.shelf.sensorsAll, (msg, topic) => {
+    if (!isShelfSensorData(msg)) return invalid(topic, "shelf reading");
+    logs.ok(`invalid ${topic}`);
+    const id = extractIdFromTopic(topic) ?? msg.shelf_id;
+    if (!due(lastReading, id, performance.now())) return;
+    outbox.add({
+      kind: "sensor",
+      row: {
+        farm_id: env.farmId,
+        device: id,
+        source: "supabase-bridge",
+        ts: new Date(msg.timestamp).toISOString(),
+        air_temp_c: msg.temperature_c,
+        humidity_pct: msg.humidity_pct,
+        water_temp_c: msg.water_temp_c,
+        water_level_ok: msg.water_level_ok,
+        ph: msg.ph,
+        light_lux: msg.light_lux,
+      },
+    });
+  });
+}
+
+function logStats() {
+  const stats = outbox.takeStats();
+  if (stats.size === 0) return;
+  const parts = [...stats].map(([kind, n]) => `${kind}: ${n}`).join(", ");
+  console.log(`[OUT] Sent in the last ${config.stats_interval_ms / 1000} s: ${parts} (${outbox.size} waiting)`);
+}
+
 // --- Main ----------------------------------------------------
 
 async function main() {
@@ -237,6 +382,14 @@ async function main() {
     },
     onDisconnect: () => void updatePresence(),
   });
+  outbox = new Outbox(supabase, {
+    farmId: env.farmId,
+    maxBatchRows: config.max_batch_rows,
+    maxBufferRows: config.max_buffer_rows,
+  }, logs);
+  subscribeOutbound();
+  const flushTimer = setInterval(() => void outbox.flush(), config.flush_interval_ms);
+  const statsTimer = setInterval(logStats, config.stats_interval_ms);
   joinStatusChannel();
   subscribeCommands();
   console.log("[BRIDGE] Running");
@@ -246,8 +399,15 @@ async function main() {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log("[BRIDGE] Shutting down");
-    // Leaving farm-status takes the farm offline right away
-    await Promise.race([supabase.removeAllChannels(), sleep(config.shutdown_timeout_ms)]);
+    clearInterval(flushTimer);
+    clearInterval(statsTimer);
+    // Send what's waiting, and leave farm-status (offline right away);
+    // without internet neither would ever finish
+    await Promise.race([
+      Promise.all([outbox.flush(), supabase.removeAllChannels()]),
+      sleep(config.shutdown_timeout_ms),
+    ]);
+    if (outbox.size > 0) console.warn(`[OUT] ${outbox.size} row(s) not sent before stopping`);
     await mqtt.disconnect();
     process.exit(0);
   };
