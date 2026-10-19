@@ -52,12 +52,30 @@ export function loadEnv(env: NodeJS.ProcessEnv): BridgeEnv {
   if (serviceKey.startsWith("sb_publishable_")) {
     throw new Error("SUPABASE_SERVICE_ROLE_KEY holds the publishable key; the bridge needs the secret key");
   }
+  // A legacy key is a JWT naming its role. The anon one passes the startup
+  // check (it may read farms), then every write fails
+  const role = jwtRole(serviceKey);
+  if (role !== null && role !== "service_role") {
+    throw new Error(`SUPABASE_SERVICE_ROLE_KEY is the ${role} key; the bridge needs the service_role key`);
+  }
   if (!farmId) throw new Error("FARM_ID is not set");
   if (!FARM_ID_PATTERN.test(farmId)) {
     throw new Error(`FARM_ID must be lowercase letters, digits and dashes, got "${farmId}"`);
   }
 
   return { brokerUrl: env.BROKER_URL ?? "mqtt://localhost:1883", supabaseUrl, serviceKey, farmId };
+}
+
+/** The role claim of a legacy (JWT) key, or null for anything else */
+function jwtRole(key: string): string | null {
+  const parts = key.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const role = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf-8")).role;
+    return typeof role === "string" ? role : null;
+  } catch {
+    return null;
+  }
 }
 
 const isPos = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v > 0;
