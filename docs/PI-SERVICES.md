@@ -15,6 +15,7 @@ Every service is a **systemd** unit. systemd is built into the OS, so there's no
 | Ingester | `farm-ingester` | Records telemetry and operator commands to SQLite | `/var/lib/verdant/farm_telemetry.db` |
 | Shelf bridge | `farm-shelf-bridge` | Reads the shelf sensor node over USB serial and publishes its readings ([shelf-sensors.md](shelf-sensors.md)) | `/var/lib/verdant/shelf-bridge-state.json` |
 | Alert engine | `farm-alert-engine` | Publishes an alert when a robot's or shelf's sensor reading stays out of range; optionally emails critical alerts ([farm-controller/README.md](../farm-controller/README.md#alert-engine)) | `/var/lib/verdant/alert-engine-state.json` |
+| Supabase bridge | `farm-supabase-bridge` | Relays remote commands from Supabase, mirrors farm data to it and marks the farm online for the remote dashboard ([SUPABASE-SETUP.md](SUPABASE-SETUP.md)) | — |
 | Dashboard | `farm-dashboard` | Web app on `http://farmnet.local:3000` | — |
 | Dashboard API | `farm-dashboard-api` | Serves the ingester's database to the dashboard on port 3001, read-only | reads `/var/lib/verdant/farm_telemetry.db` |
 
@@ -71,15 +72,18 @@ The services run as `farm`, which can't log in and can only write to its own fol
 
 ```bash
 sudo install -d -m 750 -o root -g farm /etc/verdant
-for f in orchestrator ingester shelf-bridge alert-engine dashboard dashboard-api; do
+for f in orchestrator ingester shelf-bridge alert-engine supabase-bridge dashboard dashboard-api; do
   sudo install -m 640 -o root -g farm /opt/verdant-os/deploy/env/$f.env.example /etc/verdant/$f.env
 done
 sudo install -m 640 -o root -g farm /opt/verdant-os/farm-controller/shelf-bridge-config.json /etc/verdant/shelf-bridge-config.json
 sudo nano /etc/verdant/dashboard.env
+sudo nano /etc/verdant/supabase-bridge.env
 sudo nano /etc/verdant/shelf-bridge-config.json
 ```
 
 In `dashboard.env`, set the Supabase values (the URL and the publishable key, never the secret key: [SUPABASE-SETUP.md](SUPABASE-SETUP.md) step 5). It needs no `OPERATOR_KEY`: on FarmNet the dashboard sends commands straight over MQTT. It has no sign-in either: a dashboard built with `NEXT_PUBLIC_MQTT_WS_URL` never asks operators to sign in and never calls Supabase Auth, so it works with no internet (sign-in is for the dashboard on Vercel, [SUPABASE-SETUP.md](SUPABASE-SETUP.md) step 6). `NEXT_PUBLIC_MQTT_WS_URL` (the broker's WebSocket listener) gives the dashboard live farm data on FarmNet; the example's `ws://192.168.4.1:9001` is right for the setup in [WIFI-SETUP.md](WIFI-SETUP.md). Set `NEXT_PUBLIC_FARM_ID` and `NEXT_PUBLIC_FARM_NAME` to this farm's row in Supabase's `farms` table ([SUPABASE-SETUP.md](SUPABASE-SETUP.md)): the dashboard shows only this farm. These are fixed when the dashboard is built, so after changing them run the deploy script, not just a restart. `NEXT_PUBLIC_DASHBOARD_API_URL` is the Dashboard API (its port is `PORT` in `dashboard-api.env`); the example is right unless you change that port. `NEXT_PUBLIC_JOG_WHILE_INITIALIZING=true` lets you take manual control of a robot that hasn't read its first tag yet (`initializing`), e.g. to drive it onto one; leave it `false` to hide manual control until then. Like the other `NEXT_PUBLIC_*` values it's fixed at build time: rerun the deploy script after changing it. The deploy script reads this file with bash, so quote any value with spaces: `NEXT_PUBLIC_FARM_NAME="North Farm"`.
+
+In `supabase-bridge.env`, set the project URL, the **secret** key and `FARM_ID` ([SUPABASE-SETUP.md](SUPABASE-SETUP.md) step 5). `FARM_ID` is this farm's row in Supabase's `farms` table, the same as `NEXT_PUBLIC_FARM_ID` in `dashboard.env`. This is the only file on the Pi with the secret key: it stays `640`, readable by the services only. Without internet the bridge keeps the farm data it can't send (up to `max_buffer_rows` in `farm-controller/supabase-bridge-config.json`) and sends it when the uplink is back.
 
 In `shelf-bridge-config.json`, set each shelf's `port` to its node's stable path (plug the Uno in, then `ls /dev/serial/by-id/`) and its pH calibration ([shelf-sensors.md](shelf-sensors.md#ph-calibration)). This copy belongs to this Pi; the repo's file is only the template, and a deploy never touches this one. The service can open serial ports through the `dialout` group (set in its unit).
 
@@ -148,7 +152,7 @@ sudo reboot
 
 After it's back:
 
-1. `systemctl status mosquitto farm-orchestrator farm-ingester farm-shelf-bridge farm-alert-engine farm-dashboard farm-dashboard-api`: all `active (running)`
+1. `systemctl status mosquitto farm-orchestrator farm-ingester farm-shelf-bridge farm-alert-engine farm-supabase-bridge farm-dashboard farm-dashboard-api`: all `active (running)`; `journalctl -u farm-supabase-bridge -n 20` shows `Farm "<id>" … found in Supabase` and `Farm online`
 2. `journalctl -u farm-orchestrator -n 20`: connected to the broker
 3. `curl -sI http://localhost:3000 | head -1`: `HTTP/1.1 200 OK`; `curl -s http://localhost:3001/health`: `{"ok":true,"database":true}`
 4. `systemctl show -p RuntimeWatchdogUSec`: `14s`
@@ -250,4 +254,7 @@ Disabling keeps the packages, so nothing is lost. Leave `avahi-daemon` (it's wha
 | Dashboard says "Disconnected" on FarmNet | Mosquitto is down or its port 9001 listener is missing ([WIFI-SETUP.md](WIFI-SETUP.md) step 5), or `NEXT_PUBLIC_MQTT_WS_URL` is wrong in `/etc/verdant/dashboard.env`; fix it and rerun the deploy script (it's fixed at build time). |
 | `farm-dashboard-api` fails with `Failed to load environment files` | `/etc/verdant/dashboard-api.env` is missing (a Pi set up before the Dashboard API): create it as in step 4 and rerun the deploy script. |
 | Dashboard shows no earlier commands; the browser console says CORS or "no command history from the Dashboard API" | Check `curl http://192.168.4.1:3001/health` from the laptop. If that works, add the address the dashboard is opened from to `CORS_ORIGINS` in `/etc/verdant/dashboard-api.env` and `sudo systemctl restart farm-dashboard-api`. `"database":false` means the ingester hasn't created its database yet (`journalctl -u farm-ingester`). |
+| Supabase bridge stops with `no row in the farms table` | `FARM_ID` in `/etc/verdant/supabase-bridge.env` has a typo, or the farm's row hasn't been added ([SUPABASE-SETUP.md](SUPABASE-SETUP.md) step 3). |
+| Supabase bridge logs `permission denied for table` or `Could not find the '…' column` | The project's tables are older than the repo's SQL files: run them again in the SQL editor, in order ([SUPABASE-SETUP.md](SUPABASE-SETUP.md) step 3). They're safe to rerun. |
+| Supabase bridge logs `Can't reach Supabase` | No internet on the uplink. It keeps the farm's data and sends it when the uplink is back; remote commands sent meanwhile older than `stale_command_ms` fail as stale instead of arriving late. |
 | Dashboard map shows "Default farm layout" | The orchestrator isn't running, or Mosquitto lost its retained messages (persistence off): restart the orchestrator. |

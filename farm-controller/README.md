@@ -255,7 +255,8 @@ npm run alert
   runs the same and sends nothing; a failed send is logged and dropped. See
   `deploy/env/alert-engine.env.example`.
 - `npm run clear-alerts` (`src/clear.ts`) publishes `farm/alerts/clear`:
-  the ingester deletes its stored alerts, this service, the orchestrator and
+  the ingester deletes its stored alerts, the Supabase bridge deletes this
+  farm's alerts in Supabase, this service, the orchestrator and
   the shelf bridge forget their open ones, and open dashboards empty their
   lists. See "Common tasks" in [docs/PI-SERVICES.md](../docs/PI-SERVICES.md).
 - Raised metrics and their last alert are saved to
@@ -264,6 +265,43 @@ npm run alert
   its alert. Hold times and cooldowns are in memory and start over.
 - Environment overrides: `BROKER_URL`, `CONFIG_PATH`, `STATE_PATH`. On the Pi
   it runs as the `farm-alert-engine` service ([docs/PI-SERVICES.md](../docs/PI-SERVICES.md)).
+
+### Supabase bridge
+
+Syncs this farm's MQTT bus with the team's Supabase project for the remote
+dashboard. One bridge per farm (Pi); every row it writes carries `FARM_ID`.
+
+```bash
+set -a; source /path/to/supabase-bridge.env; set +a   # a copy of the example, kept outside the repo
+cd farm-controller/supabase-bridge && ../../node_modules/.bin/tsx src/index.ts
+```
+
+Run it with tsx directly rather than `npm run bridge`: on Ctrl+C npm stops
+before the bridge has sent what's buffered.
+
+- Settings: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (the secret key),
+  `FARM_ID`, `BROKER_URL`, `CONFIG_PATH` (`deploy/env/supabase-bridge.env.example`).
+  It stops at startup if `FARM_ID` has no row in `farms` or the key is
+  refused, and waits if Supabase is unreachable. Tunables are in
+  `supabase-bridge-config.json`.
+- **Commands in:** follows this farm's `remote_commands` rows with Realtime and,
+  on each new row and every (re)connect, sends every `pending` row, oldest
+  first, to `farm/commands/remote`, then marks it `sent` (or `failed` with a
+  reason). Rows the orchestrator would drop, and `jog` / `connect_controller`
+  (farm network only), fail instead. Rows pending longer than
+  `stale_command_ms`, by Supabase's clock, fail as `stale`. With the broker
+  down nothing is sent; rows wait and go stale.
+- **Farm online:** tracks presence on `farm-status` under `FARM_ID` while the
+  broker is connected.
+- **Data out:** robot telemetry (one row per robot per `sample_interval_ms`,
+  plus any status or node change), robot state, alerts, alert clears, topology
+  and shelf readings (one per shelf per `sample_interval_ms`) go to the tables
+  in `web/supabase/farm_sync.sql` and `sensor_events.sql`. Rows queue in order
+  and go out every `flush_interval_ms`. Without internet they wait (up to
+  `max_buffer_rows`, telemetry and readings dropped first) and are sent when
+  it's back; a clear waits its turn behind the alerts before it. A batch
+  Supabase refuses as invalid is logged and dropped so it can't hold up the
+  rest.
 
 ### Other services
 
@@ -287,12 +325,13 @@ farm-controller/
 ├── orchestrator/        # Robot state, task queue, commands
 ├── shelf-bridge/        # Shelf sensor node (USB serial) → MQTT
 ├── alert-engine/        # Sensor readings out of range → alerts
-├── supabase-bridge/     # (to be built) Cloud sync
+├── supabase-bridge/     # MQTT ↔ Supabase: remote commands in, farm data out
 ├── dashboard-api/       # Stored data → dashboard (HTTP, read-only)
 ├── topology.json        # Farm layout (nodes + edges)
 ├── orchestrator-config.json  # Tunable orchestrator settings
 ├── shelf-bridge-config.json  # Shelf serial ports and pH calibration
 ├── alert-engine-config.json  # Alert ranges, hold time and cooldown
+├── supabase-bridge-config.json  # Sampling, flush and buffer settings
 └── package.json         # Workspace root
 ```
 

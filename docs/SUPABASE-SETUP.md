@@ -16,14 +16,14 @@ One account owns the organization, the project, its keys and its settings. Anyon
 
 ## 3. Create the tables (15 min)
 
-In **SQL Editor**, run these files from the repo, in this order (paste each, **Run**). Each is safe to run again.
+In **SQL Editor**, run these files from the repo, in this order (paste each, **Run**). Each is safe to run again, and each grants its tables' privileges: new Supabase projects no longer grant them by default, and without them every query fails with "permission denied for table".
 
 | File | Creates |
 |---|---|
 | [`web/supabase/farms.sql`](../web/supabase/farms.sql) | `farms`: one row per farm, the list the dashboard's farm picker shows. Every other table's `farm_id` must name one |
 | [`web/supabase/sensor_events.sql`](../web/supabase/sensor_events.sql) | `sensor_events`: shelf sensor readings, the dashboard's environment feed. The Supabase bridge mirrors them from `farm/shelf/+/sensors` ([shelf-sensors.md](shelf-sensors.md)). On an older project, running it again drops the retired columns (`light_ppfd`, `ph_voltage`, …) |
-| [`web/supabase/remote_commands.sql`](../web/supabase/remote_commands.sql) | `remote_commands`: commands the dashboard sends from anywhere; the bridge relays them to the farm |
-| [`web/supabase/farm_sync.sql`](../web/supabase/farm_sync.sql) | `robot_telemetry`, `robot_state`, `alerts`, `farm_topology` (what the bridge mirrors), Realtime for them, the presence rule and daily cleanup. On an older project, running it again adds `alerts.resolves` (the alert an alert resolves) |
+| [`web/supabase/remote_commands.sql`](../web/supabase/remote_commands.sql) | `remote_commands`: commands the dashboard sends from anywhere; the bridge relays them to the farm, through two functions that age commands by Supabase's clock |
+| [`web/supabase/farm_sync.sql`](../web/supabase/farm_sync.sql) | `robot_telemetry`, `robot_state`, `alerts`, `farm_topology` (what the bridge mirrors), Realtime for them, the presence rule, daily cleanup and the `updated_at` trigger. On an older project, running it again adds `alerts.resolves` (the alert an alert resolves) |
 
 Then **Table Editor** should list all seven tables, each with RLS enabled.
 
