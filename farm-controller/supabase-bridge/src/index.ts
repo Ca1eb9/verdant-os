@@ -404,7 +404,7 @@ async function main() {
     // Send what's waiting, and leave farm-status (offline right away);
     // without internet neither would ever finish
     await Promise.race([
-      Promise.all([outbox.flush(), supabase.removeAllChannels()]),
+      Promise.all([outbox.finish(), supabase.removeAllChannels()]),
       sleep(config.shutdown_timeout_ms),
     ]);
     if (outbox.size > 0) console.warn(`[OUT] ${outbox.size} row(s) not sent before stopping`);
