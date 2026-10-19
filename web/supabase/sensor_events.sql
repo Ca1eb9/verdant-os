@@ -44,6 +44,13 @@ create index if not exists sensor_events_device_idx
 
 alter table public.sensor_events enable row level security;
 
+-- Table privileges. New Supabase projects no longer grant them by default,
+-- and RLS only filters rows a role may already read: without these every
+-- query fails with "permission denied for table". The dashboard's keys only
+-- read; the secret key (the bridge, the dashboard's server) also writes.
+grant select on public.sensor_events to anon, authenticated;
+grant select, insert, update, delete on public.sensor_events to service_role;
+
 do $$
 begin
   if not exists (

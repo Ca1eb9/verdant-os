@@ -1,0 +1,10 @@
+{
+  "retry_interval_ms": 5000,
+  "stale_command_ms": 60000,
+  "shutdown_timeout_ms": 3000,
+  "sample_interval_ms": 5000,
+  "flush_interval_ms": 2000,
+  "max_batch_rows": 200,
+  "max_buffer_rows": 5000,
+  "stats_interval_ms": 60000
+}

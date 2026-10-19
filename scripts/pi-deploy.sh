@@ -10,7 +10,7 @@
 set -euo pipefail
 
 REPO=/opt/verdant-os
-SERVICES=(farm-orchestrator farm-ingester farm-shelf-bridge farm-alert-engine farm-dashboard farm-dashboard-api)
+SERVICES=(farm-orchestrator farm-ingester farm-shelf-bridge farm-alert-engine farm-supabase-bridge farm-dashboard farm-dashboard-api)
 
 if [[ $EUID -ne 0 ]]; then
   echo "Run with sudo." >&2

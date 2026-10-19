@@ -1,0 +1,31 @@
+# Supabase bridge: syncs the farm's MQTT bus with Supabase for the remote
+# dashboard. See docs/PI-SERVICES.md and docs/SUPABASE-SETUP.md.
+[Unit]
+Description=VerdantOS Supabase bridge
+# Wants, not Requires: see farm-orchestrator.service. Without internet at boot
+# it waits for Supabase rather than failing.
+After=mosquitto.service
+Wants=mosquitto.service
+StartLimitIntervalSec=0
+
+[Service]
+User=farm
+Group=farm
+WorkingDirectory=/opt/verdant-os/farm-controller/supabase-bridge
+EnvironmentFile=/etc/verdant/supabase-bridge.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /opt/verdant-os/node_modules/tsx/dist/cli.mjs src/index.ts
+Restart=always
+RestartSec=5
+# On SIGINT the service sends what's buffered and leaves Supabase (at most
+# shutdown_timeout_ms), then closes the broker connection.
+KillSignal=SIGINT
+TimeoutStopSec=10
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

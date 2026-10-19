@@ -89,6 +89,16 @@ alter table public.robot_state enable row level security;
 alter table public.alerts enable row level security;
 alter table public.farm_topology enable row level security;
 
+-- Table privileges. New Supabase projects no longer grant them by default,
+-- and RLS only filters rows a role may already read: without these every
+-- query fails with "permission denied for table". The dashboard's keys only
+-- read; the secret key (the bridge, the dashboard's server) also writes.
+grant select on public.robot_telemetry, public.robot_state, public.alerts, public.farm_topology
+  to anon, authenticated;
+grant select, insert, update, delete
+  on public.robot_telemetry, public.robot_state, public.alerts, public.farm_topology
+  to service_role;
+
 drop policy if exists "Dashboard reads" on public.robot_telemetry;
 create policy "Dashboard reads" on public.robot_telemetry for select to anon, authenticated using (true);
 drop policy if exists "Dashboard reads" on public.robot_state;
@@ -138,3 +148,23 @@ select cron.schedule('trim-alerts', '10 3 * * *',
   $$delete from public.alerts where created_at < now() - interval '90 days'$$);
 select cron.schedule('trim-remote-commands', '15 3 * * *',
   $$delete from public.remote_commands where created_at < now() - interval '30 days'$$);
+
+-- ---- updated_at -----------------------------------------------------------------
+-- robot_state and farm_topology are upserted: stamp updated_at on every
+-- update with Supabase's clock (the bridge can't send now() through the API)
+
+create or replace function public.touch_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end $$;
+
+drop trigger if exists touch_updated_at on public.robot_state;
+create trigger touch_updated_at before update on public.robot_state
+  for each row execute function public.touch_updated_at();
+drop trigger if exists touch_updated_at on public.farm_topology;
+create trigger touch_updated_at before update on public.farm_topology
+  for each row execute function public.touch_updated_at();
