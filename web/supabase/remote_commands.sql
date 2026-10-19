@@ -55,3 +55,44 @@ begin
       using (true);
   end if;
 end $$;
+
+-- ---- For the Supabase bridge ---------------------------------------------------
+-- Ages are measured with Supabase's clock (now()): neither the Pi's nor
+-- Vercel's is synced, so the bridge can't compare times itself. Only the
+-- secret key may call these.
+
+-- Fails this farm's pending commands older than p_max_age_ms instead of
+-- sending them late (e.g. queued while the farm was offline). Returns their ids.
+create or replace function public.fail_stale_remote_commands(p_farm_id text, p_max_age_ms bigint)
+returns setof uuid
+language sql
+as $$
+  update public.remote_commands
+     set status = 'failed', error = 'stale', processed_at = now()
+   where farm_id = p_farm_id
+     and status = 'pending'
+     and created_at < now() - make_interval(secs => p_max_age_ms / 1000.0)
+  returning id;
+$$;
+
+-- Marks a command sent or failed, only while it's still pending, so it's
+-- never processed twice. Returns false when it wasn't pending.
+create or replace function public.finish_remote_command(
+  p_id uuid, p_farm_id text, p_status text, p_error text default null
+)
+returns boolean
+language sql
+as $$
+  with done as (
+    update public.remote_commands
+       set status = p_status, error = p_error, processed_at = now()
+     where id = p_id and farm_id = p_farm_id and status = 'pending'
+    returning 1
+  )
+  select exists (select 1 from done);
+$$;
+
+revoke execute on function public.fail_stale_remote_commands(text, bigint) from public, anon, authenticated;
+revoke execute on function public.finish_remote_command(uuid, text, text, text) from public, anon, authenticated;
+grant execute on function public.fail_stale_remote_commands(text, bigint) to service_role;
+grant execute on function public.finish_remote_command(uuid, text, text, text) to service_role;
