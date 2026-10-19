@@ -16,6 +16,8 @@ export interface BridgeEnv {
 export interface BridgeConfig {
   /** Wait between attempts to reach Supabase */
   retry_interval_ms: number;
+  /** A remote command still pending after this long (Supabase's clock) fails as stale instead of being sent */
+  stale_command_ms: number;
 }
 
 /** Same rule as farms.id in web/supabase/farms.sql */
@@ -51,7 +53,7 @@ const isPos = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v >
 /** Throws with the reason */
 export function loadConfig(path: string): BridgeConfig {
   const c = JSON.parse(readFileSync(path, "utf-8"));
-  for (const key of ["retry_interval_ms"]) {
+  for (const key of ["retry_interval_ms", "stale_command_ms"]) {
     if (!isPos(c[key])) throw new Error(`${key} must be a positive number`);
   }
   return c as BridgeConfig;
