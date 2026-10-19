@@ -89,6 +89,16 @@ alter table public.robot_state enable row level security;
 alter table public.alerts enable row level security;
 alter table public.farm_topology enable row level security;
 
+-- Table privileges. New Supabase projects no longer grant them by default,
+-- and RLS only filters rows a role may already read: without these every
+-- query fails with "permission denied for table". The dashboard's keys only
+-- read; the secret key (the bridge, the dashboard's server) also writes.
+grant select on public.robot_telemetry, public.robot_state, public.alerts, public.farm_topology
+  to anon, authenticated;
+grant select, insert, update, delete
+  on public.robot_telemetry, public.robot_state, public.alerts, public.farm_topology
+  to service_role;
+
 drop policy if exists "Dashboard reads" on public.robot_telemetry;
 create policy "Dashboard reads" on public.robot_telemetry for select to anon, authenticated using (true);
 drop policy if exists "Dashboard reads" on public.robot_state;

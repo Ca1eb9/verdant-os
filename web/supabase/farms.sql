@@ -18,6 +18,12 @@ create table if not exists public.farms (
 
 alter table public.farms enable row level security;
 
+-- Table privileges. New Supabase projects no longer grant them by default,
+-- and RLS only filters rows a role may already read: without these every
+-- query fails with "permission denied for table". The dashboard's keys only
+-- read; the secret key (the bridge, the dashboard's server) also writes.
+grant select on public.farms to anon, authenticated, service_role;
+
 -- The dashboard lists farms with the anon key; only the SQL editor (or the
 -- secret key) adds them.
 drop policy if exists "Dashboard reads" on public.farms;

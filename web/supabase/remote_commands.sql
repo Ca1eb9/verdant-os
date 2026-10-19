@@ -30,6 +30,13 @@ create index if not exists remote_commands_robot_idx
 
 alter table public.remote_commands enable row level security;
 
+-- Table privileges. New Supabase projects no longer grant them by default,
+-- and RLS only filters rows a role may already read: without these every
+-- query fails with "permission denied for table". The dashboard's keys only
+-- read; the secret key (the bridge, the dashboard's server) also writes.
+grant select on public.remote_commands to anon, authenticated;
+grant select, insert, update, delete on public.remote_commands to service_role;
+
 -- The dashboard reads recent commands with the anon key. Inserts go through
 -- the /api/commands route with the service role key, which bypasses RLS.
 do $$
