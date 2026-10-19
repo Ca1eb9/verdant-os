@@ -19,6 +19,8 @@
     "shelf:dev": "npm -w @farm/shelf-bridge run dev",
     "api": "npm -w @farm/dashboard-api run start",
     "api:dev": "npm -w @farm/dashboard-api run dev",
+    "bridge": "npm -w @farm/supabase-bridge run start",
+    "bridge:dev": "npm -w @farm/supabase-bridge run dev",
     "typecheck": "npm run typecheck --workspaces --if-present"
   }
 }
