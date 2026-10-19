@@ -58,3 +58,48 @@ create policy "Allow public dashboard reads"
   for select
   to anon, authenticated
   using (true);
+
+-- ---- For the remote dashboard -------------------------------------------------
+-- The History page's stored readings: this farm's since p_from as one mean per
+-- shelf (device) per p_bucket_ms, newest bucket first, like the Pi's Dashboard
+-- API (GET /shelves?bucket_ms=). Buckets go by the reading's time on the Pi
+-- (ts), so rows a bridge sent late after an outage land where they were read.
+-- water_level_ok is false if any reading in the bucket was low. It runs as the
+-- caller, so it reads only what RLS already lets the dashboard read.
+
+create or replace function public.shelf_history(p_farm_id text, p_from timestamptz, p_bucket_ms bigint)
+returns table (
+  device text,
+  bucket_start bigint,
+  air_temp_c double precision,
+  humidity_pct double precision,
+  water_temp_c double precision,
+  water_level_ok boolean,
+  ph double precision,
+  light_lux double precision
+)
+language sql
+stable
+set search_path = ''
+as $$
+  select e.device,
+         (floor(extract(epoch from coalesce(e.ts, e.created_at)) * 1000 / p_bucket_ms) * p_bucket_ms)::bigint,
+         avg(e.air_temp_c)::double precision,
+         avg(e.humidity_pct)::double precision,
+         avg(e.water_temp_c)::double precision,
+         bool_and(e.water_level_ok),
+         avg(e.ph)::double precision,
+         avg(e.light_lux)::double precision
+    from public.sensor_events e
+   where e.farm_id = p_farm_id
+     and e.device is not null
+     -- created_at too, for sensor_events_farm_idx: a row is stored after it's read
+     and e.created_at >= p_from
+     and coalesce(e.ts, e.created_at) >= p_from
+     and p_bucket_ms >= 1000
+   group by 1, 2
+   order by 2 desc, 1;
+$$;
+
+revoke execute on function public.shelf_history(text, timestamptz, bigint) from public;
+grant execute on function public.shelf_history(text, timestamptz, bigint) to anon, authenticated, service_role;
