@@ -194,6 +194,27 @@ img {
   transition: border-color 180ms ease, transform 180ms ease, background 180ms ease;
 }
 
+/* our own arrow, inset from the border by the field's padding; the browser's sits tight against it */
+select.controlSelect {
+  appearance: none;
+  padding-right: 2.4rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2388a1b9' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.9rem center;
+  background-size: 0.7rem;
+}
+
+/* a locked choice (the farm picker on FarmNet) offers nothing to open */
+select.controlSelect:disabled,
+html[data-theme="light"] select.controlSelect:disabled {
+  padding-right: 0.9rem;
+  background-image: none;
+}
+
+html[data-theme="light"] select.controlSelect {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2356667a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
 .controlSelect:hover,
 .controlSelect:focus-visible {
   border-color: rgb(var(--cyan-rgb) / 0.4);
