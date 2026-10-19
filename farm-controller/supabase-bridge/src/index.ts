@@ -93,6 +93,7 @@ async function waitForFarm(): Promise<string> {
 
 let draining = false;
 let drainAgain = false;
+let drainRetry: NodeJS.Timeout | undefined;
 
 /** Runs drains one at a time; a trigger during a drain runs one more after it */
 async function drainCommands() {
@@ -108,7 +109,14 @@ async function drainCommands() {
     } while (drainAgain);
     logs.ok("commands", "[CMD] Relaying remote commands again");
   } catch (err) {
-    logs.warn("commands", `[CMD] Can't relay remote commands: ${(err as Error).message} (logged once; retried on the next reconnect or command)`);
+    logs.warn("commands", `[CMD] Can't relay remote commands: ${(err as Error).message}, retrying every ${config.retry_interval_ms} ms (logged once)`);
+    // Waiting for the next command or reconnect could leave a stop pending until it goes stale
+    if (!drainRetry && !shuttingDown) {
+      drainRetry = setTimeout(() => {
+        drainRetry = undefined;
+        void drainCommands();
+      }, config.retry_interval_ms);
+    }
   } finally {
     draining = false;
   }
@@ -401,6 +409,7 @@ async function main() {
     console.log("[BRIDGE] Shutting down");
     clearInterval(flushTimer);
     clearInterval(statsTimer);
+    clearTimeout(drainRetry);
     // Send what's waiting, and leave farm-status (offline right away);
     // without internet neither would ever finish
     await Promise.race([
