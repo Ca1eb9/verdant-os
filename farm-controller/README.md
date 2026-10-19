@@ -232,6 +232,10 @@ npm run alert
   carrying that field, so a robot's AHT20 `temperature_c` and `humidity_pct`
   use the shelf air ranges. The dashboard shows these alerts (its sensor dots
   included) and checks no ranges of its own.
+- At startup it publishes the limits it loaded (`AlertThresholds`, retained)
+  to `farm/system/alert-thresholds`, so the dashboard's History charts draw
+  them as the alert engine applies them. A config change reaches them on the
+  next restart.
 - A shelf's `water_level_ok: false` is critical. A `null` or missing reading
   raises nothing and keeps the metric's state; silence is the shelf bridge's
   and the orchestrator's to alert on.

@@ -44,6 +44,7 @@ import type {
   RobotStatus,
   RobotTelemetry,
   ShelfSensorData,
+  ThresholdLimits,
 } from "@/lib/farm/types";
 
 const RECONNECT_MS = 2_000;
@@ -130,6 +131,12 @@ async function getJson(url: string): Promise<unknown> {
   return response.json();
 }
 
+function isThresholdLimits(v: unknown): v is ThresholdLimits {
+  return isRecord(v) && typeof v.metric === "string" && v.metric.length > 0 &&
+    isNum(v.critical_min) && isNum(v.warning_min) && isNum(v.warning_max) && isNum(v.critical_max) &&
+    v.critical_min <= v.warning_min && v.warning_min < v.warning_max && v.warning_max <= v.critical_max;
+}
+
 function isShelfData(v: unknown): v is ShelfSensorData {
   return isRecord(v) && typeof v.shelf_id === "string" && v.shelf_id.length > 0 &&
     Number.isInteger(v.level) && isNumOrNull(v.temperature_c) && isNumOrNull(v.humidity_pct) &&
@@ -179,6 +186,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
   const alertListeners = new Set<(alerts: FarmAlert[]) => void>();
   const shelfListeners = new Set<(shelves: ShelfReading[]) => void>();
   const historyListeners = new Set<(readings: ShelfReading[]) => void>();
+  const thresholdListeners = new Set<(thresholds: ThresholdLimits[] | null) => void>();
   const host = (() => {
     try {
       return new URL(url).host;
@@ -198,6 +206,8 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
     reason: "Make sure this device is on the farm's Wi-Fi.",
   };
   let topology: FarmTopology | null = null;
+  /** Null until the alert engine's retained message arrives (none when it isn't running) */
+  let thresholds: ThresholdLimits[] | null = null;
   const warned = new Set<string>();
   /** Newest received first: issued_at comes from other clocks */
   let commands: CommandRecord[] = [];
@@ -302,6 +312,13 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       updateConnection();
       return;
     }
+    if (topic === TOPICS.system.alertThresholds) {
+      if (!isRecord(msg) || !Array.isArray(msg.thresholds)) return ignore(topic);
+      // a malformed metric is dropped on its own; the rest still draw
+      thresholds = msg.thresholds.filter(isThresholdLimits);
+      thresholdListeners.forEach((listener) => listener(thresholds));
+      return;
+    }
     if (topic === TOPICS.alertsClear) {
       if (!isRecord(msg) || !isNum(msg.timestamp)) return ignore(topic);
       alerts = [];
@@ -348,10 +365,10 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
   };
 
   // Connected while anything needs it: the robot list, a pending layout, the
-  // connection status, the alerts, the shelf readings or their history
+  // connection status, the alerts, the shelf readings, their history or the alert limits
   const updateConnection = () => {
     const needed = listeners.size > 0 || topologyWaiters.size > 0 || connectionListeners.size > 0 ||
-      alertListeners.size > 0 || shelfListeners.size > 0 || historyListeners.size > 0;
+      alertListeners.size > 0 || shelfListeners.size > 0 || historyListeners.size > 0 || thresholdListeners.size > 0;
     if (needed && !client) {
       connection = CONNECTING;
       client = mqtt.connect(url, { reconnectPeriod: RECONNECT_MS, connectTimeout: RECONNECT_MS * 2 });
@@ -365,7 +382,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       client.on("error", (err) => console.warn(`[local-source] ${err.message}`));
       client.subscribe([
         TOPICS.robot.telemetryAll, TOPICS.robot.stateAll, TOPICS.system.topology, TOPICS.commands.all, TOPICS.alerts,
-        TOPICS.alertsClear, TOPICS.shelf.sensorsAll,
+        TOPICS.alertsClear, TOPICS.shelf.sensorsAll, TOPICS.system.alertThresholds,
       ]);
     } else if (!needed && client) {
       client.end(true);
@@ -479,6 +496,16 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       void loadStoredHistory();
       return () => {
         historyListeners.delete(onHistory);
+        updateConnection();
+      };
+    },
+
+    subscribeThresholds(onThresholds) {
+      thresholdListeners.add(onThresholds);
+      updateConnection();
+      onThresholds(thresholds);
+      return () => {
+        thresholdListeners.delete(onThresholds);
         updateConnection();
       };
     },

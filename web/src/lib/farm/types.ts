@@ -164,6 +164,20 @@ export interface ShelfSensorData {
   timestamp: number;
 }
 
+/** One metric's alert limits, as the alert engine applies them */
+export interface ThresholdLimits {
+  metric: string;
+  warning_min: number;
+  warning_max: number;
+  critical_min: number;
+  critical_max: number;
+}
+
+/** Published (retained) by the alert engine to farm/system/alert-thresholds at startup */
+export interface AlertThresholds {
+  thresholds: ThresholdLimits[];
+}
+
 /** Published to farm/alerts by any service (orchestrator, alert engine) */
 export interface FarmAlert {
   alert_id: string;

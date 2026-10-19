@@ -335,6 +335,17 @@ export interface SensorThreshold {
   resolved_template: string;
 }
 
+/** One metric's alert limits, as the alert engine applies them */
+export type ThresholdLimits = Pick<SensorThreshold, "metric" | "warning_min" | "warning_max" | "critical_min" | "critical_max">;
+
+/**
+ * Published (retained) by the alert engine to farm/system/alert-thresholds
+ * at startup: the limits it loaded, for dashboards to draw
+ */
+export interface AlertThresholds {
+  thresholds: ThresholdLimits[];
+}
+
 /** The alert engine's config. Silence is the orchestrator's and shelf bridge's job */
 export interface AlertConfig {
   /** A reading must stay out of range this long before it raises (or escalates) an alert */

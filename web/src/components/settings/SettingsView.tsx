@@ -163,6 +163,34 @@ export function SettingsView({ account }: { account: string | null }) {
           </button>
         </Row>
 
+        <h2 className={styles.groupTitle}>Charts</h2>
+
+        <Row id="show-limit-lines" label="Alert limits" hint="Warning and critical limits on the History charts.">
+          <button
+            id="show-limit-lines"
+            type="button"
+            role="switch"
+            aria-checked={prefs.showLimitLines}
+            className={styles.switch}
+            onClick={() => setPref("showLimitLines", !prefs.showLimitLines)}
+          >
+            <span className={styles.knob} />
+          </button>
+        </Row>
+
+        <Row id="show-average-line" label="Average line" hint="The window's average on the History charts.">
+          <button
+            id="show-average-line"
+            type="button"
+            role="switch"
+            aria-checked={prefs.showAverageLine}
+            className={styles.switch}
+            onClick={() => setPref("showAverageLine", !prefs.showAverageLine)}
+          >
+            <span className={styles.knob} />
+          </button>
+        </Row>
+
         <div className={styles.footer}>
           <p className={styles.preview} aria-live="polite">
             <span className={styles.previewLabel}>Preview</span>

@@ -64,6 +64,8 @@ export const TOPICS = {
     heartbeat: (service: string) => `farm/system/${service}/heartbeat` as const,
     /** Topology updates */
     topology: "farm/system/topology" as const,
+    /** The alert engine's limits per metric (retained), so dashboards can draw them */
+    alertThresholds: "farm/system/alert-thresholds" as const,
   },
 } as const;
 

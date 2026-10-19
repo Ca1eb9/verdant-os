@@ -27,6 +27,8 @@ export const TOPICS = {
   system: {
     /** The farm layout (retained, published by the orchestrator) */
     topology: "farm/system/topology",
+    /** The alert engine's limits per metric (retained) */
+    alertThresholds: "farm/system/alert-thresholds",
   },
   /** Alerts from every service; not retained */
   alerts: "farm/alerts",
