@@ -14,7 +14,7 @@ export type Row = Record<string, unknown>;
 export type Op =
   | { kind: "telemetry" | "sensor" | "alert"; row: Row }
   /** Latest wins: a newer one with the same key replaces a queued one */
-  | { kind: "state" | "topology"; key: string; row: Row }
+  | { kind: "state" | "topology" | "thresholds"; key: string; row: Row }
   /** Delete this farm's alerts */
   | { kind: "clear" };
 
@@ -51,7 +51,7 @@ export class Outbox {
   }
 
   add(op: Op) {
-    if (op.kind === "state" || op.kind === "topology") {
+    if ("key" in op) {
       this.queue = this.queue.filter((o) => !(o.kind === op.kind && o.key === op.key));
     } else if (op.kind === "clear") {
       // Alerts still waiting would only be deleted again
@@ -186,6 +186,9 @@ export class Outbox {
         break;
       case "topology":
         result = await db.from("farm_topology").upsert(rows, { onConflict: "farm_id" });
+        break;
+      case "thresholds":
+        result = await db.from("alert_thresholds").upsert(rows, { onConflict: "farm_id" });
         break;
       case "clear":
         // Only this farm's: one project serves every farm

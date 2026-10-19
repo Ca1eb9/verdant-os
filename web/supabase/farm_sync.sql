@@ -82,21 +82,31 @@ create table if not exists public.farm_topology (
   updated_at timestamptz not null default now()
 );
 
+-- AlertThresholds from farm/system/alert-thresholds (retained): the alert
+-- engine's limits per metric, for the dashboard to draw. One row per farm.
+create table if not exists public.alert_thresholds (
+  farm_id text primary key references public.farms (id),
+  thresholds jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
 -- ---- Read access for the dashboard --------------------------------------------
 
 alter table public.robot_telemetry enable row level security;
 alter table public.robot_state enable row level security;
 alter table public.alerts enable row level security;
 alter table public.farm_topology enable row level security;
+alter table public.alert_thresholds enable row level security;
 
 -- Table privileges. New Supabase projects no longer grant them by default,
 -- and RLS only filters rows a role may already read: without these every
 -- query fails with "permission denied for table". The dashboard's keys only
 -- read; the secret key (the bridge, the dashboard's server) also writes.
-grant select on public.robot_telemetry, public.robot_state, public.alerts, public.farm_topology
+grant select
+  on public.robot_telemetry, public.robot_state, public.alerts, public.farm_topology, public.alert_thresholds
   to anon, authenticated;
 grant select, insert, update, delete
-  on public.robot_telemetry, public.robot_state, public.alerts, public.farm_topology
+  on public.robot_telemetry, public.robot_state, public.alerts, public.farm_topology, public.alert_thresholds
   to service_role;
 
 drop policy if exists "Dashboard reads" on public.robot_telemetry;
@@ -107,6 +117,8 @@ drop policy if exists "Dashboard reads" on public.alerts;
 create policy "Dashboard reads" on public.alerts for select to anon, authenticated using (true);
 drop policy if exists "Dashboard reads" on public.farm_topology;
 create policy "Dashboard reads" on public.farm_topology for select to anon, authenticated using (true);
+drop policy if exists "Dashboard reads" on public.alert_thresholds;
+create policy "Dashboard reads" on public.alert_thresholds for select to anon, authenticated using (true);
 
 -- ---- Realtime -------------------------------------------------------------------
 -- Changes the dashboard follows live (sensor_events from sensor_events.sql),
@@ -115,7 +127,8 @@ create policy "Dashboard reads" on public.farm_topology for select to anon, auth
 do $$
 declare t text;
 begin
-  foreach t in array array['robot_telemetry', 'robot_state', 'alerts', 'farm_topology', 'sensor_events', 'remote_commands'] loop
+  foreach t in array array['robot_telemetry', 'robot_state', 'alerts', 'farm_topology', 'alert_thresholds', 'sensor_events',
+                             'remote_commands'] loop
     if not exists (
       select 1 from pg_publication_tables
       where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
@@ -151,7 +164,7 @@ select cron.schedule('trim-remote-commands', '15 3 * * *',
   $$delete from public.remote_commands where created_at < now() - interval '30 days'$$);
 
 -- ---- updated_at -----------------------------------------------------------------
--- robot_state and farm_topology are upserted: stamp updated_at on every
+-- robot_state, farm_topology and alert_thresholds are upserted: stamp updated_at on every
 -- update with Supabase's clock (the bridge can't send now() through the API)
 
 create or replace function public.touch_updated_at()
@@ -169,4 +182,7 @@ create trigger touch_updated_at before update on public.robot_state
   for each row execute function public.touch_updated_at();
 drop trigger if exists touch_updated_at on public.farm_topology;
 create trigger touch_updated_at before update on public.farm_topology
+  for each row execute function public.touch_updated_at();
+drop trigger if exists touch_updated_at on public.alert_thresholds;
+create trigger touch_updated_at before update on public.alert_thresholds
   for each row execute function public.touch_updated_at();

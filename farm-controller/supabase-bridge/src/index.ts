@@ -19,7 +19,7 @@ import { toRemoteCommand } from "./commands.js";
 import { loadConfig, loadEnv, type BridgeConfig, type BridgeEnv } from "./config.js";
 import { Outbox } from "./outbox.js";
 import {
-  isAlert, isAlertsCleared, isRobotStateUpdate, isRobotTelemetry, isShelfSensorData, isTopology,
+  isAlert, isAlertsCleared, isAlertThresholds, isRobotStateUpdate, isRobotTelemetry, isShelfSensorData, isTopology,
 } from "./validate.js";
 
 // --- Config --------------------------------------------------
@@ -358,6 +358,12 @@ function subscribeOutbound() {
     if (!isTopology(msg)) return invalid(topic, "topology");
     logs.ok(`invalid ${topic}`);
     outbox.add({ kind: "topology", key: env.farmId, row: { farm_id: env.farmId, topology: msg } });
+  });
+
+  mqtt.subscribe<unknown>(TOPICS.system.alertThresholds, (msg, topic) => {
+    if (!isAlertThresholds(msg)) return invalid(topic, "alert thresholds");
+    logs.ok(`invalid ${topic}`);
+    outbox.add({ kind: "thresholds", key: env.farmId, row: { farm_id: env.farmId, thresholds: msg.thresholds } });
   });
 
   mqtt.subscribe<unknown>(TOPICS.shelf.sensorsAll, (msg, topic) => {
