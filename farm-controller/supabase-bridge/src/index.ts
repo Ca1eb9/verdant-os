@@ -13,6 +13,7 @@ import { fileURLToPath } from "url";
 import { setTimeout as sleep } from "timers/promises";
 import { performance } from "perf_hooks";
 import { createClient, type RealtimeChannel } from "@supabase/supabase-js";
+import WebSocket from "ws";
 import { createMqttClient, extractIdFromTopic, LogOnce, TOPICS, type TypedMqttClient } from "@farm/shared";
 
 import { toRemoteCommand } from "./commands.js";
@@ -44,6 +45,11 @@ try {
 const supabase = createClient(env.supabaseUrl, env.serviceKey, {
   // A server key: no user session to keep or refresh
   auth: { persistSession: false, autoRefreshToken: false },
+  // Node's own WebSocket fires no close after a failed connect, and Realtime
+  // only reconnects on a close: one failed attempt (Supabase restarting, the
+  // uplink down) left commands and presence dead until the bridge restarted
+  // (ws's constructor types differ from the DOM one supabase-js expects, not its behaviour)
+  realtime: { transport: WebSocket as unknown as typeof globalThis.WebSocket },
 });
 
 let mqtt: TypedMqttClient;
