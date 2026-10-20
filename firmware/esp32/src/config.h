@@ -82,6 +82,13 @@ constexpr int PIN_CHARGE_SENSE = 1;
 // Onboard NeoPixel (GPIO38 on DevKitC-1 v1.1 boards)
 constexpr int PIN_STATUS_LED = 38;
 
+// Drive motor encoder A / B (optional, ENCODER_ASSIST_ENABLED). Each through
+// a 10k/20k divider: the encoder runs on 5 V (docs/wiring/robot.md). GPIO15/16
+// are the 32 kHz crystal pins, free on the DevKitC (it has no such crystal).
+// Counts going the wrong way on the log (negative driving forward): swap them.
+constexpr int PIN_ENCODER_A = 15;
+constexpr int PIN_ENCODER_B = 16;
+
 // ---- RFID (PN532) ---------------------------------------------------------------
 
 constexpr uint16_t RFID_READ_TIMEOUT_MS = 30;   // max time one poll may block
