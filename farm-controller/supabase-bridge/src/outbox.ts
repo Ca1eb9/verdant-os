@@ -139,7 +139,7 @@ export class Outbox {
   private wait(batch: Op[], error: SendError) {
     this.putBack(batch);
     const reason = error.code ? `${error.message} (${error.code})` : error.message;
-    this.logs.warn("unreachable", `[OUT] Supabase can't take rows yet (${reason}), keeping them to retry (logged once)`);
+    this.logs.warn("unreachable", `[OUT] Supabase can't take ${batch[0].kind} rows yet (${reason}), keeping them and the rows behind them to retry (logged once)`);
   }
 
   /** Rows sent by kind since the last call */
