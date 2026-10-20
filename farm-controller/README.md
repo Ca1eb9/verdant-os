@@ -154,7 +154,7 @@ Times are milliseconds since 1970. Everything sorts and filters on
 
 Settings: `PORT` (3001), `DB_PATH` (`../ingester/farm_telemetry.db`) and
 `CORS_ORIGINS`, the comma-separated pages allowed to call it (default
-`http://localhost:3000`). On the Pi they're in
+`http://localhost:3000`, `npm run dev`). On the Pi they're in
 `/etc/verdant/dashboard-api.env` (`deploy/env/dashboard-api.env.example`).
 Point the dashboard at it with `NEXT_PUBLIC_DASHBOARD_API_URL`
 (`http://localhost:3001` locally).
