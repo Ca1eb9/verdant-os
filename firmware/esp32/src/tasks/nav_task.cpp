@@ -11,8 +11,10 @@
 #include "../comms/comms_json.h"
 #include "../config.h"
 #include "../drivers/battery.h"
+#include "../drivers/encoder.h"
 #include "../graph.h"
 #include "../log.h"
+#include "../nav/encoder_assist.h"
 #include "../nav/motion.h"
 #include "../nav/nav_core.h"
 #include "../nav/survival.h"
@@ -47,11 +49,13 @@ class QueueOutput : public NavOutput {
   void jog(JogDirection direction) override {
     last_jog_ms = millis();
     if (tof) tof->on_untracked_move();
+    assist.on_untracked_move();
     motion.jog(direction, last_jog_ms);
   }
   void drive(int16_t speed) override {
     last_jog_ms = millis();
     if (tof) tof->on_untracked_move();
+    assist.on_untracked_move();
     motion.drive(speed, last_jog_ms);
   }
 
@@ -60,16 +64,19 @@ class QueueOutput : public NavOutput {
         drive == EdgeDrive::Backward || drive == EdgeDrive::ElevatorBackward ? "backward"
                                                                              : "forward");
     if (tof) tof->on_edge(from, to, drive);
+    assist.on_edge(from, to, drive);
     motion.follow_edge(from, to, drive, millis());
   }
   void creep() override {
     if (tof) tof->on_creep();
+    assist.on_untracked_move();
     motion.creep(millis());
   }
 
   // Charge contact detection is the dock sequence card's.
   void start_docking() override {
     if (tof) tof->on_untracked_move();
+    assist.on_untracked_move();
     motion.start_docking(millis());
   }
 
@@ -105,6 +112,7 @@ class QueueOutput : public NavOutput {
 
  public:
   Motion motion{drive_};
+  EncoderAssist assist{ENCODER_EDGES, sizeof(ENCODER_EDGES) / sizeof(ENCODER_EDGES[0])};
 };
 
 // The status LED (README "Status LED"): colour = status, animation = the
@@ -241,6 +249,8 @@ void nav_task(void* /*param*/) {
       LOG("nav", "ToF navigation ON: set the robot down on level %u", (unsigned)TOF_BOOT_LEVEL);
     }
   }
+  // Off, or no PCNT: tags only. Not wired, it counts nothing: the same.
+  bool encoder = ENCODER_ASSIST_ENABLED && encoder_begin();
   core.set_charge_sense_always(CHARGE_SENSE_ALWAYS);
   core.begin();
 
@@ -252,6 +262,9 @@ void nav_task(void* /*param*/) {
     // than cutting the motor on a loose wire.
     bool ahead_blocked = core.reversing() ? g_obstacle_rear_flag : g_obstacle_front_flag;
     g_motor_kill_flag = survival.check(sensors.battery_ok ? sensors.battery_pct : NAN, ahead_blocked, now);
+
+    // Counts so far belong to the edge before any tag read below.
+    if (encoder) out.assist.on_counts(encoder_take_counts());
 
     // Every reading, in order, so no tag arrival is skipped. tag_seq still
     // shows an arrival whose reading was dropped from a full queue.
@@ -280,6 +293,12 @@ void nav_task(void* /*param*/) {
           out.tof->on_tag(node);
           tag_read = true;
         }
+        // What ENCODER_EDGES is measured from.
+        if (encoder) {
+          LOG("nav", "encoder: %ld counts since the last tag, at %s",
+              (long)out.assist.counts_since_tag(), GRAPH_NODES[node].id);
+        }
+        out.assist.on_tag();
       }
       core.on_tag(node, now);
     }
@@ -317,6 +336,15 @@ void nav_task(void* /*param*/) {
       LOG("nav", "ToF: front %.1f rear %.1f cm (sum %.1f), at %s", sensors.obstacle_front_cm,
           sensors.obstacle_rear_cm, sensors.obstacle_front_cm + sensors.obstacle_rear_cm,
           core.current_node() == NO_NODE ? "no node yet" : GRAPH_NODES[core.current_node()].id);
+    }
+
+    // Encoder assist: a missed tag taken as read, as if it had been.
+    NodeIndex guessed = encoder ? out.assist.check(core.status()) : NO_NODE;
+    if (guessed != NO_NODE) {
+      LOG("nav", "encoder: no tag after %ld counts (%ld expected), taking %s as read",
+          (long)out.assist.counts_since_tag(), (long)out.assist.edge_counts(),
+          GRAPH_NODES[guessed].id);
+      core.on_tag(guessed, now);
     }
 
     // Docking acts on the contact's state, not its change: a robot sent to
