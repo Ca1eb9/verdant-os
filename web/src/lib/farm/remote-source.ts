@@ -392,7 +392,11 @@ export function createRemoteSource(farmId: string): FarmDataSource {
             .limit(RECENT_SHELF_ROWS),
         ),
         rowsOf(client.from("farm_topology").select("topology").eq("farm_id", farmId).limit(1)),
-        rowsOf(client.from("alert_thresholds").select("thresholds").eq("farm_id", farmId).limit(1)),
+        // Only the chart lines: a project whose SQL predates the table still shows the farm
+        rowsOf(client.from("alert_thresholds").select("thresholds").eq("farm_id", farmId).limit(1)).catch((err) => {
+          warnOnce("thresholds", `no alert limits from Supabase (rerun web/supabase/farm_sync.sql?): ${err instanceof Error ? err.message : err}`);
+          return [];
+        }),
       ]);
       // Every robot the orchestrator knows has a robot_state row; each one's
       // newest telemetry through the (farm_id, robot_id, created_at) index. A
