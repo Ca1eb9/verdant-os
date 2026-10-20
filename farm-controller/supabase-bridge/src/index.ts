@@ -13,13 +13,14 @@ import { fileURLToPath } from "url";
 import { setTimeout as sleep } from "timers/promises";
 import { performance } from "perf_hooks";
 import { createClient, type RealtimeChannel } from "@supabase/supabase-js";
+import WebSocket from "ws";
 import { createMqttClient, extractIdFromTopic, LogOnce, TOPICS, type TypedMqttClient } from "@farm/shared";
 
 import { toRemoteCommand } from "./commands.js";
 import { loadConfig, loadEnv, type BridgeConfig, type BridgeEnv } from "./config.js";
 import { Outbox } from "./outbox.js";
 import {
-  isAlert, isAlertsCleared, isRobotStateUpdate, isRobotTelemetry, isShelfSensorData, isTopology,
+  isAlert, isAlertsCleared, isAlertThresholds, isRobotStateUpdate, isRobotTelemetry, isShelfSensorData, isTopology,
 } from "./validate.js";
 
 // --- Config --------------------------------------------------
@@ -44,6 +45,11 @@ try {
 const supabase = createClient(env.supabaseUrl, env.serviceKey, {
   // A server key: no user session to keep or refresh
   auth: { persistSession: false, autoRefreshToken: false },
+  // Node's own WebSocket fires no close after a failed connect, and Realtime
+  // only reconnects on a close: one failed attempt (Supabase restarting, the
+  // uplink down) left commands and presence dead until the bridge restarted
+  // (ws's constructor types differ from the DOM one supabase-js expects, not its behaviour)
+  realtime: { transport: WebSocket as unknown as typeof globalThis.WebSocket },
 });
 
 let mqtt: TypedMqttClient;
@@ -93,6 +99,7 @@ async function waitForFarm(): Promise<string> {
 
 let draining = false;
 let drainAgain = false;
+let drainRetry: NodeJS.Timeout | undefined;
 
 /** Runs drains one at a time; a trigger during a drain runs one more after it */
 async function drainCommands() {
@@ -108,7 +115,14 @@ async function drainCommands() {
     } while (drainAgain);
     logs.ok("commands", "[CMD] Relaying remote commands again");
   } catch (err) {
-    logs.warn("commands", `[CMD] Can't relay remote commands: ${(err as Error).message} (logged once; retried on the next reconnect or command)`);
+    logs.warn("commands", `[CMD] Can't relay remote commands: ${(err as Error).message}, retrying every ${config.retry_interval_ms} ms (logged once)`);
+    // Waiting for the next command or reconnect could leave a stop pending until it goes stale
+    if (!drainRetry && !shuttingDown) {
+      drainRetry = setTimeout(() => {
+        drainRetry = undefined;
+        void drainCommands();
+      }, config.retry_interval_ms);
+    }
   } finally {
     draining = false;
   }
@@ -188,9 +202,30 @@ function subscribeCommands() {
 
 let statusChannel: RealtimeChannel | null = null;
 let statusJoined = false;
+let presenceBusy = false;
+let presenceAgain = false;
 
-/** Tracks while the broker is connected, untracks while it isn't */
+/**
+ * Tracks while the broker is connected, untracks while it isn't. One at a
+ * time: a track and an untrack finishing out of order would leave the wrong one
+ */
 async function updatePresence() {
+  if (presenceBusy) {
+    presenceAgain = true;
+    return;
+  }
+  presenceBusy = true;
+  try {
+    do {
+      presenceAgain = false;
+      await applyPresence();
+    } while (presenceAgain);
+  } finally {
+    presenceBusy = false;
+  }
+}
+
+async function applyPresence() {
   if (!statusChannel || !statusJoined) return;
   const online = mqtt?.raw.connected ?? false;
   const result = online
@@ -331,6 +366,12 @@ function subscribeOutbound() {
     outbox.add({ kind: "topology", key: env.farmId, row: { farm_id: env.farmId, topology: msg } });
   });
 
+  mqtt.subscribe<unknown>(TOPICS.system.alertThresholds, (msg, topic) => {
+    if (!isAlertThresholds(msg)) return invalid(topic, "alert thresholds");
+    logs.ok(`invalid ${topic}`);
+    outbox.add({ kind: "thresholds", key: env.farmId, row: { farm_id: env.farmId, thresholds: msg.thresholds } });
+  });
+
   mqtt.subscribe<unknown>(TOPICS.shelf.sensorsAll, (msg, topic) => {
     if (!isShelfSensorData(msg)) return invalid(topic, "shelf reading");
     logs.ok(`invalid ${topic}`);
@@ -401,10 +442,11 @@ async function main() {
     console.log("[BRIDGE] Shutting down");
     clearInterval(flushTimer);
     clearInterval(statsTimer);
+    clearTimeout(drainRetry);
     // Send what's waiting, and leave farm-status (offline right away);
     // without internet neither would ever finish
     await Promise.race([
-      Promise.all([outbox.flush(), supabase.removeAllChannels()]),
+      Promise.all([outbox.finish(), supabase.removeAllChannels()]),
       sleep(config.shutdown_timeout_ms),
     ]);
     if (outbox.size > 0) console.warn(`[OUT] ${outbox.size} row(s) not sent before stopping`);

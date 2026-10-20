@@ -290,18 +290,21 @@ before the bridge has sent what's buffered.
   reason). Rows the orchestrator would drop, and `jog` / `connect_controller`
   (farm network only), fail instead. Rows pending longer than
   `stale_command_ms`, by Supabase's clock, fail as `stale`. With the broker
-  down nothing is sent; rows wait and go stale.
+  down nothing is sent; rows wait and go stale. If Supabase fails partway, it
+  tries again every `retry_interval_ms`.
 - **Farm online:** tracks presence on `farm-status` under `FARM_ID` while the
   broker is connected.
 - **Data out:** robot telemetry (one row per robot per `sample_interval_ms`,
-  plus any status or node change), robot state, alerts, alert clears, topology
-  and shelf readings (one per shelf per `sample_interval_ms`) go to the tables
+  plus any status or node change), robot state, alerts, alert clears, topology,
+  the alert engine's limits and shelf readings (one per shelf per `sample_interval_ms`) go to the tables
   in `web/supabase/farm_sync.sql` and `sensor_events.sql`. Rows queue in order
   and go out every `flush_interval_ms`. Without internet they wait (up to
   `max_buffer_rows`, telemetry and readings dropped first) and are sent when
-  it's back; a clear waits its turn behind the alerts before it. A batch
-  Supabase refuses as invalid is logged and dropped so it can't hold up the
-  rest.
+  it's back; a clear waits its turn behind the alerts before it. The same goes
+  for any other error that may pass (Supabase restarting or overloaded, a
+  rejected key, a missing grant). Only a row Supabase refuses as invalid
+  (a data or constraint error) is logged and dropped, alone, so it can't hold
+  up the rest.
 
 ### Other services
 

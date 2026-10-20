@@ -39,33 +39,26 @@ grant select, insert, update, delete on public.remote_commands to service_role;
 
 -- The dashboard reads recent commands with the anon key. Inserts go through
 -- the /api/commands route with the service role key, which bypasses RLS.
-do $$
-begin
-  if not exists (
-    select 1
-    from pg_policies
-    where schemaname = 'public'
-      and tablename = 'remote_commands'
-      and policyname = 'Allow dashboard command reads'
-  ) then
-    create policy "Allow dashboard command reads"
-      on public.remote_commands
-      for select
-      to anon
-      using (true);
-  end if;
-end $$;
+-- Signed-in operators read as authenticated.
+drop policy if exists "Allow dashboard command reads" on public.remote_commands;
+create policy "Allow dashboard command reads"
+  on public.remote_commands
+  for select
+  to anon, authenticated
+  using (true);
 
 -- ---- For the Supabase bridge ---------------------------------------------------
 -- Ages are measured with Supabase's clock (now()): neither the Pi's nor
 -- Vercel's is synced, so the bridge can't compare times itself. Only the
--- secret key may call these.
+-- secret key may call these. An empty search_path keeps a same-named object
+-- elsewhere from standing in for the tables (Supabase's security advisor).
 
 -- Fails this farm's pending commands older than p_max_age_ms instead of
 -- sending them late (e.g. queued while the farm was offline). Returns their ids.
 create or replace function public.fail_stale_remote_commands(p_farm_id text, p_max_age_ms bigint)
 returns setof uuid
 language sql
+set search_path = ''
 as $$
   update public.remote_commands
      set status = 'failed', error = 'stale', processed_at = now()
@@ -82,6 +75,7 @@ create or replace function public.finish_remote_command(
 )
 returns boolean
 language sql
+set search_path = ''
 as $$
   with done as (
     update public.remote_commands

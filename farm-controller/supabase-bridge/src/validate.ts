@@ -2,7 +2,7 @@
 // Payload validation — incoming MQTT JSON is untrusted until it
 // matches the shared types. Invalid messages are dropped, never
 // sent: a row Supabase refuses would hold up the rows behind it.
-// Same checks as the ingester's, plus state and topology.
+// Same checks as the ingester's, plus state, topology and thresholds.
 // ============================================================
 
 import {
@@ -12,6 +12,7 @@ import {
   type FarmAlert,
   type FarmTopology,
   type AlertsCleared,
+  type AlertThresholds,
   AlertSeverity,
   RobotStatus,
   Heading,
@@ -99,6 +100,16 @@ export function isAlert(v: unknown): v is FarmAlert {
 
 export function isAlertsCleared(v: unknown): v is AlertsCleared {
   return isObj(v) && isNum(v.timestamp);
+}
+
+export function isAlertThresholds(v: unknown): v is AlertThresholds {
+  return (
+    isObj(v) &&
+    Array.isArray(v.thresholds) &&
+    v.thresholds.every((t) =>
+      isObj(t) && isStr(t.metric) &&
+      isNum(t.warning_min) && isNum(t.warning_max) && isNum(t.critical_min) && isNum(t.critical_max))
+  );
 }
 
 /** Only its shape: the dashboard reads it as it is */

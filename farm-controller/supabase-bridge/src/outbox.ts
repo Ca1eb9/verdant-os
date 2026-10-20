@@ -14,7 +14,7 @@ export type Row = Record<string, unknown>;
 export type Op =
   | { kind: "telemetry" | "sensor" | "alert"; row: Row }
   /** Latest wins: a newer one with the same key replaces a queued one */
-  | { kind: "state" | "topology"; key: string; row: Row }
+  | { kind: "state" | "topology" | "thresholds"; key: string; row: Row }
   /** Delete this farm's alerts */
   | { kind: "clear" };
 
@@ -24,12 +24,19 @@ export interface OutboxOptions {
   maxBufferRows: number;
 }
 
-/** Postgres and PostgREST error codes: Supabase looked at the rows and refused them */
-const REFUSED = /^([0-9A-Z]{5}|PGRST\d+)$/;
+/**
+ * Postgres data and integrity errors (classes 22 and 23): the row itself is
+ * bad, so retrying can't help. Anything else may pass later and is retried: no
+ * network, Supabase restarting or overloaded (PGRST000-003, 57P03, 53300), a
+ * timeout (57014), a rejected key (PGRST301), a missing grant or column.
+ */
+const ROW_REFUSED = /^2[23][0-9A-Z]{3}$/;
+
+type SendError = { message: string; code?: string };
 
 export class Outbox {
   private queue: Op[] = [];
-  private flushing = false;
+  private running: Promise<void> | null = null;
   private sent = new Map<Op["kind"], number>();
   private droppedFull = 0;
 
@@ -44,7 +51,7 @@ export class Outbox {
   }
 
   add(op: Op) {
-    if (op.kind === "state" || op.kind === "topology") {
+    if ("key" in op) {
       this.queue = this.queue.filter((o) => !(o.kind === op.kind && o.key === op.key));
     } else if (op.kind === "clear") {
       // Alerts still waiting would only be deleted again
@@ -63,35 +70,76 @@ export class Outbox {
   }
 
   /** Sends everything queued, in order; stops at the first batch Supabase can't take yet */
-  async flush() {
-    if (this.flushing) return;
-    this.flushing = true;
-    try {
-      while (this.queue.length > 0) {
-        const batch = this.takeBatch();
-        const error = await this.send(batch);
-        if (!error) {
-          this.sent.set(batch[0].kind, (this.sent.get(batch[0].kind) ?? 0) + batch.length);
-          continue;
-        }
-        if (REFUSED.test(error.code ?? "")) {
-          // Retrying can't help, and it would hold up every row behind it
-          console.error(`[OUT] Supabase refused ${batch.length} ${batch[0].kind} row(s), dropped: ${error.message} (${error.code})`);
-          continue;
-        }
-        this.putBack(batch);
-        this.logs.warn("unreachable", `[OUT] Can't reach Supabase (${error.message}), keeping rows to retry (logged once)`);
+  flush(): Promise<void> {
+    // One at a time; a call meanwhile shares the one running
+    this.running ??= this.flushQueue().finally(() => {
+      this.running = null;
+    });
+    return this.running;
+  }
+
+  /** Waits for a flush in flight, then sends what's left (when stopping) */
+  async finish() {
+    await this.running;
+    await this.flush();
+  }
+
+  private async flushQueue() {
+    while (this.queue.length > 0) {
+      const batch = this.takeBatch();
+      const error = await this.send(batch);
+      if (!error) {
+        this.count(batch);
+        continue;
+      }
+      if (!ROW_REFUSED.test(error.code ?? "")) {
+        this.wait(batch, error);
         return;
       }
-      this.logs.ok("unreachable", "[OUT] Supabase reachable again, buffered rows sent");
-      if (this.droppedFull > 0) {
-        console.warn(`[OUT] ${this.droppedFull} row(s) were dropped while the buffer was full`);
-        this.droppedFull = 0;
-        this.logs.ok("full");
+      if (batch.length === 1) {
+        this.drop(batch[0], error);
+        continue;
       }
-    } finally {
-      this.flushing = false;
+      // One bad row refuses its whole batch: send them one by one to drop only it
+      if (!(await this.sendEach(batch))) return;
     }
+    this.logs.ok("unreachable", "[OUT] Supabase reachable again, buffered rows sent");
+    if (this.droppedFull > 0) {
+      console.warn(`[OUT] ${this.droppedFull} row(s) were dropped while the buffer was full`);
+      this.droppedFull = 0;
+      this.logs.ok("full");
+    }
+  }
+
+  /** False when Supabase stopped taking rows partway; the rest are back in the queue */
+  private async sendEach(batch: Op[]) {
+    for (let i = 0; i < batch.length; i++) {
+      const error = await this.send([batch[i]]);
+      if (!error) {
+        this.count([batch[i]]);
+      } else if (ROW_REFUSED.test(error.code ?? "")) {
+        this.drop(batch[i], error);
+      } else {
+        this.wait(batch.slice(i), error);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private count(batch: Op[]) {
+    this.sent.set(batch[0].kind, (this.sent.get(batch[0].kind) ?? 0) + batch.length);
+  }
+
+  /** Retrying can't help, and it would hold up every row behind it */
+  private drop(op: Op, error: SendError) {
+    console.error(`[OUT] Supabase refused one ${op.kind} row, dropped: ${error.message} (${error.code})`);
+  }
+
+  private wait(batch: Op[], error: SendError) {
+    this.putBack(batch);
+    const reason = error.code ? `${error.message} (${error.code})` : error.message;
+    this.logs.warn("unreachable", `[OUT] Supabase can't take ${batch[0].kind} rows yet (${reason}), keeping them and the rows behind them to retry (logged once)`);
   }
 
   /** Rows sent by kind since the last call */
@@ -117,7 +165,7 @@ export class Outbox {
     this.queue.unshift(...kept);
   }
 
-  private async send(batch: Op[]): Promise<{ message: string; code?: string } | null> {
+  private async send(batch: Op[]): Promise<SendError | null> {
     const kind = batch[0].kind;
     const rows = batch.map((op) => ("row" in op ? op.row : {}));
     const db = this.supabase;
@@ -138,6 +186,9 @@ export class Outbox {
         break;
       case "topology":
         result = await db.from("farm_topology").upsert(rows, { onConflict: "farm_id" });
+        break;
+      case "thresholds":
+        result = await db.from("alert_thresholds").upsert(rows, { onConflict: "farm_id" });
         break;
       case "clear":
         // Only this farm's: one project serves every farm

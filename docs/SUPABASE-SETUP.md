@@ -23,7 +23,7 @@ In **SQL Editor**, run these files from the repo, in this order (paste each, **R
 | [`web/supabase/farms.sql`](../web/supabase/farms.sql) | `farms`: one row per farm, the list the dashboard's farm picker shows. Every other table's `farm_id` must name one |
 | [`web/supabase/sensor_events.sql`](../web/supabase/sensor_events.sql) | `sensor_events`: shelf sensor readings, the dashboard's environment feed. The Supabase bridge mirrors them from `farm/shelf/+/sensors` ([shelf-sensors.md](shelf-sensors.md)). On an older project, running it again drops the retired columns (`light_ppfd`, `ph_voltage`, …) |
 | [`web/supabase/remote_commands.sql`](../web/supabase/remote_commands.sql) | `remote_commands`: commands the dashboard sends from anywhere; the bridge relays them to the farm, through two functions that age commands by Supabase's clock |
-| [`web/supabase/farm_sync.sql`](../web/supabase/farm_sync.sql) | `robot_telemetry`, `robot_state`, `alerts`, `farm_topology` (what the bridge mirrors), Realtime for them, the presence rule, daily cleanup and the `updated_at` trigger. On an older project, running it again adds `alerts.resolves` (the alert an alert resolves) |
+| [`web/supabase/farm_sync.sql`](../web/supabase/farm_sync.sql) | `robot_telemetry`, `robot_state`, `alerts`, `farm_topology`, `alert_thresholds` (what the bridge mirrors), Realtime for them and `sensor_events`, the presence rule, daily cleanup and the `updated_at` trigger. On an older project, running it again adds `alerts.resolves` (the alert an alert resolves) |
 
 Then **Table Editor** should list all seven tables, each with RLS enabled.
 
@@ -77,13 +77,13 @@ The password goes over HTTPS from the browser to the dashboard's server and on t
 
 ## 7. Check it
 
-1. **Table Editor**: seven tables; `farms`, `remote_commands`, `robot_telemetry` and the rest show "RLS enabled", and `farms` has a row for each farm.
-2. **Database → Publications → supabase_realtime**: `robot_telemetry`, `robot_state`, `alerts`, `farm_topology` and `remote_commands` are on.
+1. **Table Editor**: eight tables; `farms`, `remote_commands`, `robot_telemetry` and the rest show "RLS enabled", and `farms` has a row for each farm.
+2. **Database → Publications → supabase_realtime**: `robot_telemetry`, `robot_state`, `alerts`, `farm_topology`, `alert_thresholds`, `sensor_events` and `remote_commands` are on.
 3. **Integrations → Cron** (or `select jobname, schedule from cron.job;`): four `trim-*` jobs.
 4. The anon key can't write. With `URL` and `ANON` set to the project URL and the publishable key, `curl -X POST "$URL/rest/v1/farm_topology" -H "apikey: $ANON" -H "Authorization: Bearer $ANON" -H "Content-Type: application/json" -d '{"topology":{}}'` returns a row-level security error (the row is otherwise valid, so nothing else can be the reason).
 5. Once Vercel has the keys: the dashboard opens on its login page; a wrong password says so, and an operator from step 6 gets in.
 6. Signed in: the header's farm picker lists your farms, and sending a command adds a `pending` row to `remote_commands` with the selected farm's `farm_id` and the operator's email as `issued_by`.
-7. Once the bridge runs: the row turns `sent`, `robot_telemetry`, `robot_state` and `sensor_events` fill, the dashboard's environment feed loads, and the remote dashboard's pill shows **Connected**. A client with only the anon key trying to track presence on `farm-status` is refused.
+7. Once the bridge runs: the row turns `sent`, `robot_telemetry`, `robot_state`, `sensor_events` and (with the alert engine running) `alert_thresholds` fill, the dashboard's environment feed loads, and the remote dashboard's pill shows **Connected**. A client with only the anon key trying to track presence on `farm-status` is refused.
 
 ## Things to know
 
