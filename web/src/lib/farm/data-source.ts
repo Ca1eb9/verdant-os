@@ -192,8 +192,10 @@ export function setFarmDataSource(source: FarmDataSource) {
 export function selectFarm(farmId: string | null, reason = "No farm selected.") {
   if (isFarmNet()) {
     if (activeSource.mode !== "local") {
+      // An IPv6 address needs its brackets back in a URL
       const { hostname } = window.location;
-      setFarmDataSource(createLocalSource(`ws://${hostname}:${BROKER_WS_PORT}`, process.env.NEXT_PUBLIC_DASHBOARD_API_URL));
+      const host = hostname.includes(":") ? `[${hostname}]` : hostname;
+      setFarmDataSource(createLocalSource(`ws://${host}:${BROKER_WS_PORT}`, process.env.NEXT_PUBLIC_DASHBOARD_API_URL));
     }
     return;
   }
