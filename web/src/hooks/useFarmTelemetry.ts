@@ -4,32 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { getFarmDataSource, onFarmDataSourceChange, type ShelfReading } from "@/lib/farm/data-source";
 import { MOCK_DATA_ENABLED, buildLiveTelemetry } from "@/lib/mock-data";
 import { readingStorageKey } from "@/lib/stored-readings";
-import type {
-  LiveStatus,
-  SensorEventRecord,
-  SensorReading,
-  TelemetrySnapshot,
-} from "@/lib/types";
+import type { LiveStatus, SensorReading, TelemetrySnapshot } from "@/lib/types";
 
 const STALE_AFTER_MS = 10_000;
-const POLL_INTERVAL_MS = 2_000;
-
-function eventToReading(event: SensorEventRecord): SensorReading {
-  return {
-    timestamp: event.created_at ?? event.ts ?? new Date().toISOString(),
-    device: event.device,
-    airTemperature: event.air_temp_c,
-    humidity: event.humidity_pct,
-    waterTemperature: event.water_temp_c,
-    ph: event.ph,
-    waterLevelOk: event.water_level_ok,
-    lightLux: event.light_lux,
-  };
-}
 
 function shelfToReading({ data, receivedAt }: ShelfReading): SensorReading {
   return {
-    // the browser's receive time, so staleness never depends on the Pi's clock
+    // the browser's receive time (or Supabase's, for one loaded from it), so staleness never depends on the Pi's clock
     timestamp: new Date(receivedAt).toISOString(),
     device: data.shelf_id,
     airTemperature: data.temperature_c,
@@ -87,11 +68,6 @@ function storeReading(farmId: string, reading: SensorReading) {
   }
 }
 
-interface LatestSensorResponse {
-  event: SensorEventRecord | null;
-  error?: string;
-}
-
 // Keyed by farm, so a switch never shows the last farm's reading
 interface FeedState {
   farmId: string | null;
@@ -99,17 +75,13 @@ interface FeedState {
 }
 
 /**
- * The selected farm's latest environment reading: streamed from the data
- * source when it has a shelf feed (FarmNet: the newest reading of any shelf),
- * otherwise polled from the farm's newest sensor_events row. Null until the
- * farm has reported one.
+ * The selected farm's latest environment reading: the newest of any shelf,
+ * streamed from the data source (on FarmNet from MQTT, remotely from
+ * Supabase). Null until the farm has reported one.
  */
 export function useFarmTelemetry(farmId: string | null) {
   const [feed, setFeed] = useState<FeedState>({ farmId: null, reading: null });
   const [source, setSource] = useState(getFarmDataSource);
-  /** Whether the source streams shelf readings; null until it has said */
-  const [hasShelfFeed, setHasShelfFeed] = useState<boolean | null>(null);
-  const [isOnline, setIsOnline] = useState(true);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -128,7 +100,6 @@ export function useFarmTelemetry(farmId: string | null) {
   useEffect(() => {
     if (MOCK_DATA_ENABLED || !farmId) return undefined;
     return source.subscribeShelves((shelves) => {
-      setHasShelfFeed(shelves !== null);
       if (!shelves) return;
       const newest = shelves.reduce<ShelfReading | null>(
         (latest, shelf) => (!latest || shelf.receivedAt > latest.receivedAt ? shelf : latest),
@@ -145,55 +116,9 @@ export function useFarmTelemetry(farmId: string | null) {
   }, [source, farmId]);
 
   useEffect(() => {
-    const syncNetworkState = () => setIsOnline(window.navigator.onLine);
-    syncNetworkState();
-    window.addEventListener("online", syncNetworkState);
-    window.addEventListener("offline", syncNetworkState);
-    return () => {
-      window.removeEventListener("online", syncNetworkState);
-      window.removeEventListener("offline", syncNetworkState);
-    };
-  }, []);
-
-  useEffect(() => {
     const intervalId = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(intervalId);
   }, []);
-
-  useEffect(() => {
-    if (MOCK_DATA_ENABLED || !farmId || !isOnline || hasShelfFeed !== false) return undefined;
-
-    let isCancelled = false;
-
-    const fetchLatest = async () => {
-      try {
-        const response = await fetch(`/api/sensor-events/latest?farm_id=${encodeURIComponent(farmId)}`, {
-          cache: "no-store",
-        });
-        const payload = (await response.json()) as LatestSensorResponse;
-        if (isCancelled) return;
-        if (!payload.event) {
-          setFeed((current) => (current.farmId === farmId ? { ...current } : current));
-          return;
-        }
-
-        const next = eventToReading(payload.event);
-        setFeed({ farmId, reading: next });
-        storeReading(farmId, next);
-      } catch {
-        // keep the last reading; it turns stale
-        if (!isCancelled) setFeed((current) => (current.farmId === farmId ? { ...current } : current));
-      }
-    };
-
-    void fetchLatest();
-    const intervalId = window.setInterval(fetchLatest, POLL_INTERVAL_MS);
-
-    return () => {
-      isCancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [farmId, isOnline, hasShelfFeed]);
 
   const current = feed.farmId === farmId ? feed : null;
   const reading = current?.reading ?? null;

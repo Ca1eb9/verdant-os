@@ -33,19 +33,12 @@ import {
   type FarmDataSource,
   type ShelfReading,
 } from "@/lib/farm/data-source";
-import type { RobotTask, RobotView } from "@/lib/farm/robots";
+import { toRobotView, type RobotEntry, type RobotView } from "@/lib/farm/robots";
 import { TOPICS, extractIdFromTopic } from "@/lib/farm/topics";
-import type {
-  AlertSeverity,
-  FarmAlert,
-  FarmTopology,
-  RemoteCommand,
-  RobotStateUpdate,
-  RobotStatus,
-  RobotTelemetry,
-  ShelfSensorData,
-  ThresholdLimits,
-} from "@/lib/farm/types";
+import type { FarmAlert, FarmTopology, RemoteCommand, ShelfSensorData, ThresholdLimits } from "@/lib/farm/types";
+import {
+  isAlert, isCommand, isNum, isRecord, isShelfData, isStateUpdate, isTelemetry, isThresholdLimits, isTopology,
+} from "@/lib/farm/validate";
 
 const RECONNECT_MS = 2_000;
 /** Commands listed per robot: the Dashboard API returns the same */
@@ -66,120 +59,15 @@ const STORED_HISTORY_BUCKET_MS = 5 * 60_000;
 /** The Dashboard API's most: a full week for up to four shelves; with more, the oldest days drop */
 const STORED_HISTORY_LIMIT = 10_000;
 
-const STATUSES: RobotStatus[] = [
-  "idle", "en_route", "working", "returning_to_dock", "docking", "charging",
-  "stopped", "lost", "error", "manual", "initializing",
-];
-const NODE_TYPES = ["checkpoint", "elevator", "dock", "water"];
-const COMMANDS = [
-  "navigate", "return_to_dock", "stop", "resume", "cancel", "jog", "connect_controller", "charge_complete",
-];
-const SEVERITIES: AlertSeverity[] = ["info", "warning", "critical"];
-const ALERT_SOURCES = ["robot", "elevator", "shelf", "system"];
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-const isStrOrNull = (v: unknown) => v === null || typeof v === "string";
-const isOptStr = (v: unknown) => v === undefined || typeof v === "string";
-const isNumOrNull = (v: unknown) => v === null || isNum(v);
-
-function isTelemetry(v: unknown): v is RobotTelemetry {
-  return isRecord(v) &&
-    STATUSES.includes(v.status as RobotStatus) &&
-    isStrOrNull(v.current_node) &&
-    isNum(v.battery_pct) &&
-    (v.heading === null || v.heading === 0 || v.heading === 1 || v.heading === 2 || v.heading === 3);
-}
-
-function isStateUpdate(v: unknown): v is RobotStateUpdate {
-  if (!isRecord(v) || !STATUSES.includes(v.status as RobotStatus)) return false;
-  if (!Array.isArray(v.expected_path) || !v.expected_path.every((n) => typeof n === "string")) return false;
-  const t = v.task;
-  return t === null || (isRecord(t) && typeof t.task_id === "string" && typeof t.type === "string" &&
-    (t.target_node === undefined || typeof t.target_node === "string"));
-}
-
-function isTopology(v: unknown): v is FarmTopology {
-  return isRecord(v) && Array.isArray(v.nodes) && Array.isArray(v.edges) &&
-    v.nodes.every((n) => isRecord(n) && typeof n.id === "string" && isNum(n.x) && isNum(n.y) &&
-      isNum(n.z) && NODE_TYPES.includes(n.type as string)) &&
-    v.edges.every((e) => isRecord(e) && typeof e.from === "string" && typeof e.to === "string");
-}
-
-// Only the fields the history shows; the orchestrator validates the rest
-function isCommand(v: unknown): v is RemoteCommand {
-  if (!isRecord(v) || !isRecord(v.command)) return false;
-  const c = v.command;
-  return typeof v.id === "string" && typeof v.robot_id === "string" && typeof v.issued_by === "string" &&
-    isNum(v.issued_at) && COMMANDS.includes(c.command as string) && isOptStr(c.target_node) &&
-    isOptStr(c.task_id) && (c.immediate === undefined || typeof c.immediate === "boolean");
-}
-
-function isAlert(v: unknown): v is FarmAlert {
-  return isRecord(v) && typeof v.alert_id === "string" && v.alert_id.length > 0 &&
-    SEVERITIES.includes(v.severity as AlertSeverity) && typeof v.source === "string" &&
-    ALERT_SOURCES.includes(v.source_type as string) && typeof v.message === "string" &&
-    typeof v.metric === "string" && isNum(v.value) && isNum(v.threshold) && isNum(v.timestamp) &&
-    (v.resolves === null || (typeof v.resolves === "string" && v.resolves.length > 0));
-}
-
 async function getJson(url: string): Promise<unknown> {
   const response = await fetch(url, { cache: "no-store" });
   if (!response.ok) throw new Error(`${response.status} from ${url}`);
   return response.json();
 }
 
-function isThresholdLimits(v: unknown): v is ThresholdLimits {
-  return isRecord(v) && typeof v.metric === "string" && v.metric.length > 0 &&
-    isNum(v.critical_min) && isNum(v.warning_min) && isNum(v.warning_max) && isNum(v.critical_max) &&
-    v.critical_min <= v.warning_min && v.warning_min < v.warning_max && v.warning_max <= v.critical_max;
-}
-
-function isShelfData(v: unknown): v is ShelfSensorData {
-  return isRecord(v) && typeof v.shelf_id === "string" && v.shelf_id.length > 0 &&
-    Number.isInteger(v.level) && isNumOrNull(v.temperature_c) && isNumOrNull(v.humidity_pct) &&
-    isNumOrNull(v.light_lux) && isNumOrNull(v.water_temp_c) &&
-    (v.water_level_ok === null || typeof v.water_level_ok === "boolean") && isNumOrNull(v.ph) &&
-    isNum(v.timestamp);
-}
-
-interface Entry {
-  telemetry?: RobotTelemetry;
-  /** Browser receive time of the last telemetry: there's no clock sync. 0 = none yet */
-  seenAt: number;
-  state?: RobotStateUpdate;
-}
-
-/** Optional readings are dropped on their own when malformed, keeping the rest of the telemetry */
-const optNum = (v: unknown) => (isNum(v) ? v : undefined);
-
-function toView(id: string, e: Entry): RobotView {
-  const t = e.telemetry;
-  const s = e.state;
-  const task: RobotTask | null = s?.task
-    ? { id: s.task.task_id, type: s.task.type, targetNode: s.task.target_node }
-    : null;
-  return {
-    id,
-    // The robot's own status, except "lost", which only the orchestrator knows
-    status: s?.status === "lost" ? "lost" : t?.status ?? s?.status ?? "initializing",
-    currentNode: t?.current_node ?? null,
-    batteryPct: t?.battery_pct ?? 0,
-    heading: t?.heading ?? undefined,
-    lastSeen: e.seenAt,
-    expectedPath: s?.expected_path.length ? s.expected_path : undefined,
-    task,
-    temperatureC: optNum(t?.temperature_c),
-    humidityPct: optNum(t?.humidity_pct),
-    controllerConnected: typeof t?.controller_connected === "boolean" ? t.controller_connected : undefined,
-  };
-}
-
 export function createLocalSource(url: string, apiUrl?: string): FarmDataSource {
   let client: MqttClient | null = null;
-  const robots = new Map<string, Entry>();
+  const robots = new Map<string, RobotEntry>();
   const listeners = new Set<(robots: RobotView[]) => void>();
   const topologyWaiters = new Set<(topology: FarmTopology | null) => void>();
   const connectionListeners = new Set<(connection: FarmConnection) => void>();
@@ -232,7 +120,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
   };
 
   const emit = () => {
-    const list = [...robots].map(([id, e]) => toView(id, e));
+    const list = [...robots].map(([id, e]) => toRobotView(id, e));
     listeners.forEach((listener) => listener(list));
   };
 
@@ -406,7 +294,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
     subscribeRobots(onRobots) {
       listeners.add(onRobots);
       updateConnection();
-      onRobots([...robots].map(([id, e]) => toView(id, e)));
+      onRobots([...robots].map(([id, e]) => toRobotView(id, e)));
       return () => {
         listeners.delete(onRobots);
         updateConnection();

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ON_FARMNET, selectFarm } from "@/lib/farm/data-source";
+import { isFarmNet, selectFarm } from "@/lib/farm/data-source";
 import { LOCAL_FARM } from "@/lib/farms";
 import { FARMS, MOCK_DATA_ENABLED } from "@/lib/mock-data";
 import type { FarmIdentity } from "@/lib/types";
@@ -33,13 +33,10 @@ const FarmContext = createContext<FarmContextValue | null>(null);
 // whoever sets the farm up go to the console.
 const LOAD_FAILED = "Couldn't load the farms. Retrying…";
 
-function initialList(): FarmList {
-  if (MOCK_DATA_ENABLED) return { state: "ready", farms: FARMS };
-  if (!ON_FARMNET) return { state: "loading" };
+/** On FarmNet: only the Pi's own farm */
+function farmNetList(): FarmList {
   if (LOCAL_FARM) return { state: "ready", farms: [LOCAL_FARM] };
-  if (typeof window !== "undefined") {
-    console.warn("[farms] NEXT_PUBLIC_FARM_ID in /etc/verdant/dashboard.env is missing or invalid (docs/PI-SERVICES.md)");
-  }
+  console.warn("[farms] NEXT_PUBLIC_FARM_ID in /etc/verdant/dashboard.env is missing or invalid (docs/PI-SERVICES.md)");
   return { state: "unavailable", reason: "This dashboard isn't set up for a farm yet." };
 }
 
@@ -71,11 +68,19 @@ function readStoredFarmId() {
 }
 
 export function FarmProvider({ children }: { children: ReactNode }) {
-  const [list, setList] = useState<FarmList>(initialList);
+  const [list, setList] = useState<FarmList>(() => (MOCK_DATA_ENABLED ? { state: "ready", farms: FARMS } : { state: "loading" }));
   const [chosenId, setChosenId] = useState<string | null>(null);
-  const fixedList = MOCK_DATA_ENABLED || ON_FARMNET;
+  /** Null until detected in the browser, after hydration (the server can't tell) */
+  const [farmNet, setFarmNet] = useState<boolean | null>(null);
+  const fixedList = MOCK_DATA_ENABLED || farmNet !== false;
 
   useEffect(() => setChosenId(readStoredFarmId()), []);
+
+  useEffect(() => {
+    const detected = isFarmNet();
+    setFarmNet(detected);
+    if (detected && !MOCK_DATA_ENABLED) setList(farmNetList());
+  }, []);
 
   useEffect(() => {
     if (fixedList || list.state === "ready") return undefined;
@@ -113,11 +118,11 @@ export function FarmProvider({ children }: { children: ReactNode }) {
       farm,
       activeFarmId: farm?.id ?? null,
       setActiveFarmId,
-      locked: ON_FARMNET && !MOCK_DATA_ENABLED,
+      locked: farmNet === true && !MOCK_DATA_ENABLED,
       loading: list.state === "loading",
       problem,
     }),
-    [farm, farms, list.state, problem, setActiveFarmId],
+    [farm, farmNet, farms, list.state, problem, setActiveFarmId],
   );
 
   return <FarmContext.Provider value={value}>{children}</FarmContext.Provider>;

@@ -1,7 +1,10 @@
 import type { NavGraph } from "@/lib/farm/navigation";
 import { resolveNode } from "@/lib/farm/navigation";
 import type { RobotDraw } from "@/lib/farm/map/renderer";
-import type { GraphNode, GrowthStage, Heading, PlantRecord, RobotStatus, TaskType } from "@/lib/farm/types";
+import type {
+  GraphNode, GrowthStage, Heading, PlantRecord, RobotStateUpdate, RobotStatus, RobotTelemetry, TaskType,
+} from "@/lib/farm/types";
+import { isNum } from "@/lib/farm/validate";
 
 /** The orchestrator's assigned task, from farm/robot/{id}/state */
 export interface RobotTask {
@@ -31,6 +34,39 @@ export interface RobotView {
   humidityPct?: number;
   /** Its Bluetooth controller is connected (FarmNet telemetry); missing when the robot doesn't say */
   controllerConnected?: boolean;
+}
+
+/** What a data source knows of one robot */
+export interface RobotEntry {
+  telemetry?: RobotTelemetry;
+  /** Browser receive time of the last telemetry (there's no clock sync), or Supabase's created_at for one loaded from it. 0 = none yet */
+  seenAt: number;
+  state?: RobotStateUpdate;
+}
+
+/** Optional readings are dropped on their own when malformed, keeping the rest of the telemetry */
+const optNum = (v: unknown) => (isNum(v) ? v : undefined);
+
+export function toRobotView(id: string, e: RobotEntry): RobotView {
+  const t = e.telemetry;
+  const s = e.state;
+  const task: RobotTask | null = s?.task
+    ? { id: s.task.task_id, type: s.task.type, targetNode: s.task.target_node }
+    : null;
+  return {
+    id,
+    // The robot's own status, except "lost", which only the orchestrator knows
+    status: s?.status === "lost" ? "lost" : t?.status ?? s?.status ?? "initializing",
+    currentNode: t?.current_node ?? null,
+    batteryPct: t?.battery_pct ?? 0,
+    heading: t?.heading ?? undefined,
+    lastSeen: e.seenAt,
+    expectedPath: s?.expected_path.length ? s.expected_path : undefined,
+    task,
+    temperatureC: optNum(t?.temperature_c),
+    humidityPct: optNum(t?.humidity_pct),
+    controllerConnected: typeof t?.controller_connected === "boolean" ? t.controller_connected : undefined,
+  };
 }
 
 /** Same as orchestrator-config.json heartbeat_timeout_ms */

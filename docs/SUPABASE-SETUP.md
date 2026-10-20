@@ -21,7 +21,7 @@ In **SQL Editor**, run these files from the repo, in this order (paste each, **R
 | File | Creates |
 |---|---|
 | [`web/supabase/farms.sql`](../web/supabase/farms.sql) | `farms`: one row per farm, the list the dashboard's farm picker shows. Every other table's `farm_id` must name one |
-| [`web/supabase/sensor_events.sql`](../web/supabase/sensor_events.sql) | `sensor_events`: shelf sensor readings, the dashboard's environment feed. The Supabase bridge mirrors them from `farm/shelf/+/sensors` ([shelf-sensors.md](shelf-sensors.md)). On an older project, running it again drops the retired columns (`light_ppfd`, `ph_voltage`, …) |
+| [`web/supabase/sensor_events.sql`](../web/supabase/sensor_events.sql) | `sensor_events`: shelf sensor readings, the dashboard's environment feed. The Supabase bridge mirrors them from `farm/shelf/+/sensors` ([shelf-sensors.md](shelf-sensors.md)), and `shelf_history` gives the History page their means per 5 minutes. On an older project, running it again drops the retired columns (`light_ppfd`, `ph_voltage`, …) |
 | [`web/supabase/remote_commands.sql`](../web/supabase/remote_commands.sql) | `remote_commands`: commands the dashboard sends from anywhere; the bridge relays them to the farm, through two functions that age commands by Supabase's clock |
 | [`web/supabase/farm_sync.sql`](../web/supabase/farm_sync.sql) | `robot_telemetry`, `robot_state`, `alerts`, `farm_topology`, `alert_thresholds` (what the bridge mirrors), Realtime for them and `sensor_events`, the presence rule, daily cleanup and the `updated_at` trigger. On an older project, running it again adds `alerts.resolves` (the alert an alert resolves) |
 
@@ -62,7 +62,7 @@ On Vercel the dashboard asks operators to sign in (step 6), and their session au
 
 ## 6. Operator sign-in (10 min)
 
-Remotely (Vercel), every page and API route needs an operator signed in with Supabase Auth (email and password). On a farm's Pi there's no sign-in: its FarmNet build never asks and never calls Supabase Auth, so the farm keeps working offline. The dashboard uses the URL and publishable key from step 5; nothing else needs adding to Vercel.
+Remotely (Vercel), every page and API route needs an operator signed in with Supabase Auth (email and password). On a farm's Pi there's no sign-in: its build, which names its farm (`NEXT_PUBLIC_FARM_ID`), never asks and never calls Supabase Auth, so the farm keeps working offline. The dashboard uses the URL and publishable key from step 5; nothing else needs adding to Vercel.
 
 1. **Authentication → Sign In / Providers**: leave **Email** on, and turn **Allow new users to sign up** off. The publishable key is public, so with sign-ups on anyone could create an account and sign in.
 2. **Authentication → Users → Add user → Create new user**, once per operator: their email, a strong password, and **Auto Confirm User** ticked (an unconfirmed account can't sign in, and the dashboard sends no emails). Give each operator their own account; remote commands record their email as `issued_by`.
@@ -83,7 +83,7 @@ The password goes over HTTPS from the browser to the dashboard's server and on t
 4. The anon key can't write. With `URL` and `ANON` set to the project URL and the publishable key, `curl -X POST "$URL/rest/v1/farm_topology" -H "apikey: $ANON" -H "Authorization: Bearer $ANON" -H "Content-Type: application/json" -d '{"topology":{}}'` returns a row-level security error (the row is otherwise valid, so nothing else can be the reason).
 5. Once Vercel has the keys: the dashboard opens on its login page; a wrong password says so, and an operator from step 6 gets in.
 6. Signed in: the header's farm picker lists your farms, and sending a command adds a `pending` row to `remote_commands` with the selected farm's `farm_id` and the operator's email as `issued_by`.
-7. Once the bridge runs: the row turns `sent`, `robot_telemetry`, `robot_state`, `sensor_events` and (with the alert engine running) `alert_thresholds` fill, the dashboard's environment feed loads, and the remote dashboard's pill shows **Connected**. A client with only the anon key trying to track presence on `farm-status` is refused.
+7. Once the bridge runs: the row turns `sent`, `robot_telemetry`, `robot_state`, `sensor_events` and (with the alert engine running) `alert_thresholds` fill, the dashboard's environment feed loads, and the remote dashboard's pill shows **Connected**, its map shows the farm's layout and robots live, and Alerts and History fill. Stopping the bridge turns the pill to "The farm isn't online right now." within seconds. A client with only the anon key trying to track presence on `farm-status` is refused.
 
 ## Things to know
 
