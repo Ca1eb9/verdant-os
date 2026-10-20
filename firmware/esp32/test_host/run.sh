@@ -65,6 +65,11 @@ CORE_FLAGS=(-std=c++17 -Wall -Wextra -DARDUINOJSON_USE_LONG_LONG=1 -I../src -I"$
 ./out/motion_test
 ./out/survival_test
 
+# Encoder assist (a missed tag taken as read), wired to NavCore and Motion.
+"$CXX" "${CORE_FLAGS[@]}" encoder_assist_test.cpp ../src/nav/encoder_assist.cpp \
+  ../src/nav/motion.cpp "${CORE_SRC[@]:1}" ../src/graph.cpp -o out/encoder_assist_test
+./out/encoder_assist_test
+
 # Motor task rules (timed drives, the reversal ramp, the safety flags).
 "$CXX" -std=c++17 -Wall -Wextra -I../src motor_test.cpp ../src/motor/motor_core.cpp \
   -o out/motor_test

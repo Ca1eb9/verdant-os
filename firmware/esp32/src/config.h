@@ -203,6 +203,42 @@ constexpr uint32_t DEFAULT_GROW_MS = 600000;
 constexpr uint32_t DEFAULT_HARVEST_MS = 0;       // TBD: harvest isn't specified yet
 constexpr uint32_t DEFAULT_IDLE_MS = 0;
 
+// ---- Encoder assist (optional, docs/firmware-architecture.md "Encoder") ----------
+// The drive motor's encoder stands in for one missed tag: driving an edge in
+// ENCODER_EDGES, ENCODER_PASS_RATIO of its counts with no tag is taken as
+// that tag (nav/encoder_assist). Off: tags only, as without an encoder.
+// Logged at boot when on.
+constexpr bool ENCODER_ASSIST_ENABLED = false;
+constexpr float ENCODER_PASS_RATIO = 1.10f;
+// PCNT glitch filter: pulses shorter than this many 80 MHz APB cycles are
+// ignored (max 1023). 10 us; at full speed each signal changes every ~120 us.
+constexpr uint16_t ENCODER_FILTER_CYCLES = 800;
+
+// Encoder counts from one tag read to the next, per edge and direction (A->B
+// and B->A are separate entries). Counted on every edge of A and B: 2249 a
+// wheel turn on the 46.85:1 25D. Not listed, or 0: no assist on that edge.
+// TBD: measure on the farm with ENCODER_ASSIST_ENABLED on: drive each edge
+// several times without stopping and put in the average of the "counts since
+// the last tag" the log shows at its end tag (negative driving backward:
+// enter them positive).
+struct EncoderEdge {
+  const char* from;
+  const char* to;
+  int32_t counts;
+};
+constexpr EncoderEdge ENCODER_EDGES[] = {
+    {"dock-1", "cp-01", 0},     {"cp-01", "dock-1", 0},
+    {"cp-01", "water-01", 0},   {"water-01", "cp-01", 0},
+    {"water-01", "cp-02", 0},   {"cp-02", "water-01", 0},
+    {"cp-02", "elev-1-L0", 0},  {"elev-1-L0", "cp-02", 0},
+    {"elev-1-L1", "cp-11", 0},  {"cp-11", "elev-1-L1", 0},
+    {"cp-11", "water-11", 0},   {"water-11", "cp-11", 0},
+    {"water-11", "cp-12", 0},   {"cp-12", "water-11", 0},
+    {"cp-12", "cp-13", 0},      {"cp-13", "cp-12", 0},
+    {"elev-1-L2", "cp-21", 0},  {"cp-21", "elev-1-L2", 0},
+    {"cp-21", "cp-22", 0},      {"cp-22", "cp-21", 0},
+};
+
 // ---- Survival overrides -------------------------------------------------------------
 // Each level applies at or below its value. The forced return sits below the
 // orchestrator's battery_low_pct (20), so the orchestrator handles normal
