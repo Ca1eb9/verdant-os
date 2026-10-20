@@ -187,7 +187,7 @@ From a laptop:
 4. `ssh <user>@farmnet.local` — logs in
 5. `mosquitto_sub -h 192.168.4.1 -t 'farm/#' -v` — connects (needs Mosquitto clients on the laptop)
 6. `nslookup google.com 192.168.4.1` — fails, and `ping google.com` fails (no internet on FarmNet, this is correct)
-7. `http://farmnet.local:3000` — dashboard loads (once deployed)
+7. `http://farmnet.local` — dashboard loads (once deployed)
 
 ## No Ethernet? Use a USB WiFi adapter
 

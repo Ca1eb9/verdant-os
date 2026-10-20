@@ -65,6 +65,14 @@ done
 if [[ $changed -eq 1 ]]; then systemctl daemon-reload; fi
 systemctl enable --quiet "${SERVICES[@]}"
 
+# The dashboard moved from port 3000 to 80; an older dashboard-api.env still
+# allows only the :3000 origins, which no longer match.
+if grep -q '^CORS_ORIGINS=.*:3000' /etc/verdant/dashboard-api.env 2>/dev/null &&
+   ! grep -qE '^CORS_ORIGINS=(.*,)?http://farmnet\.local(,|$)' /etc/verdant/dashboard-api.env; then
+  echo "Warning: CORS_ORIGINS in /etc/verdant/dashboard-api.env lists port 3000; the dashboard is on port 80 now." >&2
+  echo "Copy the line from deploy/env/dashboard-api.env.example and restart farm-dashboard-api." >&2
+fi
+
 echo "== start"
 systemctl start "${SERVICES[@]}"
 sleep 3

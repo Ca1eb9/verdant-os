@@ -1,4 +1,4 @@
-# Dashboard: the Next.js app on http://farmnet.local:3000. See docs/PI-SERVICES.md.
+# Dashboard: the Next.js app on http://farmnet.local (port 80). See docs/PI-SERVICES.md.
 # Built by scripts/pi-deploy.sh; this only serves the build.
 [Unit]
 Description=VerdantOS dashboard
@@ -11,7 +11,10 @@ Group=farm
 WorkingDirectory=/opt/verdant-os/web
 EnvironmentFile=/etc/verdant/dashboard.env
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/node /opt/verdant-os/web/node_modules/next/dist/bin/next start -p 3000
+ExecStart=/usr/bin/node /opt/verdant-os/web/node_modules/next/dist/bin/next start -p 80
+# Port 80 lets browsers open it without a port. Binding a port below 1024
+# needs this capability, so the service doesn't have to run as root.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 Restart=always
 RestartSec=5
 TimeoutStopSec=10

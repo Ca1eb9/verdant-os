@@ -16,7 +16,7 @@ Every service is a **systemd** unit. systemd is built into the OS, so there's no
 | Shelf bridge | `farm-shelf-bridge` | Reads the shelf sensor node over USB serial and publishes its readings ([shelf-sensors.md](shelf-sensors.md)) | `/var/lib/verdant/shelf-bridge-state.json` |
 | Alert engine | `farm-alert-engine` | Publishes an alert when a robot's or shelf's sensor reading stays out of range; optionally emails critical alerts ([farm-controller/README.md](../farm-controller/README.md#alert-engine)) | `/var/lib/verdant/alert-engine-state.json` |
 | Supabase bridge | `farm-supabase-bridge` | Relays remote commands from Supabase, mirrors farm data to it and marks the farm online for the remote dashboard ([SUPABASE-SETUP.md](SUPABASE-SETUP.md)) | — |
-| Dashboard | `farm-dashboard` | Web app on `http://farmnet.local:3000` | — |
+| Dashboard | `farm-dashboard` | Web app on `http://farmnet.local` (port 80) | — |
 | Dashboard API | `farm-dashboard-api` | Serves the ingester's database to the dashboard on port 3001, read-only | reads `/var/lib/verdant/farm_telemetry.db` |
 
 Networks (set up in [WIFI-SETUP.md](WIFI-SETUP.md)):
@@ -87,7 +87,7 @@ In `supabase-bridge.env`, set the project URL, the **secret** key and `FARM_ID` 
 
 In `shelf-bridge-config.json`, set each shelf's `port` to its node's stable path (plug the Uno in, then `ls /dev/serial/by-id/`) and its pH calibration ([shelf-sensors.md](shelf-sensors.md#ph-calibration)). This copy belongs to this Pi; the repo's file is only the template, and a deploy never touches this one. The service can open serial ports through the `dialout` group (set in its unit).
 
-The orchestrator, ingester, shelf bridge and Dashboard API `.env` files work as they are (if you open the dashboard from another address, add it to `CORS_ORIGINS` in `dashboard-api.env`). So does the alert engine's; to have it email critical alerts, `sudo nano /etc/verdant/alert-engine.env` and set the three Resend values described there (an API key from [resend.com](https://resend.com), the sender and the recipients). Without them it only publishes alerts. On a Pi set up before the shelf bridge and alert engine kept state files, add the `STATE_PATH` line from each one's example to its `.env`; without it they log `Could not write` and forget open alerts on a restart.
+The orchestrator, ingester, shelf bridge and Dashboard API `.env` files work as they are (if you open the dashboard from another address, add it to `CORS_ORIGINS` in `dashboard-api.env`). So does the alert engine's; to have it email critical alerts, `sudo nano /etc/verdant/alert-engine.env` and set the three Resend values described there (an API key from [resend.com](https://resend.com), the sender and the recipients). Without them it only publishes alerts. On a Pi set up before the shelf bridge and alert engine kept state files, add the `STATE_PATH` line from each one's example to its `.env`; without it they log `Could not write` and forget open alerts on a restart. On a Pi set up while the dashboard was on port 3000, change `CORS_ORIGINS` to the example's: the dashboard is now on port 80, and a browser's origin for port 80 has no port, so the old `:3000` entries no longer match and the dashboard shows no command history. The deploy script warns while they're there. Bookmarks to `:3000` stop working too; use `http://farmnet.local`.
 
 These files are readable by root and the `farm` user only. Never copy them into the repo; it's public.
 
@@ -154,7 +154,7 @@ After it's back:
 
 1. `systemctl status mosquitto farm-orchestrator farm-ingester farm-shelf-bridge farm-alert-engine farm-supabase-bridge farm-dashboard farm-dashboard-api`: all `active (running)`; `journalctl -u farm-supabase-bridge -n 20` shows `Farm "<id>" … found in Supabase` and `Farm online`
 2. `journalctl -u farm-orchestrator -n 20`: connected to the broker
-3. `curl -sI http://localhost:3000 | head -1`: `HTTP/1.1 200 OK`; `curl -s http://localhost:3001/health`: `{"ok":true,"database":true}`
+3. `curl -sI http://localhost | head -1`: `HTTP/1.1 200 OK`; `curl -s http://localhost:3001/health`: `{"ok":true,"database":true}`
 4. `systemctl show -p RuntimeWatchdogUSec`: `14s`
 5. `vcgencmd get_throttled`: `throttled=0x0` (anything else means the power supply is too weak)
 6. `timedatectl`: `System clock synchronized: yes`
@@ -242,6 +242,8 @@ Disabling keeps the packages, so nothing is lost. Leave `avahi-daemon` (it's wha
 | `Cannot find module` after an update | The build didn't finish. A failed deploy starts the services again on what's installed, which may be half-updated. Run the deploy script again and read its output. |
 | `EROFS: read-only file system` | A service tried to write outside its allowed folders. Data belongs in `/var/lib/verdant`; set the path in its env file. |
 | Ingester fails on `better-sqlite3` | It was built for a different Node version. Rerun the deploy script (it reinstalls), and check step 1's packages are installed. |
+| `farm-dashboard` fails with `EADDRINUSE` on port 80 | Another web server (Apache, nginx, lighttpd) holds port 80: `sudo ss -ltnp 'sport = :80'` names it. Disable it (`sudo systemctl disable --now <name>`) and `sudo systemctl restart farm-dashboard`. |
+| Typing `farmnet.local` searches the web instead of opening the dashboard | Some browsers treat a bare `.local` name as a search. Type `http://farmnet.local` once; after that the address bar suggests it. |
 | Dashboard shows old content | The deploy rebuilds it; make sure the script reached `== start`. |
 | `farmnet.local` doesn't resolve over the uplink | The mDNS firewall rule (step 7) is missing. |
 | FarmNet missing after a reboot, or the uplink on the wrong radio | `wlan0` and `wlan1` swapped names. See step 4 of the USB adapter section in [WIFI-SETUP.md](WIFI-SETUP.md#no-ethernet-use-a-usb-wifi-adapter). |
