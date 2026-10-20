@@ -381,7 +381,8 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
 - **Missed tag:** if the next tag isn't read within a timeout, stop, publish
   `error` and report `error`, keeping `task_id` and the last known node. When a
   known tag is read again, publish `recovery`, re-plan from that node and
-  continue.
+  continue. With the optional encoder, one missed tag can be taken as read
+  instead (see "Encoder (optional)").
 - **Approach not finished:** the elevator or dock end wall isn't reached
   within a timeout. The robot faults the same way.
 - **Can't charge:** at `DOCK_STOP_CM` with no charger contact after a short
@@ -467,9 +468,124 @@ missed-tag timeouts. `timestamp` in payloads may be `millis()`.
 ## TBD
 
 - Missed-tag and path-blocked timeout values
+- Encoder counts for each edge (`ENCODER_EDGES`), if the encoder is used
 - ToF approach distances and speeds, and where the elevator and dock tags go
 - Battery ADC calibration curve
 - Turns (single drive motor: an edge to the side faults for now)
 - `harvest` action
 - Graph updates from the orchestrator (the only case where the robot would
   write to flash)
+
+## Encoder (optional)
+
+The Pololu 25D drive motor has a quadrature encoder on its motor shaft: 48
+counts a motor turn on every edge of its A and B signals, 2249 a wheel turn
+through the 46.85:1 gearbox. The robot doesn't need it, and navigates by tags
+either way. Wired, and with `ENCODER_ASSIST_ENABLED` on in `config.h`, it
+covers one failure: a missed tag that's the last before a stop.
+
+A tag missed mid-path is already recovered when a later path tag is read.
+The last tag before a stop has no later tag: the destination, or the
+elevator or dock tag that starts the ToF approach. Without it the robot
+drives on until the missed-tag timeout faults (`missed tag`), or until the
+end wall's obstacle stop holds it short.
+
+**What it does.** The PCNT peripheral counts the encoder in hardware
+(`drivers/encoder`); `nav/encoder_assist` keeps the count since the last tag
+read (forward positive).
+
+- Driving an edge with counts in `ENCODER_EDGES`, once the robot has driven
+  `ENCODER_PASS_RATIO` (1.10) of them with no tag, it takes the edge's end
+  tag as read and does what that tag would have made it do: stop at a
+  target (`arrived`, `task_started` as usual), start the ToF creep at the
+  elevator or dock (the ToF still stops it at the wall, and the
+  charge-contact check still applies on the dock), or carry on along the
+  path.
+- The serial log says so: `encoder: no tag after 2310 counts (2100
+  expected), taking water-01 as read`.
+- Real tags always win: each one starts the count again.
+
+**What it doesn't do.**
+
+- Steer, time or position anything, or change the MQTT contract: the Pi sees
+  the same events and telemetry as for the real tag.
+- Guess twice in a row: after a guess it waits for a real tag, and the next
+  missed tag faults as before.
+- Guess after a move it can't measure from the last tag: creeping after
+  boot, a jog or the controller's drive, docking, an elevator ride, or an
+  edge that isn't in `ENCODER_EDGES`. Only the next real tag allows it
+  again. A stop or an obstacle hold keeps the count: the robot hasn't moved.
+  So the elevator's tag on the level it drives off at is never guessed.
+- Count the wrong way round: counts against the drive direction take
+  progress off, so a swapped A and B never guesses.
+- Anything when it's off or not wired (no counts): the robot behaves exactly
+  as with tags alone.
+
+**Missed-tag timeout.** Unchanged, and still the backstop for a slipping or
+stalled wheel and an encoder that stopped counting. A guess starts the next
+edge like a tag does, which restarts the timer, so it never needs more time.
+But the guess has to come first: driving 1.10 × an edge must take less than
+`MISSED_TAG_TIMEOUT_MS`, at `CRUISE_SPEED` and at `APPROACH_SPEED` where the
+slow zone applies, or the timeout faults before the guess. Check it on the
+farm and raise the timeout if an edge is too long.
+
+**Caveats.**
+
+- **Wheel slip:** the encoder measures the motor, not the track. A wheel that
+  slips (a heavy plant, a wet track, a worn tyre) counts distance the robot
+  didn't drive, and the guess comes early.
+- **Off-centre stops:** a guessed stop is about 10% of the edge past the tag,
+  plus the stop ramp, so a target reached by a guess is off where its tag
+  would have stopped the robot. The elevator and dock creep in to the wall
+  by ToF either way.
+- **Elevator and dock:** the guess point, like the tag, must come while the
+  end wall is still more than `OBSTACLE_STOP_CM` away, or the obstacle stop
+  holds the robot first (`path_blocked`).
+- **Recalibrate** whenever the track, a tag's position, the wheel or the
+  reader changes.
+- **It masks bad tag reading.** Fix the reader's height, the speed and the
+  tag placement first. A guess in the log means a tag was missed: look into
+  it rather than rely on the encoder.
+
+**Calibration.**
+
+1. Wire the encoder (below). Set `ENCODER_ASSIST_ENABLED = true`, leave the
+   counts in `ENCODER_EDGES` at 0 (no guesses yet), flash and open the serial
+   monitor.
+2. With it on, every tag read logs `encoder: N counts since the last tag, at
+   <node>`. Drive forward over two tags: N must be positive. Negative: swap
+   `PIN_ENCODER_A` and `PIN_ENCODER_B` in `config.h`.
+3. Send navigates that drive each edge in both directions in one go: no stop,
+   jog or controller in between. Each N is the edge from the previous tag to
+   that node, in that direction (negative driving backward: enter it
+   positive).
+4. Drive each edge several times (3–5), and put the average in
+   `ENCODER_EDGES`. Runs far apart mean slip or a misread: fix that first.
+   The edges into a target, the elevator or the dock matter most.
+5. Test it: cover a target's tag and send the robot there. It should stop a
+   little past it and log the guess.
+
+**Wiring** (`docs/wiring/robot.md`). The encoder connections are optional:
+leave them off and the robot runs on tags alone.
+
+```
+ Pololu 25D motor                     Robot
+ red     motor power  -------------> DRV8871 motor output (unchanged)
+ black   motor power  -------------> DRV8871 motor output (unchanged)
+ blue    encoder Vcc  -------------> 5 V
+ green   encoder GND  -------------> GND
+ yellow  encoder A    ---[divider]--> GPIO 15 (PIN_ENCODER_A)
+ white   encoder B    ---[divider]--> GPIO 16 (PIN_ENCODER_B)
+```
+
+The encoder needs 3.5–20 V, so it runs on 5 V, and A and B swing to 5 V. The
+ESP32-S3's pins aren't 5 V tolerant, so each signal goes through its own
+divider down to 3.3 V:
+
+```
+ encoder A or B (0-5 V) ---[ 10k ]---+---> GPIO 15 or 16 (0-3.3 V)
+                                     |
+                                  [ 20k ]
+                                     |
+                                    GND
+```

@@ -28,6 +28,7 @@ The pins come from `firmware/esp32/src/config.h`; the firmware is in
 | 100 kΩ + 22 kΩ + 10 kΩ resistors | Charge contact divider, and a pull-down on pad + | **Docking only** |
 | 2× 0.1 µF ceramic capacitors | Steady the divider readings | **Optional** |
 | 0.1 µF ceramic capacitor | Across the motor's two terminals: soaks up its electrical noise | **Optional** |
+| 2× 10 kΩ + 2× 20 kΩ resistors | Bring the motor encoder's 5 V signals down to 3.3 V | **Optional**, only with the encoder wired ([Encoder](#encoder-optional)) |
 | STEMMA QT cable | Rear VL53L4CX → AHT20 | **Optional**, with the AHT20 |
 | Jumper wires; 20–22 AWG wire for the 12 V side | | |
 
@@ -49,6 +50,7 @@ optional: it's what stops a short from overheating the pack and wiring.
 | **GPIO 5 / 6** | DRV8871 IN1 / IN2 |
 | **GPIO 4** | Battery divider tap (battery voltage) |
 | **GPIO 1** | Charge contact divider tap |
+| GPIO 15 / 16 | Motor encoder A / B, each through a 10 kΩ / 20 kΩ divider (**optional**) |
 | GPIO 38 | The on-board status LED; nothing to wire |
 
 GPIO 4 and 1 are ADC1 pins, the only ones that can still read a voltage while
@@ -87,8 +89,8 @@ continues on the ESP32, and every ground symbol is the same shared ground.
   pull-downs inside the chip, so the motor stays off while the ESP32 boots.
   Its ~2 A limit also protects a jammed motor. If the robot drives the wrong
   way, swap the motor's red and black wires. The motor's other four wires are
-  an encoder the firmware doesn't use: insulate them and leave them
-  unconnected.
+  its encoder, which is optional (see [Encoder](#encoder-optional)): if you
+  don't wire it, insulate them and leave them unconnected.
 - **Capacitor across the motor (optional).** Inside a brushed motor, carbon
   brushes slide over a spinning copper ring that's split into segments; each
   time a brush crosses a gap, the current breaks for an instant, making a tiny
@@ -193,6 +195,40 @@ output sits just above the pack's voltage until the pack is nearly full.
   divider, ten times what the 100 kΩ allows. Adding the separate 10 kΩ keeps
   that at 0.1 mA.
 
+### Encoder (optional)
+
+The robot navigates by tags and runs the same without the encoder. Wired,
+and with `ENCODER_ASSIST_ENABLED` on in `config.h`, it stands in for one
+missed tag: what it does, its caveats and how to measure the edges are in
+[firmware-architecture.md](../firmware-architecture.md#encoder-optional). It
+isn't drawn in the diagrams here.
+
+```
+ Pololu 25D motor                     Robot
+ red     motor power  -------------> DRV8871 motor output (as above)
+ black   motor power  -------------> DRV8871 motor output (as above)
+ blue    encoder Vcc  -------------> 5 V (the ESP32's 5V pin)
+ green   encoder GND  -------------> GND
+ yellow  encoder A    ---[divider]--> GPIO 15
+ white   encoder B    ---[divider]--> GPIO 16
+```
+
+The encoder needs 3.5–20 V, so it runs from 5 V, and its A and B outputs
+swing to that 5 V. **The ESP32-S3's pins aren't 5 V tolerant:** never wire A
+or B straight in. Each goes through its own divider:
+
+```
+ encoder A (0-5 V) ---[ 10k ]---+---> GPIO 15 (0-3.3 V)
+                                |
+                             [ 20k ]
+                                |
+                               GND
+```
+
+`5 V × 20k / (10k + 20k) = 3.3 V`. The firmware also turns on the pin's
+pull-down, which brings a high to about 2.9 V, still well above what the pin
+reads as high, and keeps an unplugged encoder reading a steady low.
+
 ## Breadboard (3.3 V logic side)
 
 ![Robot breadboard wiring](robot-breadboard.svg)
@@ -282,6 +318,7 @@ On the bench, USB powers the ESP32 and the 5 V switch stays off. Unplug USB
 | Battery divider (+ the power side) | 5 V switch off, USB in, main switch on. With a multimeter, GPIO 4 reads 0.18 × the pack voltage, and `battery_pct` in telemetry matches the pack. Tune `BATTERY_CAL_FACTOR` if it's off. Then USB out, 5 V switch on: the converter powers the ESP32 by itself |
 | Charge contact divider | Pads on the dock: GPIO 1 reads 1.8–2.3 V; off the dock, under 0.5 V (close to 0 V with a cool diode) |
 | DRV8871 + motor | Flash the full firmware (`pio run -e esp32 -t upload`) and follow "Motor driver" in [firmware/esp32/README.md](../../firmware/esp32/README.md#motor-driver). With USB in and the 5 V switch off, switch the main switch on: the motor runs from the battery while the serial monitor stays open |
+| Encoder (optional) | Set `ENCODER_ASSIST_ENABLED` on, and drive forward over two tags: the second logs "encoder: N counts since the last tag" with N above 0. Below 0, swap `PIN_ENCODER_A` and `PIN_ENCODER_B` in `config.h`; always 0, check the dividers and the 5 V |
 
 ## Moving to the perfboard
 

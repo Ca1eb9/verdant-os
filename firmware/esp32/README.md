@@ -42,12 +42,13 @@ firmware/
 │   │   ├── nav_core.*          # Robot state machine (pure C++, host-tested)
 │   │   ├── motion.*            # Motion hooks -> DriveCommands, missed-tag faults
 │   │   ├── survival.*          # Battery thresholds, motor cutoff, obstacle events
+│   │   ├── encoder_assist.*    # Optional: encoder counts stand in for one missed tag
 │   │   └── task_context.h      # Current/kept task, stop latch, paused status
 │   ├── motor/motor_core.*      # Motor rules: timed drives, reversal ramp, safety flags
 │   ├── pad/pad_core.*          # Controller rules: stick, centre-first, buttons
 │   ├── utils/nav_helpers.*     # Dijkstra, heading, turns (match navigation.ts)
 │   ├── comms/comms_json.*      # JSON <-> struct, matches @farm/shared types
-│   ├── drivers/                # RFID reader, VL53L4CX ToF, battery ADC, AHT20, motor driver
+│   ├── drivers/                # RFID reader, VL53L4CX ToF, battery ADC, AHT20, motor driver, encoder
 │   ├── bench/bench_main.cpp    # `bench` env: test comms + sensor tasks alone
 │   ├── wifitest/               # `wifitest` env: WiFi diagnostics
 │   └── padtest/                # `padtest` env: Xbox controller pairing test
@@ -70,7 +71,7 @@ firmware/
 
 The contract with the orchestrator is [docs/firmware-architecture.md](../../docs/firmware-architecture.md); the diagrams are in [docs/state-machine.md](docs/state-machine.md). `nav/nav_core` implements it. The nav task feeds it tags, battery readings, commands and the time, and it reports through a `NavOutput`: events, and motion hooks that `nav/motion` turns into `DriveCommand`s.
 
-The robot has a single drive motor and no encoder, so it never turns: it faces `ROBOT_HEADING`, away from the dock (so it backs onto the charger), and `heading` never changes. `NavCore` works out how to drive each edge (`EdgeDrive`): forward at `CRUISE_SPEED` toward the way it faces, backward otherwise, until the next tag. On an elevator ride it stays put for `ELEVATOR_WAIT_MS` per level (consecutive elevator edges are one ride), then drives off the opposite way to how it drove on, to the elevator tag on the last level. Turns to the side are a placeholder: the robot stops with a fault. `creep` drives forward at `CREEP_SPEED` until the first tag.
+The robot has a single drive motor, so it never turns: it faces `ROBOT_HEADING`, away from the dock (so it backs onto the charger), and `heading` never changes. `NavCore` works out how to drive each edge (`EdgeDrive`): forward at `CRUISE_SPEED` toward the way it faces, backward otherwise, until the next tag. On an elevator ride it stays put for `ELEVATOR_WAIT_MS` per level (consecutive elevator edges are one ride), then drives off the opposite way to how it drove on, to the elevator tag on the last level. Turns to the side are a placeholder: the robot stops with a fault. `creep` drives forward at `CREEP_SPEED` until the first tag. The motor's encoder is optional: with `ENCODER_ASSIST_ENABLED` it stands in for one missed tag (`nav/encoder_assist`, [firmware-architecture.md](../../docs/firmware-architecture.md) "Encoder (optional)").
 
 ToF approach: while driving an edge it slows to `APPROACH_SPEED` once anything ahead is inside `SLOW_ZONE_CM`, and so does driving by hand (a jog or the controller's drive) for the rest of its pulse; a pulse started in the slow zone starts slow. After the elevator tag it creeps onto the platform until the end wall is `ELEVATOR_STOP_CM` away, and `start_docking` backs onto the dock until `DOCK_STOP_CM`. For those it lowers that side's stop distance (`Motion::stop_cm()`, written to `g_obstacle_*_stop_cm` for the sensor task), so the flag doesn't stop it at `OBSTACLE_STOP_CM`. Each elevator and dock tag must be read while the wall is still beyond `OBSTACLE_STOP_CM`. The nav loop calls `Motion::check()` every cycle and passes any fault to `NavCore::fault()`:
 
@@ -226,6 +227,7 @@ Needs g++ or clang++ (on Windows, MSYS2's `mingw-w64-ucrt-x86_64-gcc`). `run.sh`
 - the state machine (`nav_core_test.cpp`): command and sensor sequences, with every event checked to go out before its status change;
 - the motion hooks (`motion_test.cpp`): the drive commands they send, the ToF slow zone (manual driving included) and approaches, and each fault;
 - the survival overrides (`survival_test.cpp`): each battery threshold in each status, and the obstacle events;
+- the encoder assist (`encoder_assist_test.cpp`): a missed tag taken as read at a target, before the elevator and dock approaches and mid-path, once in a row, and never without counts, after a jog or on an edge with no counts;
 - the motor rules (`motor_test.cpp`): each command, the timed Drive, the reversal ramp and the safety flags;
 - the controller rules (`pad_test.cpp`): the stick's deadzone, speed and drive repeat, the centre-first rule and the buttons.
 
