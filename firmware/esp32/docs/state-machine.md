@@ -143,6 +143,12 @@ stateDiagram-v2
   `[path_blocked]` if still blocked after a timeout. In `manual` the motors
   stop the same way, and the events are sent when a jog runs into the
   obstacle.
+- **Encoder assist** (optional, `ENCODER_ASSIST_ENABLED`): in `en_route` or
+  `returning_to_dock`, a tag missed on an edge with measured encoder counts
+  is taken as read once the counts pass `ENCODER_PASS_RATIO` of them, and the
+  robot goes on exactly as on that tag. It adds no state or event. At most
+  one in a row, and none after a jog, drive or other move off a measured
+  edge until a real tag; otherwise the missed-tag fault applies as before.
 - **Telemetry** is sent every 1 s and on every status or node change, and always
   reports the current `task_id` and `last_completed_task_id`. The robot never
   reports `lost`.

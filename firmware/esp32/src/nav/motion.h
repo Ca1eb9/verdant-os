@@ -8,8 +8,10 @@
 // here: NavCore calls follow_edge() for the next edge, which restarts the
 // timer.
 //
-// Single drive motor, no encoder: the robot drives forward or backward until
-// the next tag (EdgeDrive in nav_core.h). An edge that needs a turn faults.
+// Single drive motor: the robot drives forward or backward until the next tag
+// (EdgeDrive in nav_core.h). An edge that needs a turn faults. The optional
+// encoder (nav/encoder_assist) only stands in for one missed tag, as a tag
+// read through NavCore; the missed-tag timeout here stays the backstop.
 //
 // ToF approach: driving an edge, it slows to APPROACH_SPEED once anything
 // ahead is inside SLOW_ZONE_CM (until the next edge). After the elevator or

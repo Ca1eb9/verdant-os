@@ -60,9 +60,11 @@ When sources disagree, this order wins: **code contract > design docs > timeline
 - A **stop beats a low-battery return**, the firmware's survival override
   included. Only the motor cutoff still applies to a stopped robot.
 - **Manual driving (`jog`) is local-network only.**
-- The robot **never turns**: one drive motor, no encoder. It always faces
+- The robot **never turns**: one drive motor. It always faces
   `ROBOT_HEADING` (away from the dock, so it backs onto the charger) and drives
-  backward to go the other way. An edge to the side faults.
+  backward to go the other way. An edge to the side faults. Its encoder is
+  optional and only stands in for one missed tag (`ENCODER_ASSIST_ENABLED`):
+  tags still navigate.
 - **Elevator nodes are never navigate targets.** Robots only pass through.
 - Dashboard commands on FarmNet are **never queued for a reconnect**: with the
   broker unreachable they fail, so a stop or jog can't arrive late.
