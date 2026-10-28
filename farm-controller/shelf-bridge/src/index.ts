@@ -3,7 +3,9 @@
 //
 // Reads each shelf sensor node's JSON lines over USB serial and
 // publishes them as ShelfSensorData. Reopens a port that drops
-// and alerts once when a shelf goes quiet.
+// and alerts once when a shelf goes quiet. With "lights" in its
+// config, it also switches each level's lights from where the
+// robots are (lights.ts) through that shelf node's relays.
 //
 // Run:  npx tsx src/index.ts
 // ============================================================
@@ -18,6 +20,7 @@ import {
   AlertSeverity,
   TOPICS,
   createMqttClient,
+  extractIdFromTopic,
   readStateFile,
   writeStateFile,
   type TypedMqttClient,
@@ -26,6 +29,7 @@ import {
 
 import { loadConfig, type ShelfBridgeConfig, type ShelfPort } from "./config.js";
 import { parseLine } from "./parse.js";
+import { LevelLights } from "./lights.js";
 
 // --- Config --------------------------------------------------
 
@@ -60,6 +64,8 @@ interface ShelfLink {
   silenceAlertId: string | null;
   /** Last non-reading line, so a sensor library repeating its error logs once */
   lastNodeLog: string;
+  /** The node has printed since the port opened: past its bootloader, so it reads input */
+  nodeReady: boolean;
 }
 
 const links: ShelfLink[] = config.shelves.map((shelf) => ({
@@ -73,6 +79,7 @@ const links: ShelfLink[] = config.shelves.map((shelf) => ({
   lastSeq: null,
   silenceAlertId: null,
   lastNodeLog: "",
+  nodeReady: false,
 }));
 
 let mqtt: TypedMqttClient;
@@ -82,11 +89,53 @@ const logs = new LogOnce();
 
 const tag = (link: ShelfLink) => `[${link.shelf.shelf_id}]`;
 
+// --- Level lights --------------------------------------------
+
+const lights = config.lights ? new LevelLights(config.lights) : null;
+const lightsLink = config.lights ? links.find((l) => l.shelf.shelf_id === config.lights!.shelf_id)! : null;
+/** The line the node last accepted from us; null resends the next one */
+let lightsSent: string | null = null;
+/**
+ * Off while the broker is unreachable: robots can't be heard, so rather than
+ * time them out and switch their levels off, it stops sending and the node
+ * turns every light on after its LIGHTS_TIMEOUT_MS
+ */
+let brokerConnected = true;
+
+/**
+ * Sends the lights line when it changed, or always with `refresh`: each
+ * reading refreshes it, so a line lost or a node that reset (it starts with
+ * every light on) is put right within one report.
+ */
+function sendLights(refresh = false) {
+  if (!lights || !lightsLink || !brokerConnected) return;
+  const command = lights.command(performance.now());
+  // No topology yet: the node keeps every light on
+  if (!command || (!refresh && command.line === lightsSent)) return;
+  const { line, on } = command;
+  const port = lightsLink.port;
+  if (!port?.isOpen || !lightsLink.nodeReady) return;
+  if (line !== lightsSent) console.log(`[LIGHTS] ${on.length ? `level ${on.join(", ")} on` : "all off"} (${line})`);
+  lightsSent = line;
+  port.write(`${line}\n`, (err) => {
+    if (err) {
+      logs.warn("lights write", `[LIGHTS] can't write to ${lightsLink.shelf.port}: ${err.message}`);
+      lightsSent = null;
+    } else {
+      logs.ok("lights write");
+    }
+  });
+}
+
 // --- Lines ---------------------------------------------------
 
 function onLine(link: ShelfLink, raw: string) {
   const line = raw.trim();
   if (!line) return;
+  if (!link.nodeReady) {
+    link.nodeReady = true;
+    if (link === lightsLink) sendLights(true);
+  }
   // Readings are JSON objects; anything else is the node's '#' logs, a sensor
   // library's own error prints, or boot noise
   if (!line.startsWith("{")) {
@@ -134,6 +183,7 @@ function onLine(link: ShelfLink, raw: string) {
   link.lastReadingAt = now;
 
   mqtt.publish(TOPICS.shelf.sensors(link.shelf.shelf_id), reading.data);
+  if (link === lightsLink) sendLights(true);
 }
 
 function onData(link: ShelfLink, chunk: Buffer) {
@@ -174,6 +224,9 @@ function openPort(link: ShelfLink) {
   link.port = port;
   link.buffer = "";
   link.lastNodeLog = "";
+  // Opening resets an Uno: it reads nothing until its bootloader is done
+  link.nodeReady = false;
+  if (link === lightsLink) lightsSent = null;
   // Set before open() so the silence check never sees an open port with a stale time
   link.openedAt = performance.now();
 
@@ -258,6 +311,12 @@ async function main() {
   mqtt = await createMqttClient({
     serviceName: "shelf-bridge",
     brokerUrl: BROKER_URL,
+    onConnect: () => {
+      brokerConnected = true;
+    },
+    onDisconnect: () => {
+      brokerConnected = false;
+    },
   });
 
   console.log(`[SHELF] Shelf bridge running`);
@@ -278,6 +337,37 @@ async function main() {
     console.log("[SHELF] Alerts cleared");
   });
   setInterval(checkSilence, config.watchdog_interval_ms);
+
+  if (lights && config.lights) {
+    console.log(`[LIGHTS]  levels ${config.lights.levels.join(", ")} by ${config.lights.shelf_id}'s relays`);
+    mqtt.subscribe<unknown>(TOPICS.system.topology, (msg) => {
+      if (!lights.setTopology(msg)) {
+        logs.warn("lights topology", "[LIGHTS] ignored an invalid topology; lights keep the last one");
+        return;
+      }
+      logs.ok("lights topology");
+      console.log("[LIGHTS] topology loaded");
+      sendLights();
+    });
+    mqtt.subscribe<unknown>(TOPICS.robot.telemetryAll, (msg, topic) => {
+      const robotId = extractIdFromTopic(topic);
+      if (!robotId) return;
+      if (!lights.onTelemetry(robotId, msg, performance.now())) {
+        logs.warn(`lights telemetry ${robotId}`, `[LIGHTS] ignoring invalid telemetry from ${robotId}`);
+        return;
+      }
+      logs.ok(`lights telemetry ${robotId}`);
+      sendLights();
+    });
+    mqtt.subscribe<unknown>(TOPICS.robot.stateAll, (msg, topic) => {
+      const robotId = extractIdFromTopic(topic);
+      if (!robotId) return;
+      lights.onState(robotId, msg);
+      sendLights();
+    });
+    // A robot that goes silent stops lighting its level
+    setInterval(() => sendLights(), config.watchdog_interval_ms);
+  }
 
   const shutdown = async () => {
     shuttingDown = true;

@@ -206,13 +206,18 @@ npm run shelf
 ```
 
 - Settings load from `shelf-bridge-config.json`: one entry per node with its
-  serial port, shelf id, level and pH calibration. On the Pi, prefer the
+  serial port, shelf id, level and pH calibration, and the optional `lights`. On the Pi, prefer the
   `/dev/serial/by-id/...` path over `/dev/ttyACM0`.
 - An unplugged node is reopened automatically; a shelf with no readings for
   `silence_timeout_ms` raises one alert on `farm/alerts`, and its next reading
   publishes an info alert resolving it. Open silence alerts are saved to
   `farm-controller/shelf-bridge-state.json` (gitignored), so this works across
   a restart or reboot.
+- With `lights` in its config it also switches each level's grow lights,
+  through relays on one shelf's node: a level is lit while a robot is on it.
+  It follows robot telemetry (`farm/robot/+/telemetry`), the orchestrator's
+  retained topology and robot state (for the target of an elevator ride);
+  see "Level lights" in [docs/shelf-sensors.md](../docs/shelf-sensors.md#level-lights).
 - Environment overrides: `BROKER_URL`, `CONFIG_PATH`, `STATE_PATH`. On the Pi
   it runs as the `farm-shelf-bridge` service with its config in `/etc/verdant/`
   ([docs/PI-SERVICES.md](../docs/PI-SERVICES.md)); by hand, your user needs to

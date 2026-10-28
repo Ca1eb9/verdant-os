@@ -11,6 +11,16 @@ export interface ShelfPort {
   ph_mv_per_unit: number;
 }
 
+/** The level lights, switched by relays on one shelf's node (docs/shelf-sensors.md "Level lights") */
+export interface LevelLightsConfig {
+  /** The shelf whose node has the relays */
+  shelf_id: string;
+  /** Level lit by each relay channel, in channel order (the node's PIN_LIGHT_RELAY) */
+  levels: number[];
+  /** A robot with no telemetry this long no longer lights its level */
+  robot_timeout_ms: number;
+}
+
 export interface ShelfBridgeConfig {
   baud: number;
   reopen_interval_ms: number;
@@ -20,6 +30,8 @@ export interface ShelfBridgeConfig {
   /** Longer lines are dropped (noise, or a node not running shelf firmware) */
   max_line_length: number;
   shelves: ShelfPort[];
+  /** Omitted: no level lights */
+  lights?: LevelLightsConfig;
 }
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -52,5 +64,19 @@ export function loadConfig(path: string): ShelfBridgeConfig {
   const ports = c.shelves.map((s: ShelfPort) => s.port);
   if (new Set(ids).size !== ids.length) throw new Error("shelf_id values must be unique");
   if (new Set(ports).size !== ports.length) throw new Error("port values must be unique");
+  if (c.lights !== undefined) checkLights(c.lights, ids);
   return c as ShelfBridgeConfig;
+}
+
+function checkLights(v: unknown, shelfIds: string[]) {
+  if (typeof v !== "object" || v === null) throw new Error("lights must be an object");
+  const l = v as Record<string, unknown>;
+  if (!isStr(l.shelf_id) || !shelfIds.includes(l.shelf_id)) {
+    throw new Error("lights.shelf_id must be one of the shelves");
+  }
+  if (!Array.isArray(l.levels) || l.levels.length === 0 || !l.levels.every((n) => Number.isInteger(n))) {
+    throw new Error("lights.levels must be a non-empty array of levels");
+  }
+  if (new Set(l.levels).size !== l.levels.length) throw new Error("lights.levels values must be unique");
+  if (!isPos(l.robot_timeout_ms)) throw new Error("lights.robot_timeout_ms must be a positive number");
 }
