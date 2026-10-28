@@ -5,7 +5,8 @@
 // report they are. A robot lights the level of the last tag it
 // read; riding the elevator, it also lights the level it's
 // riding to, so that level is lit when it drives off. A robot
-// parked on the dock, or silent, lights nothing.
+// parked on the dock (not driving off it), or silent, lights
+// nothing.
 //
 // The robot doesn't report its path, so the ride's end comes
 // from the same shortest path the robot computes on board
@@ -48,7 +49,8 @@ function isEdge(v: unknown): v is GraphEdge {
 
 export class LevelLights {
   private graph: NavGraph | null = null;
-  private docks: string[] = [];
+  /** The first dock, as on the robot (GRAPH_DOCK), the simulator and the scheduler */
+  private dock: string | null = null;
   private robots = new Map<string, RobotSeen>();
   /** Targets that arrived before the robot's first telemetry */
   private targets = new Map<string, string | null>();
@@ -62,12 +64,8 @@ export class LevelLights {
       return false;
     }
     this.graph = buildGraph(raw as unknown as FarmTopology);
-    this.docks = (raw.nodes as GraphNode[]).filter((n) => n.type === "dock").map((n) => n.id);
+    this.dock = (raw.nodes as GraphNode[]).find((n) => n.type === "dock")?.id ?? null;
     return true;
-  }
-
-  get hasTopology(): boolean {
-    return this.graph !== null;
   }
 
   /** A robot's telemetry. False if it isn't valid telemetry. */
@@ -82,6 +80,15 @@ export class LevelLights {
       target: this.robots.get(robotId)?.target ?? this.targets.get(robotId) ?? null,
     });
     return true;
+  }
+
+  /**
+   * Counts every known robot as just heard from, e.g. after a broker outage
+   * in which their telemetry couldn't arrive: otherwise their levels go off
+   * until each one's next telemetry
+   */
+  refreshRobots(now: number) {
+    for (const robot of this.robots.values()) robot.at = now;
   }
 
   /** The orchestrator's retained state for a robot: only its task's target is used */
@@ -101,8 +108,10 @@ export class LevelLights {
     for (const robot of this.robots.values()) {
       if (now - robot.at > this.config.robot_timeout_ms || robot.node === null) continue;
       const node = graph.nodes.get(robot.node);
-      // Unknown to this topology, or parked on the dock: not on a level
-      if (!node || node.type === "dock") continue;
+      // Unknown to this topology, or parked on the dock: not on a level. Its
+      // last tag stays the dock until the next one, so driving off counts.
+      if (!node) continue;
+      if (node.type === "dock" && robot.status !== RobotStatus.EN_ROUTE) continue;
       lit.add(node.z);
       const rideEnd = this.rideEnd(graph, node, robot);
       if (rideEnd) lit.add(rideEnd.z);
@@ -131,12 +140,8 @@ export class LevelLights {
     let route: string[] | null = null;
     if (robot.status === RobotStatus.EN_ROUTE && robot.target) {
       route = dijkstra(graph, node.id, robot.target);
-    } else if (robot.status === RobotStatus.RETURNING_TO_DOCK) {
-      // The nearest dock; the robot has one, but the topology may list more
-      for (const dock of this.docks) {
-        const r = dijkstra(graph, node.id, dock);
-        if (r && (!route || r.length < route.length)) route = r;
-      }
+    } else if (robot.status === RobotStatus.RETURNING_TO_DOCK && this.dock) {
+      route = dijkstra(graph, node.id, this.dock);
     }
     if (!route) return null;
     let end: GraphNode | null = null;

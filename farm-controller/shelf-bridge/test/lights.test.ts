@@ -34,11 +34,16 @@ describe("level lights", () => {
     assert.deepEqual(l.command(1), { line: "lights 01", on: [1] });
   });
 
-  it("doesn't count a robot on the dock or before its first tag", () => {
+  it("doesn't count a robot parked on the dock or before its first tag", () => {
     const l = lightsAt();
     l.onTelemetry("robot-1", at("dock-1", "charging"), 0);
     l.onTelemetry("robot-2", at(null, "initializing"), 0);
     assert.deepEqual(lit(l), []);
+    l.onTelemetry("robot-1", at("dock-1", "idle"), 0);
+    assert.deepEqual(lit(l), []);
+    // Driving off: its last tag is still the dock's
+    l.onTelemetry("robot-1", at("dock-1"), 0);
+    assert.deepEqual(lit(l), [0]);
   });
 
   it("lights the level it rides to, from the elevator tag it rides from", () => {
@@ -92,6 +97,13 @@ describe("level lights", () => {
     l.onTelemetry("robot-1", at("cp-01"), 0);
     assert.deepEqual(lit(l, TIMEOUT), [0]);
     assert.deepEqual(lit(l, TIMEOUT + 1), []);
+  });
+
+  it("keeps robots after a broker outage until their telemetry is back", () => {
+    const l = lightsAt();
+    l.onTelemetry("robot-1", at("cp-01"), 0);
+    l.refreshRobots(3 * TIMEOUT);
+    assert.deepEqual(lit(l, 3 * TIMEOUT), [0]);
   });
 
   it("ignores invalid telemetry, unknown nodes and levels without a relay", () => {

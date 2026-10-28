@@ -188,7 +188,13 @@ numbers there instead of the wires.
 - **Check the light turns fully off first.** With the light on, touch its two
   dim wires together. If it only dims (many drivers stop at about 10 %), the
   relay can't turn it off; switch its power instead, with the Adafruit IoT
-  Power Relay (#2935) on the same pin.
+  Power Relay (#2935) on the same pin. Plug the light into its **normally
+  ON** outlet: the pin HIGH turns it off, and a dead Uno leaves it on, as
+  with the dim wires.
+- **The dim circuit carries about 1 mA.** Power relays' contacts can get
+  unreliable at currents that small over time. If a light only partly dims
+  when its relay is on, clean or replace the relay, or switch to a signal
+  relay.
 - A relay's coil draws current from the Uno's 5V only while it's on (its
   light off). Two are fine on the Pi's USB port; if the Uno resets as a relay
   clicks, power the Pi from its official supply.

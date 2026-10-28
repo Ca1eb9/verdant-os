@@ -64,7 +64,7 @@ interface ShelfLink {
   silenceAlertId: string | null;
   /** Last non-reading line, so a sensor library repeating its error logs once */
   lastNodeLog: string;
-  /** The node has printed since the port opened: past its bootloader, so it reads input */
+  /** Its boot line or a reading since the port opened: past its bootloader, so it reads input */
   nodeReady: boolean;
 }
 
@@ -93,7 +93,7 @@ const tag = (link: ShelfLink) => `[${link.shelf.shelf_id}]`;
 
 const lights = config.lights ? new LevelLights(config.lights) : null;
 const lightsLink = config.lights ? links.find((l) => l.shelf.shelf_id === config.lights!.shelf_id)! : null;
-/** The line the node last accepted from us; null resends the next one */
+/** The line last written to the node; null resends the next one */
 let lightsSent: string | null = null;
 /**
  * Off while the broker is unreachable: robots can't be heard, so rather than
@@ -132,13 +132,11 @@ function sendLights(refresh = false) {
 function onLine(link: ShelfLink, raw: string) {
   const line = raw.trim();
   if (!line) return;
-  if (!link.nodeReady) {
-    link.nodeReady = true;
-    if (link === lightsLink) sendLights(true);
-  }
   // Readings are JSON objects; anything else is the node's '#' logs, a sensor
   // library's own error prints, or boot noise
   if (!line.startsWith("{")) {
+    // Its boot line: past the bootloader, so a line sent now isn't lost
+    if (line === "# shelf-sensor boot") markReady(link);
     if (line !== link.lastNodeLog) console.log(`${tag(link)} node: ${line.replace(/^#\s*/, "")}`);
     link.lastNodeLog = line;
     return;
@@ -179,10 +177,18 @@ function onLine(link: ShelfLink, raw: string) {
     link.silenceAlertId = null;
     saveSilenceAlerts();
   }
+  markReady(link);
   link.lastSeq = reading.seq;
   link.lastReadingAt = now;
 
   mqtt.publish(TOPICS.shelf.sensors(link.shelf.shelf_id), reading.data);
+  if (link === lightsLink) sendLights(true);
+}
+
+/** The node is reading its input: send it the lights straight away */
+function markReady(link: ShelfLink) {
+  if (link.nodeReady) return;
+  link.nodeReady = true;
   if (link === lightsLink) sendLights(true);
 }
 
@@ -313,6 +319,7 @@ async function main() {
     brokerUrl: BROKER_URL,
     onConnect: () => {
       brokerConnected = true;
+      lights?.refreshRobots(performance.now());
     },
     onDisconnect: () => {
       brokerConnected = false;
