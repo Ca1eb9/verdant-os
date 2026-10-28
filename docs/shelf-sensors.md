@@ -13,6 +13,9 @@ flowchart LR
     Bridge -- "farm/alerts<br/>shelf silent" --> Broker
     Broker --> Ingester["ingester → shelf_sensors"]
     Broker --> SupaBridge["supabase-bridge →<br/>Supabase sensor_events"]
+    Broker -- "robot telemetry, topology,<br/>robot state" --> Bridge
+    Bridge -- "USB serial<br/>lights 10" --> Uno
+    Uno --> Relays["2 relays →<br/>level lights' 0-10 V dim wires"]
 ```
 
 ## Hardware
@@ -69,6 +72,58 @@ needs to be in the `dialout` group to open serial ports).
 | `silence_timeout_ms` | No valid reading this long → one alert, resolved by an info alert when readings resume |
 | `reopen_interval_ms` | Retry delay for a missing or dropped port |
 | `baud`, `max_line_length`, `watchdog_interval_ms` | Serial and timing settings |
+| `lights.shelf_id` | The shelf whose node has the light relays. Leave `lights` out for no level lights |
+| `lights.levels` | Level lit by each relay channel, in order: `[0, 1]` is D5 for level 0, D6 for level 1 |
+| `lights.robot_timeout_ms` | A robot with no telemetry this long stops lighting its level |
+
+## Level lights
+
+Each level's grow light comes on while a robot is on that level, and goes off
+when none is. The node switches them through two relays (Adafruit #4409) on
+D5 and D6, wired across each light's 0–10 V dim wires
+([wiring](wiring/shelf-sensor.md#level-light-relays)); the bridge decides.
+
+**Which levels are lit**
+
+- A robot lights the level of the **last tag it read** (`current_node` in its
+  telemetry; the level is the node's `z` in the topology). The robot is the
+  source of truth, and a missed tag only delays the change to the next tag.
+- **Riding the elevator,** it also lights the level it's riding to, from the
+  moment it reads the elevator tag it rides from. The robot doesn't report
+  its path, so the bridge works out the ride's end with the same shortest
+  path the robot computes on board, to its task's target (from the
+  orchestrator's retained `farm/robot/{id}/state`) or, returning, to the dock.
+  So the new level is already lit when the robot drives off the elevator, and
+  the old one goes off when it reads its first tag on the new level. A ride
+  through several levels only lights the last.
+- A robot **parked on the dock** lights nothing: the level comes on as it
+  leaves the dock, and goes off when it's back.
+- A robot that's **silent** for `robot_timeout_ms` lights nothing.
+- A robot that's stopped, in error or driven by hand keeps its level lit, but
+  doesn't look ahead to a ride.
+- A level is lit while **any** robot is on it. Levels with no relay in
+  `lights.levels` are ignored.
+
+The bridge sends the node `lights 10` (level 0 on, level 1 off) when that
+changes, and again with every reading, so a lost line or a node that reset is
+put right within 5 s. It only sends once the orchestrator's topology has
+arrived; until then the node keeps every light on. The bridge logs each
+change: `[LIGHTS] level 0, 1 on (lights 11)`.
+
+**Failures leave the lights on**, never off: the plants keep their light.
+
+| Failure | Lights |
+|---|---|
+| Uno unpowered, resetting or unplugged | All on (relays released) until the bridge resends, within a few seconds of it printing again |
+| Bridge stopped, or the Pi off | All on, 30 s after the last line it got (the node's `LIGHTS_TIMEOUT_MS`) |
+| Orchestrator not running at the bridge's start | All on until its retained topology arrives. Once loaded, the bridge keeps it, so an orchestrator restart changes nothing |
+| Broker down | The bridge can't hear the robots, so it stops sending: all on 30 s later, until the broker is back |
+| A robot powered off or out of WiFi | Its level goes off after `robot_timeout_ms` |
+| Orchestrator not running, so no task target | Only an elevator ride on the way to a task is affected: the new level comes on at its first tag instead of during the ride. A return to the dock needs no target |
+
+**Turning it off for the demo or a test:** remove `lights` from
+`/etc/verdant/shelf-bridge-config.json` and restart the bridge; the node's
+lights go back on 30 s later.
 
 ## pH calibration
 

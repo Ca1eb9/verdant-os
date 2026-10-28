@@ -143,6 +143,61 @@ recovers, so you can wiggle wires while watching the monitor.
 
 Then calibrate pH: [shelf-sensors.md](../shelf-sensors.md#ph-calibration).
 
+## Level light relays
+
+Two Adafruit STEMMA Non-Latching Mini Relays (#4409) switch the level grow
+lights: one per level. Each relay's contacts short that light's 0–10 V dim
+wires, which turns the light off; released, the light is at full brightness.
+The light's driver puts about 10 V on those wires itself, so nothing here
+makes 10 V. What the node does with them: "Level lights" in
+[shelf-sensors.md](../shelf-sensors.md#level-lights).
+
+They aren't on the breadboard or perfboard drawings. Each relay plugs into
+the Uno with its STEMMA JST cable (or three jumpers) and sits next to the
+lights:
+
+```
+  Uno                 Relay 1 (level 0)          Level 0 light
+  D5  ───────────────  SIG
+  5V  ──┬────────────  +  (3-5V)                 dim wire + ──┐
+  GND ──┼─┬──────────  −  (GND)          COM ─────────────────┘
+        │ │                              NO  ───── dim wire −
+        │ │           Relay 2 (level 1)          Level 1 light
+  D6  ──┼─┼──────────  SIG
+        └─┼──────────  +                         dim wire + ──┐
+          └──────────  −                 COM ─────────────────┘
+                                         NO  ───── dim wire −
+```
+
+| Relay | Pin | Goes to |
+|---|---|---|
+| Relay 1 (level 0) | SIG | Uno **D5** |
+| Relay 2 (level 1) | SIG | Uno **D6** |
+| Both | + | 5V (the + rail) |
+| Both | − | GND (the − rail) |
+| Each | COM and NO screw terminals | That level light's two 0–10 V dim wires (usually purple and grey/pink) |
+
+The JST cable's colours are black (−), red (+) and white (SIG). Which relay
+lights which level is the Pi's setting (`lights.levels` in
+`shelf-bridge-config.json`), so if the levels come out swapped, swap the
+numbers there instead of the wires.
+
+- **Use COM and NO, never NC.** On NO, a relay with no power (Uno off,
+  resetting or unplugged) leaves the light on, which is what the plants need.
+- **Only the dim wires go to the relay,** never the light's mains wiring.
+- **Check the light turns fully off first.** With the light on, touch its two
+  dim wires together. If it only dims (many drivers stop at about 10 %), the
+  relay can't turn it off; switch its power instead, with the Adafruit IoT
+  Power Relay (#2935) on the same pin.
+- A relay's coil draws current from the Uno's 5V only while it's on (its
+  light off). Two are fine on the Pi's USB port; if the Uno resets as a relay
+  clicks, power the Pi from its official supply.
+
+**Check:** flash the node, stop the bridge (`sudo systemctl stop
+farm-shelf-bridge` on the Pi), open `pio device monitor` and type
+`lights 01`: relay 1 clicks and level 0's light goes off, level 1's stays on.
+`lights 11` turns both back on. Start the bridge again afterwards.
+
 ## Moving to the perfboard
 
 Once the breadboard works, solder it onto an
