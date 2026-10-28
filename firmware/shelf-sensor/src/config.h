@@ -20,13 +20,28 @@ constexpr uint8_t PIN_WATER_TEMP = 3;   // DS18B20 data, 4.7k pull-up to 5V
 constexpr uint8_t PIN_WATER_LEVEL = 4;  // level adapter output (green wire); 100k pull-down so unplugged reads LOW
 constexpr uint8_t PIN_PH = A0;          // pH board output (blue wire)
 
+// Level light relays (Adafruit STEMMA mini relay #4409), one per channel. The
+// Pi's "lights" line sets channel i on PIN_LIGHT_RELAY[i]; which level each
+// channel lights is the Pi's config (shelf-bridge lights.levels).
+constexpr uint8_t PIN_LIGHT_RELAY[] = {5, 6};
+constexpr uint8_t LIGHT_CHANNELS = sizeof(PIN_LIGHT_RELAY) / sizeof(PIN_LIGHT_RELAY[0]);
+
 // XKC-Y25-V drives its output HIGH when it senses water through the wall
 constexpr uint8_t WATER_LEVEL_OK_STATE = HIGH;
+
+// The relay's COM/NO contacts short the light's 0-10 V dim wires: energised
+// (HIGH) dims the light to off, released (LOW) leaves it at full brightness.
+// Released is also what an unpowered or resetting Uno gives.
+constexpr uint8_t LIGHT_OFF_RELAY_STATE = HIGH;
 
 // ---- Timing ---------------------------------------------------------------------
 
 constexpr uint32_t REPORT_INTERVAL_MS = 5000;   // one JSON line this often (DHT11 needs >= 1 s)
 constexpr uint32_t I2C_TIMEOUT_US = 25000;      // a stuck bus aborts instead of hanging
+// No "lights" line from the Pi this long: every light back on, as if the Uno
+// had no power. The bridge resends the state with every reading (5 s).
+constexpr uint32_t LIGHTS_TIMEOUT_MS = 30000;
+constexpr uint8_t MAX_INPUT_LINE = 32;          // longer lines from the Pi are dropped
 
 // ---- Analog (pH) ------------------------------------------------------------------
 
