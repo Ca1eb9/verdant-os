@@ -206,8 +206,8 @@ npm run shelf
 ```
 
 - Settings load from `shelf-bridge-config.json`: one entry per node with its
-  serial port, shelf id, level and pH calibration, and the optional `lights`. On the Pi, prefer the
-  `/dev/serial/by-id/...` path over `/dev/ttyACM0`.
+  serial port, shelf id, level and pH calibration, and the optional `lights`.
+  On the Pi, prefer the `/dev/serial/by-id/...` path over `/dev/ttyACM0`.
 - An unplugged node is reopened automatically; a shelf with no readings for
   `silence_timeout_ms` raises one alert on `farm/alerts`, and its next reading
   publishes an info alert resolving it. Open silence alerts are saved to

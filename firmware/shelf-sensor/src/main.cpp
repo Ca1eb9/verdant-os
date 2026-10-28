@@ -193,8 +193,8 @@ void setup() {
 
   Serial.begin(SERIAL_BAUD);
   Serial.println(F("# shelf-sensor boot"));
-  // Lights at full brightness until the Pi says otherwise: the same as with
-  // no power, so the relays don't click on a reset
+  // Lights at full brightness until the Pi says otherwise, the same as with
+  // no power: a reset or power cut never leaves a level dark
   for (uint8_t i = 0; i < LIGHT_CHANNELS; i++) pinMode(PIN_LIGHT_RELAY[i], OUTPUT);
   allLightsOn();
 
