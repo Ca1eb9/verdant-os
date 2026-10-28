@@ -12,5 +12,10 @@
       "ph_neutral_mv": 2000,
       "ph_mv_per_unit": 286
     }
-  ]
+  ],
+  "lights": {
+    "shelf_id": "shelf-1",
+    "levels": [0, 1],
+    "robot_timeout_ms": 10000
+  }
 }
