@@ -65,6 +65,18 @@ async function getJson(url: string): Promise<unknown> {
   return response.json();
 }
 
+/**
+ * A v4 UUID. crypto.randomUUID() only exists on https or localhost, and the
+ * dashboard on FarmNet is opened over http; getRandomValues() works on both.
+ */
+function commandId(): string {
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const hex = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 export function createLocalSource(url: string, apiUrl?: string): FarmDataSource {
   let client: MqttClient | null = null;
   const robots = new Map<string, RobotEntry>();
@@ -307,7 +319,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
         return Promise.reject(new CommandError("Not connected to the farm's MQTT broker.", 503));
       }
       const remote: RemoteCommand = {
-        id: crypto.randomUUID(),
+        id: commandId(),
         robot_id: request.robot_id,
         command: { ...request.command, source: "local" },
         issued_by: "dashboard",
