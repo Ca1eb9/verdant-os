@@ -125,6 +125,8 @@ void pad_task(void* /*param*/) {
 
   PadCore core;
   bool connected = false;
+  bool rumble_pending = false;
+  uint32_t connected_ms = 0;
   bool link_ok = false;
   uint32_t last_ok_ms = 0;
   PadAction last_logged = PadAction::None;
@@ -189,7 +191,11 @@ void pad_task(void* /*param*/) {
       if (in_use) pad.onLoop();
     }
 
-    bool ready = pad.isConnected() && !pad.isWaitingForFirstNotification();
+    // Connected once the controller answers, not at its first input report:
+    // it sends none until it's touched. onLoop() has already found its
+    // services and subscribed by the time pConnectedClient is set.
+    bool linked = pad.isConnected() && XboxSeriesXControllerESP32_asukiaaa::pConnectedClient != nullptr;
+    bool ready = linked && (connected || probe_link());
     if (ready != connected) {
       connected = ready;
       link_ok = false;
@@ -203,12 +209,20 @@ void pad_task(void* /*param*/) {
         bool is_public = !client || client->getPeerAddress().getType() == BLE_ADDR_PUBLIC;
         LOG("pad", "controller connected (%s%s)", pad.buildDeviceAddressStr().c_str(),
             is_public ? "" : ", a random address: PAD_ADDRESS can't pin it");
-        rumble(pad);
+        // Not at once: the rumble is written without a reply, and a
+        // controller still settling the connection drops it
+        rumble_pending = true;
+        connected_ms = millis();
       } else {
+        rumble_pending = false;
         LOG("pad", "controller disconnected");
       }
     }
     if (!connected) continue;
+    if (rumble_pending && millis() - connected_ms >= PAD_RUMBLE_DELAY_MS) {
+      rumble_pending = false;
+      rumble(pad);
+    }
 
     bool ok = probe_link();
     uint32_t now = millis();
@@ -224,6 +238,9 @@ void pad_task(void* /*param*/) {
       LOG("pad", "controller link ok");
     }
     last_ok_ms = now;
+    // Until its first report the stick and buttons hold the last
+    // connection's values, which PadCore must never see as just sent.
+    if (pad.isWaitingForFirstNotification()) continue;
 
     // 0 = stick fully up, maxJoy = fully down.
     float stick = 1.0f - 2.0f * (float)pad.xboxNotif.joyLVert /

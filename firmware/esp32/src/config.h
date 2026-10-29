@@ -273,6 +273,9 @@ constexpr uint32_t PAD_SCAN_CHUNK_MS = 10000;   // each scan this long, then a f
 // On each connection the controller rumbles once, to confirm it at the robot.
 constexpr uint8_t PAD_RUMBLE_PCT = 30;          // motor power, 0-100
 constexpr uint32_t PAD_RUMBLE_MS = 300;         // in the controller's 10 ms steps
+// TBD: how long after it connects. Raise it if a controller connects (its
+// logo stops blinking, "controller connected" is logged) without buzzing.
+constexpr uint32_t PAD_RUMBLE_DELAY_MS = 200;
 
 // ---- Motor task (tasks/motor_task.h) ------------------------------------------------
 
