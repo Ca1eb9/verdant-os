@@ -147,6 +147,11 @@ constexpr uint32_t BATTERY_PERIOD_MS = 500;
 // protections and charge logic pause until a real reading is back; telemetry
 // keeps the last good one.
 constexpr float BATTERY_UNPLUGGED_V = 6.0f;
+// Telemetry's battery_pct is a whole number that moves only once the smoothed
+// reading is this far past half-way to the next one (0.5: a full point from
+// the reported value), so the Pi doesn't see it flip 95, 96, 95. The robot's
+// own battery thresholds use the smoothed reading.
+constexpr float BATTERY_PCT_HYSTERESIS = 0.5f;
 
 // ---- Charge contact (PIN_CHARGE_SENSE, docs/wiring/robot.md) ----------------------
 // Only read while docking or charging (g_charge_sense_on), or always with

@@ -31,6 +31,12 @@ float battery_pct_from_voltage(float pack_v, int cells, float full_pack_v) {
   return 0.0f;
 }
 
+float battery_pct_steady(float pct, float reported, float hysteresis) {
+  if (isnan(pct)) return reported;
+  if (!isnan(reported) && fabsf(pct - reported) < 0.5f + hysteresis) return reported;
+  return roundf(pct);
+}
+
 #ifdef ARDUINO
 #include <Arduino.h>
 

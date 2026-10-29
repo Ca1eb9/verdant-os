@@ -162,14 +162,14 @@ Telemetry:
 {
   "robot_id": "robot-1", "status": "en_route", "current_node": "cp-01",
   "task_id": "3f2c…", "last_completed_task_id": "9a1b…",
-  "battery_pct": 82.5, "heading": 1, "obstacle_cm": null,
+  "battery_pct": 82, "heading": 1, "obstacle_cm": null,
   "temperature_c": 24.1, "humidity_pct": 61.0, "controller_connected": false,
   "timestamp": 123456
 }
 ```
 
 `heading` is 0 N, 1 E, 2 S, 3 W, or `null` if unknown: the way the robot
-faces. It never changes (see "Driving" below). `battery_pct` is 0–100.
+faces. It never changes (see "Driving" below). `battery_pct` is a whole number, 0–100: it only moves once the smoothed reading is a full point past it (`BATTERY_PCT_HYSTERESIS`), so noise on a boundary doesn't flip it back and forth. The robot's own battery thresholds use the smoothed reading.
 `temperature_c` and `humidity_pct` come from the robot's AHT20 and are left
 out when it has no recent reading. They are for the dashboard: neither the
 robot nor the orchestrator acts on them. The robot has no light sensor, so it
