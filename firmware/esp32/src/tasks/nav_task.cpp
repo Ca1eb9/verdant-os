@@ -10,6 +10,7 @@
 
 #include "../comms/comms_json.h"
 #include "../config.h"
+#include "../drivers/battery.h"
 #include "../graph.h"
 #include "../log.h"
 #include "../nav/motion.h"
@@ -208,6 +209,7 @@ void nav_task(void* /*param*/) {
   RobotStatus sent_status = RobotStatus::Initializing;
   NodeIndex sent_node = NO_NODE;
   bool sent_controller = false;
+  float reported_pct = NAN;  // telemetry's battery_pct (battery_pct_steady)
   uint32_t last_telemetry = 0;
   bool telemetry_sent = false;
 
@@ -277,7 +279,8 @@ void nav_task(void* /*param*/) {
       TelemetryMsg t = {};
       core.snapshot(t);
       t.uptime_ms = now;
-      t.battery_pct = sensors.battery_pct;  // NAN until the first sample: comms skips it
+      reported_pct = battery_pct_steady(sensors.battery_pct, reported_pct, BATTERY_PCT_HYSTERESIS);
+      t.battery_pct = reported_pct;  // NAN until the first sample: comms skips it
       t.obstacle_cm = core.reversing() ? sensors.obstacle_rear_cm : sensors.obstacle_front_cm;
       t.temperature_c = sensors.temperature_c;  // NAN: comms leaves it out
       t.humidity_pct = sensors.humidity_pct;

@@ -127,6 +127,11 @@ constexpr float BATTERY_CAL_FACTOR = 1.0f;      // tweak after multimeter check
 constexpr uint8_t BATTERY_SAMPLES = 16;         // ADC reads averaged per sample
 constexpr float BATTERY_EMA_ALPHA = 0.2f;       // smoothing, 0..1 (1 = none)
 constexpr uint32_t BATTERY_PERIOD_MS = 500;
+// Telemetry's battery_pct is a whole number that moves only once the smoothed
+// reading is this far past half-way to the next one (0.5: a full point from
+// the reported value), so the Pi doesn't see it flip 95, 96, 95. The robot's
+// own battery thresholds use the smoothed reading.
+constexpr float BATTERY_PCT_HYSTERESIS = 0.5f;
 
 // ---- Charge contact (PIN_CHARGE_SENSE, docs/wiring/robot.md) ----------------------
 // Only read while docking or charging (g_charge_sense_on), or always with
