@@ -7,6 +7,12 @@
 #include "../config.h"
 #include "../log.h"
 
+#ifndef DEFAULT_I2C_BUFFER_LEN
+#error "DEFAULT_I2C_BUFFER_LEN must come from platformio.ini (the VL53L4CX read-chunk hang)"
+#endif
+// A transfer is the 2-byte register address plus up to this many bytes
+constexpr size_t I2C_BUFFER_BYTES = DEFAULT_I2C_BUFFER_LEN + 2;
+
 namespace {
 
 // A sensor reset mid-transfer can hold SDA low for good, and no new
@@ -46,6 +52,10 @@ bool TofSensor::begin() {
     bus_.end();
     int clocks = free_bus(sda_, scl_);
     if (clocks > 0) LOG("tof", "%s I2C bus was stuck: freed with %d clocks", name_, clocks);
+  }
+  // Before begin(): it can't resize a running bus
+  if (bus_.setBufferSize(I2C_BUFFER_BYTES) != I2C_BUFFER_BYTES && !fail_logged_) {
+    LOG("tof", "%s couldn't size the I2C buffer to %u bytes", name_, (unsigned)I2C_BUFFER_BYTES);
   }
   bus_.begin(sda_, scl_, hz_);
   wire_started_ = true;
@@ -106,7 +116,8 @@ TofReading TofSensor::poll(float* cm_out) {
     bool valid = r.RangeStatus == VL53L4CX_RANGESTATUS_RANGE_VALID ||
                  r.RangeStatus == VL53L4CX_RANGESTATUS_RANGE_VALID_MIN_RANGE_CLIPPED ||
                  r.RangeStatus == VL53L4CX_RANGESTATUS_RANGE_VALID_MERGED_PULSE;
-    if (valid && r.RangeMilliMeter > 0 && r.RangeMilliMeter < best_mm) {
+    // 0 mm: the library clips a target touching the sensor to 0, still valid
+    if (valid && r.RangeMilliMeter >= 0 && r.RangeMilliMeter < best_mm) {
       best_mm = r.RangeMilliMeter;
     } else if (!valid && rejected_status_ == VL53L4CX_RANGESTATUS_NONE) {
       rejected_status_ = r.RangeStatus;
