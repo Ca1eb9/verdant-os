@@ -35,6 +35,7 @@ struct TagState {
   uint32_t last_seen_ms = 0;
   uint32_t seq = 0;
   uint32_t last_reinit_ms = 0;
+  uint32_t last_check_ms = 0;
 };
 TagState s_tag;
 
@@ -58,8 +59,14 @@ void update_rfid(uint32_t now) {
     }
     s_tag.in_field = true;
     s_tag.last_seen_ms = now;
-  } else if (s_tag.in_field && now - s_tag.last_seen_ms >= RFID_TAG_GONE_MS) {
-    s_tag.in_field = false;
+  } else {
+    if (s_tag.in_field && now - s_tag.last_seen_ms >= RFID_TAG_GONE_MS) s_tag.in_field = false;
+    // No tag can also be a reader that reset: ask it now and then, and the
+    // reinit above takes over if it doesn't answer.
+    if (!s_tag.in_field && now - s_tag.last_check_ms >= RFID_REINIT_MS) {
+      s_tag.last_check_ms = now;
+      s_rfid.check();
+    }
   }
 }
 

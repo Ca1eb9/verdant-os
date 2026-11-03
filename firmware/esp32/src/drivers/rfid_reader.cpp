@@ -38,10 +38,19 @@ bool RfidReader::begin() {
 
 bool RfidReader::poll(char* out, size_t cap) {
   if (!ok_) return false;
-  uint8_t uid[10];
+  // Real tags are 4, 7 or 10 bytes, but the library copies as many as the
+  // reader's (possibly corrupted) frame says, up to 255, unchecked.
+  uint8_t uid[255];
   uint8_t uid_len = 0;
   if (!s_nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uid_len, RFID_READ_TIMEOUT_MS))
     return false;
   return format_tag_uid(uid, uid_len, out, cap);
 }
 
+bool RfidReader::check() {
+  if (!ok_) return false;
+  if (s_nfc.getFirmwareVersion()) return true;
+  LOG("rfid", "PN532 stopped answering: re-initialising");
+  ok_ = false;
+  return false;
+}
