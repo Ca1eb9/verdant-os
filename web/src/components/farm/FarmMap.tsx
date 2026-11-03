@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { useLevelLights } from "@/hooks/useLevelLights";
-import { FarmRenderer, type RendererOptions, type RouteDraw } from "@/lib/farm/map/renderer";
+import { FarmRenderer, levelLightText, type RendererOptions, type RouteDraw } from "@/lib/farm/map/renderer";
 import type { Scene } from "@/lib/farm/map/layout";
 import { resolveNode, type NavGraph } from "@/lib/farm/navigation";
 import { toRobotDraw, type RobotView } from "@/lib/farm/robots";
@@ -156,7 +156,9 @@ export function FarmMap({
           viewBox={`0 0 660 ${scene.viewH}`}
           width="100%"
           role="img"
-          aria-label="Side-view cross-section of the farm showing robots on each shelf level, the charging dock and the elevator"
+          aria-label={`Side-view cross-section of the farm showing robots on each shelf level, the charging dock and the elevator. ${scene.levels
+            .map((level) => levelLightText(level.id, lights.get(level.z) ?? null))
+            .join(", ")}.`}
         />
       </div>
 

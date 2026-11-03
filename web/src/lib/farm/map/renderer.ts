@@ -100,7 +100,9 @@ export const PAL_LIGHT: typeof PAL_DARK = {
 // depends on the fixture and its distance: set it from a reading under the
 // farm's lights at full brightness.
 const FULL_GLOW_LUX = 5000;
-// A level whose light reads 0 keeps its fixture this visible, so it reads as off, not missing
+// A level whose light reads 0, or has no reading, keeps its fixture this
+// visible, so it reads as off rather than missing. No reading never draws
+// brighter than off: losing the feed mustn't look like the light coming on.
 const OFF_FIXTURE_OPACITY = 0.35;
 
 // plant colours
@@ -161,6 +163,11 @@ interface RobotAnim {
 }
 
 type Attrs = Record<string, string | number>;
+
+/** "L1 light: 412 lux", by the map's level label: for the fixture's title and the map's label */
+export function levelLightText(levelId: number, lux: number | null) {
+  return `L${levelId} light: ${lux === null ? "no reading" : `${Math.round(lux)} lux`}`;
+}
 
 /** A level's light fixture, updated from its reading without redrawing the farm */
 interface LightEls {
@@ -261,8 +268,9 @@ export class FarmRenderer {
   }
 
   /**
-   * Lit as bright as the level's light reads. With no reading the fixture is
-   * drawn without beams: the map never shows a light it doesn't know is on.
+   * Lit as bright as the level's light reads. With no reading it's drawn as
+   * off, and its title says so: the map never shows a light it doesn't know
+   * is on.
    */
   private applyLights() {
     for (const [z, els] of this.lightEls) {
@@ -270,8 +278,8 @@ export class FarmRenderer {
       const glow = lux === null ? 0 : Math.min(1, Math.max(0, lux / FULL_GLOW_LUX));
       const beamOpacity = this.opts.beamOpacity == null ? 0.32 : this.opts.beamOpacity;
       els.beams?.setAttribute("opacity", String(beamOpacity * glow));
-      els.fixture.setAttribute("opacity", String(lux === null ? 1 : OFF_FIXTURE_OPACITY + (1 - OFF_FIXTURE_OPACITY) * glow));
-      els.title.textContent = `Level ${els.levelId} light: ${lux === null ? "no reading" : `${Math.round(lux)} lux`}`;
+      els.fixture.setAttribute("opacity", String(OFF_FIXTURE_OPACITY + (1 - OFF_FIXTURE_OPACITY) * glow));
+      els.title.textContent = levelLightText(els.levelId, lux);
     }
   }
 

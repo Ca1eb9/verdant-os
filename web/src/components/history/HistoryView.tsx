@@ -113,16 +113,14 @@ export function HistoryView() {
     // no average: the grow lights switch on and off, so a mean of the two says nothing
     {
       key: "light.lux",
-      title: "Light",
-      description: "Bottom level",
+      title: "Bottom level light",
       color: color.amber,
       unit: "lux",
       precision: 0,
     },
     {
       key: "light.topLux",
-      title: "Light",
-      description: "Top level",
+      title: "Top level light",
       color: color.amber,
       unit: "lux",
       precision: 0,
