@@ -18,11 +18,15 @@
 #include "config.h"
 
 static DHT dht(PIN_DHT, DHT11);
-static BH1750 lightMeter;
+// The bottom level's light (light_lux) and the top level's (light_top_lux),
+// sharing the I2C bus at their own addresses
+static BH1750 lightMeter(LIGHT_ADDR);
+static BH1750 topLightMeter(LIGHT_TOP_ADDR);
 static OneWire oneWire(PIN_WATER_TEMP);
 static DallasTemperature waterProbe(&oneWire);
 
 static bool lightReady = false;
+static bool topLightReady = false;
 static uint32_t seq = 0;
 static uint32_t lastReportMs = 0;
 
@@ -36,6 +40,7 @@ static uint32_t lastLightsMs = 0;
 // Last known health per sensor, so failures log once instead of every report
 static bool airOk = true;
 static bool lightOk = true;
+static bool topLightOk = true;
 static bool waterTempOk = true;
 
 static void noteHealth(const __FlashStringHelper* name, bool ok, bool& wasOk) {
@@ -46,18 +51,28 @@ static void noteHealth(const __FlashStringHelper* name, bool ok, bool& wasOk) {
   Serial.println(ok ? F(" ok") : F(" failed"));
 }
 
-static float readLight() {
-  if (!lightReady) lightReady = lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
-  if (!lightReady) return NAN;
-  float lux = lightMeter.readLightLevel();
+// begin() is given the address: left to its default, it sets the meter back to
+// 0x23, the bottom sensor's
+static bool startLight(BH1750& meter, uint8_t addr) {
+  return meter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, addr);
+}
+
+static float readLight(BH1750& meter, uint8_t addr, bool& ready) {
+  if (!ready) {
+    // Its first measurement takes up to 180 ms, and until then it reads 0 lux,
+    // which would show a lit level as dark: read it from the next report on
+    ready = startLight(meter, addr);
+    return NAN;
+  }
+  float lux = meter.readLightLevel();
   if (lux < 0) {
     // Bus error: configure it again on the next report
-    lightReady = false;
+    ready = false;
     return NAN;
   }
   // A BH1750 that browns out restarts powered down and keeps answering with
   // a stale value; re-sending the mode each report recovers it by the next one
-  lightReady = lightMeter.configure(BH1750::CONTINUOUS_HIGH_RES_MODE);
+  ready = meter.configure(BH1750::CONTINUOUS_HIGH_RES_MODE);
   return lux;
 }
 
@@ -162,13 +177,15 @@ static void readInput() {
 static void report() {
   float airC = dht.readTemperature();
   float rh = dht.readHumidity();
-  float lux = readLight();
+  float lux = readLight(lightMeter, LIGHT_ADDR, lightReady);
+  float topLux = readLight(topLightMeter, LIGHT_TOP_ADDR, topLightReady);
   float waterC = readWaterTemp();
   bool levelOk = digitalRead(PIN_WATER_LEVEL) == WATER_LEVEL_OK_STATE;
   uint16_t phMv = readPhMv();
 
   noteHealth(F("dht11"), !isnan(airC) && !isnan(rh), airOk);
   noteHealth(F("bh1750"), !isnan(lux), lightOk);
+  noteHealth(F("bh1750 top"), !isnan(topLux), topLightOk);
   noteHealth(F("ds18b20"), !isnan(waterC), waterTempOk);
 
   // Field names match ShelfSensorData in @farm/shared where they overlap
@@ -177,6 +194,7 @@ static void report() {
   printField(F("temperature_c"), airC, 1);
   printField(F("humidity_pct"), rh, 0);
   printField(F("light_lux"), lux, 0);
+  printField(F("light_top_lux"), topLux, 0);
   printField(F("water_temp_c"), waterC, 2);
   Serial.print(F(",\"water_level_ok\":"));
   Serial.print(levelOk ? F("true") : F("false"));
@@ -202,6 +220,9 @@ void setup() {
   dht.begin();
   Wire.begin();
   Wire.setWireTimeout(I2C_TIMEOUT_US, true);
+  // Measuring by the first report, so it has both light readings
+  lightReady = startLight(lightMeter, LIGHT_ADDR);
+  topLightReady = startLight(topLightMeter, LIGHT_TOP_ADDR);
   waterProbe.begin();
   waterProbe.setWaitForConversion(false);
   waterProbe.requestTemperatures();

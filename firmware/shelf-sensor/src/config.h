@@ -13,7 +13,7 @@
 constexpr uint32_t SERIAL_BAUD = 115200;
 
 // ---- Pins (Uno R3) ----------------------------------------------------------------
-// BH1750 uses the hardware I2C pins: SDA = A4, SCL = A5.
+// Both BH1750s use the hardware I2C pins: SDA = A4, SCL = A5.
 
 constexpr uint8_t PIN_DHT = 2;          // DHT11 module "S" pin
 constexpr uint8_t PIN_WATER_TEMP = 3;   // DS18B20 data, 4.7k pull-up to 5V
@@ -25,6 +25,11 @@ constexpr uint8_t PIN_PH = A0;          // pH board output (blue wire)
 // channel lights is the Pi's config (shelf-bridge lights.levels).
 constexpr uint8_t PIN_LIGHT_RELAY[] = {5, 6};
 constexpr uint8_t LIGHT_CHANNELS = sizeof(PIN_LIGHT_RELAY) / sizeof(PIN_LIGHT_RELAY[0]);
+
+// BH1750 I2C addresses, set by each board's ADDR pin: unconnected is 0x23 (the
+// bottom level's sensor), tied to 3.3V is 0x5C (the top level's)
+constexpr uint8_t LIGHT_ADDR = 0x23;
+constexpr uint8_t LIGHT_TOP_ADDR = 0x5C;
 
 // XKC-Y25-V drives its output HIGH when it senses water through the wall
 constexpr uint8_t WATER_LEVEL_OK_STATE = HIGH;

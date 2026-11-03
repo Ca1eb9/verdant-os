@@ -132,6 +132,7 @@ plug back in, and check it before adding the next:
 | The two Uno power wires to the rails | Nothing changes |
 | DHT11 | `temperature_c` and `humidity_pct` have values. Breathe on it: humidity rises |
 | BH1750 | `light_lux` has a value. Cover it: it falls near 0 |
+| Top level BH1750 ([below](#top-level-light-sensor)) | `light_top_lux` has a value. Cover it: it falls near 0, and `light_lux` doesn't change |
 | DS18B20 + 4.7 kΩ | `water_temp_c` has a value. Hold the probe: it rises |
 | Level sensor + 100 kΩ | `water_level_ok` is `false`. Hold the white disc flat against a plastic bottle of water: on the next line it's `true` |
 | pH board | With the probe unplugged, touch the BNC socket's centre pin to its outer shell with a paperclip: `ph_mv` settles at about 2000, what the board outputs at pH 7 |
@@ -142,6 +143,40 @@ that goes `null` logs `# <name> failed` once, and `# <name> ok` when it
 recovers, so you can wiggle wires while watching the monitor.
 
 Then calibrate pH: [shelf-sensors.md](../shelf-sensors.md#ph-calibration).
+
+## Top level light sensor
+
+A second BH1750 (GY-302 board) watches the top level's grow light. It shares
+the first one's I2C bus: same SCL and SDA rows, its own address. On the
+breadboard and the perfboard it joins the rows already there; it isn't on
+their drawings.
+
+| Top BH1750 pin | Goes to | |
+|---|---|---|
+| VCC | + rail (5V) | Its board makes its own 3.3V, like the first |
+| GND | − rail | |
+| SCL | Row 9, a free hole (b–d) | Shared with the first BH1750's SCL, which goes on to Uno **A5** |
+| SDA | Row 10, a free hole (b–d) | Shared with the first BH1750's SDA, which goes on to Uno **A4** |
+| ADDR | Uno **3.3V** pin, its own wire | Sets address 0x5C. **Never row 11 and never 5V** (below) |
+
+- **ADDR is never shared.** It isn't a signal to the Uno: it picks the address.
+  Row 11 holds the first sensor's ADDR, unconnected for 0x23. Joined to it,
+  both sensors answer at 0x23, their replies collide and neither light reads.
+- **3.3V, not 5V, on ADDR.** It goes straight to the BH1750 chip, which runs on
+  3.3V and is rated to 4.5V at most.
+- **On the perfboard,** each row's a–e strip is separate from its f–j strip:
+  solder the cable into b–d of rows 9 and 10, not f–j.
+- **The cable** carries all five wires (VCC, GND, SCL, SDA, ADDR), up to about
+  800 mm. Keep it away from the lights' drivers and mains wiring, and twist
+  SCL and SDA each with a GND wire if the cable allows.
+- **Only plug or unplug it with the Uno off.** It's on the first sensor's bus,
+  so a glitch while plugging it can blank both light readings until the bus
+  recovers.
+
+**Check:** with the cable at its full length and the grow lights on, leave
+`pio device monitor` running for an hour. No `# bh1750 failed` or
+`# bh1750 top failed` lines should appear. Covering one sensor lowers only its
+own reading.
 
 ## Level light relays
 
