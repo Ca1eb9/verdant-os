@@ -37,7 +37,13 @@
 // ---- Comms timing -------------------------------------------------------------
 
 constexpr uint32_t COMMS_LOOP_MS = 10;          // comms task tick
-constexpr uint32_t WIFI_RETRY_MS = 10000;       // restart WiFi.begin() after this
+constexpr uint32_t WIFI_RETRY_MS = 10000;       // look for the network again after this
+constexpr uint32_t WIFI_SCAN_CHANNEL_MS = 300;  // that scan's time on each channel
+// Once a scan finds the network, Bluetooth gives up the radio for the join (a
+// join sharing it fails, AUTH_EXPIRE): wait up to this for it to stop...
+constexpr uint32_t WIFI_RADIO_FREE_MS = 2000;
+// ...then give the join this long (under WIFI_RETRY_MS) before handing it back.
+constexpr uint32_t WIFI_JOIN_TIMEOUT_MS = 8000;
 constexpr uint32_t MQTT_RETRY_MIN_MS = 1000;    // reconnect backoff, doubles...
 constexpr uint32_t MQTT_RETRY_MAX_MS = 16000;   // ...up to this
 constexpr uint16_t MQTT_KEEPALIVE_S = 15;

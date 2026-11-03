@@ -24,6 +24,8 @@ volatile uint32_t g_last_command_ms = 0;
 volatile uint32_t g_pad_connect_requests = 0;
 volatile bool g_pad_connected = false;
 volatile uint32_t g_pad_link_changed_ms = 0;
+volatile bool g_wifi_joining = false;
+volatile bool g_pad_radio_on = false;
 
 bool create_queues() {
   g_sensor_queue = xQueueCreate(SENSOR_QUEUE_LEN, sizeof(SensorData));

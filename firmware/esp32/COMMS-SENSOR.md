@@ -37,6 +37,7 @@ Decisions worth knowing:
 - **While offline, events wait in the queue** (up to 16) and go out in order on reconnect. Telemetry is discarded, since a stale position is useless.
 - **No clock sync.** `timestamp` is the robot's uptime (`millis()`); Pi services use their own receive time.
 - **No Pi heartbeat.** Losing the Pi doesn't send the robot to the dock. `g_last_command_ms` is for diagnostics only.
+- **WiFi scans before it joins.** While WiFi is down, the comms task scans for `WIFI_SSID` every `WIFI_RETRY_MS` (10 s). Only when it's found does it ask the pad task to stop Bluetooth (`g_wifi_joining`), dropping a connected controller, since a join sharing the radio fails with `AUTH_EXPIRE`. It waits up to `WIFI_RADIO_FREE_MS` for that, joins the access point the scan found, and hands the radio back when the join succeeds, fails or takes over `WIFI_JOIN_TIMEOUT_MS`.
 - **No `delay()`** in either task. WiFi and MQTT reconnect with backoff. A broker connect attempt can block the comms task for ~3 s, but it runs alone on core 0 at the lowest priority.
 - **Battery %** uses a Li-ion voltage curve rather than a straight line, because a straight line reads up to 20 points high mid-pack. Sprint 3 replaces the table with measurements from the real pack.
 
