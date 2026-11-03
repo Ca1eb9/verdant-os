@@ -389,8 +389,7 @@ function subscribeOutbound() {
         water_temp_c: msg.water_temp_c,
         water_level_ok: msg.water_level_ok,
         ph: msg.ph,
-        light_lux: msg.light_lux,
-        light_top_lux: msg.light_top_lux,
+        lights: msg.lights,
       },
     });
   });

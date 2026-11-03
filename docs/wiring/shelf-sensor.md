@@ -131,8 +131,8 @@ plug back in, and check it before adding the next:
 |---|---|
 | The two Uno power wires to the rails | Nothing changes |
 | DHT11 | `temperature_c` and `humidity_pct` have values. Breathe on it: humidity rises |
-| BH1750 | `light_lux` has a value. Cover it: it falls near 0 |
-| Top level BH1750 ([below](#top-level-light-sensor)) | `light_top_lux` has a value. Cover it: it falls near 0, and `light_lux` doesn't change |
+| BH1750 | `light_lux`'s first value is a number. Cover it: it falls near 0 |
+| Top level BH1750 ([below](#top-level-light-sensor)) | `light_lux`'s second value is a number. Cover it: it falls near 0, and the first doesn't change |
 | DS18B20 + 4.7 kΩ | `water_temp_c` has a value. Hold the probe: it rises |
 | Level sensor + 100 kΩ | `water_level_ok` is `false`. Hold the white disc flat against a plastic bottle of water: on the next line it's `true` |
 | pH board | With the probe unplugged, touch the BNC socket's centre pin to its outer shell with a paperclip: `ph_mv` settles at about 2000, what the board outputs at pH 7 |
@@ -162,9 +162,10 @@ their drawings.
 - **ADDR is never shared.** It isn't a signal to the Uno: it picks the address.
   Row 11 holds the first sensor's ADDR, unconnected for 0x23. Joined to it, or
   with its wire broken in the cable, both sensors answer at 0x23 and their
-  replies merge: `light_lux` shows a believable but **wrong** value with no
-  error, and only `light_top_lux` goes `null`. So a `null` top reading means
-  check the ADDR wire, and don't trust `light_lux` until the top one reads.
+  replies merge: the bottom reading (`light_lux`'s first value) is believable
+  but **wrong** with no error, and only the top one goes `null`. So a `null`
+  top reading means check the ADDR wire, and don't trust the bottom one until
+  the top one reads.
 - **3.3V, not 5V, on ADDR.** It goes straight to the BH1750 chip, which runs on
   3.3V and is rated to 4.5V at most.
 - **On the perfboard,** each row's a–e strip is separate from its f–j strip:

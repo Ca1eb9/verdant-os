@@ -42,6 +42,17 @@ describe("shelf bridge config", () => {
     assert.throws(() => load({ ...base, lights: { ...lights, levels: [0.5] } }), /levels/);
   });
 
+  it("gives a shelf without light_levels one light sensor at its level", () => {
+    assert.deepEqual(load(base).shelves[0].light_levels, [0]);
+  });
+
+  it("refuses empty, repeated or fractional light levels", () => {
+    const shelf = base.shelves[0];
+    assert.throws(() => load({ ...base, shelves: [{ ...shelf, light_levels: [] }] }), /light_levels/);
+    assert.throws(() => load({ ...base, shelves: [{ ...shelf, light_levels: [0, 0] }] }), /unique/);
+    assert.throws(() => load({ ...base, shelves: [{ ...shelf, light_levels: [0.5] }] }), /light_levels/);
+  });
+
   it("refuses a missing robot timeout", () => {
     assert.throws(() => load({ ...base, lights: { ...lights, robot_timeout_ms: 0 } }), /robot_timeout_ms/);
   });

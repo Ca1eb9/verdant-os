@@ -18,8 +18,8 @@
 #include "config.h"
 
 static DHT dht(PIN_DHT, DHT11);
-// The bottom level's light (light_lux) and the top level's (light_top_lux),
-// sharing the I2C bus at their own addresses
+// The bottom level's light and the top level's, sharing the I2C bus at their
+// own addresses: light_lux is [bottom, top]
 static BH1750 lightMeter(LIGHT_ADDR);
 static BH1750 topLightMeter(LIGHT_TOP_ADDR);
 static OneWire oneWire(PIN_WATER_TEMP);
@@ -101,13 +101,17 @@ static uint16_t readPhMv() {
   return (uint32_t)s[PH_SAMPLES / 2] * ADC_REF_MV / ADC_MAX;
 }
 
+static void printValue(float v, uint8_t decimals) {
+  // Serial.print renders inf as "inf", which would break the JSON line
+  if (isnan(v) || isinf(v)) Serial.print(F("null"));
+  else Serial.print(v, decimals);
+}
+
 static void printField(const __FlashStringHelper* key, float v, uint8_t decimals) {
   Serial.print(F(",\""));
   Serial.print(key);
   Serial.print(F("\":"));
-  // Serial.print renders inf as "inf", which would break the JSON line
-  if (isnan(v) || isinf(v)) Serial.print(F("null"));
-  else Serial.print(v, decimals);
+  printValue(v, decimals);
 }
 
 // on[i]: channel i's light on. Logged only when it changes.
@@ -193,8 +197,12 @@ static void report() {
   Serial.print(seq++);
   printField(F("temperature_c"), airC, 1);
   printField(F("humidity_pct"), rh, 0);
-  printField(F("light_lux"), lux, 0);
-  printField(F("light_top_lux"), topLux, 0);
+  // One per light sensor, bottom then top; the Pi's config gives each its level
+  Serial.print(F(",\"light_lux\":["));
+  printValue(lux, 0);
+  Serial.print(',');
+  printValue(topLux, 0);
+  Serial.print(']');
   printField(F("water_temp_c"), waterC, 2);
   Serial.print(F(",\"water_level_ok\":"));
   Serial.print(levelOk ? F("true") : F("false"));

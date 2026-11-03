@@ -10,7 +10,8 @@
       "level": 0,
       "port": "/dev/ttyACM0",
       "ph_neutral_mv": 2000,
-      "ph_mv_per_unit": 286
+      "ph_mv_per_unit": 286,
+      "light_levels": [0, 1]
     }
   ],
   "lights": {

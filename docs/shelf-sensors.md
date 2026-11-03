@@ -23,8 +23,8 @@ flowchart LR
 | Part | Measures | `ShelfSensorData` field |
 |---|---|---|
 | DHT11 module (blue, 3 pins) | Air temperature, humidity | `temperature_c`, `humidity_pct` |
-| BH1750 / GY-302 board, bottom level | The bottom level's grow light | `light_lux` |
-| BH1750 / GY-302 board, top level (ADDR to 3.3V) | The top level's grow light | `light_top_lux` |
+| BH1750 / GY-302 board, bottom level | The bottom level's grow light | `lights` (its level from `light_levels`) |
+| BH1750 / GY-302 board, top level (ADDR to 3.3V) | The top level's grow light | `lights` |
 | DS18B20 steel probe | Reservoir water temperature | `water_temp_c` |
 | DFRobot liquid level kit: XKC-Y25-V contactless switch (white disc) + adapter | Reservoir above/below a line | `water_level_ok` |
 | pH electrode + DFRobot pH meter V1.1 board | Reservoir pH | `ph` |
@@ -73,6 +73,7 @@ needs to be in the `dialout` group to open serial ports).
 | `shelves[].shelf_id`, `level` | Identity the readings are published under |
 | `shelves[].port` | Serial device of that shelf's node |
 | `shelves[].ph_neutral_mv`, `ph_mv_per_unit` | pH calibration (below) |
+| `shelves[].light_levels` | Level each of the node's light sensors faces, in its order (bottom sensor, then top): `[0, 1]`. Left out, the node has one, at the shelf's `level`. Each reading is published as `lights: [{ "level": 0, "lux": 412 }, …]` |
 | `silence_timeout_ms` | No valid reading this long → one alert, resolved by an info alert when readings resume |
 | `reopen_interval_ms` | Retry delay for a missing or dropped port |
 | `baud`, `max_line_length`, `watchdog_interval_ms` | Serial and timing settings |
@@ -179,10 +180,11 @@ Restart the bridge after editing the config: `sudo systemctl restart farm-shelf-
 | pH board or probe unplugged | Reports whatever A0 floats to | pH outside 0–14 becomes `null` |
 | Level switch unplugged | The pull-down reads it as "low" | `water_level_ok: false`, the safe direction |
 | Light sensor reset by a power glitch | Re-sends its mode every report, so at most one wrong reading | — |
-| Top light sensor unplugged or its cable loose | Logs `# bh1750 top failed`, prints `null` for it | `light_top_lux: null`; the map shows the top level with no reading |
+| Top light sensor unplugged or its cable loose | Logs `# bh1750 top failed`, prints `null` for it | Its level's `lux: null`; the map shows that level with no reading |
 | A light sensor or its cable holding the I2C bus low | Both light sensors share the bus: both `null` until the Uno is power-cycled (unplug its USB). The I2C timeout keeps the rest of the node reporting | Both lights `null`; the other readings unaffected |
-| Top sensor's ADDR wire broken or on row 11 | Both sensors answer at 0x23: `light_lux` wrong with no error | `light_top_lux: null`; check ADDR before trusting `light_lux` |
-| Firmware from before the top light sensor | Its lines have no `light_top_lux` | Published as `light_top_lux: null` |
+| Top sensor's ADDR wire broken or on row 11 | Both sensors answer at 0x23: the bottom reading wrong with no error | The top level's `lux: null`; check ADDR before trusting the bottom one |
+| Firmware from before the top light sensor | One `light_lux` number | Published as the first level's; the others `null` |
+| `light_levels` left out of the Pi's config | — | Only the bottom sensor is published, at the shelf's level: add `light_levels` |
 | Node hangs (I2C, firmware bug) | Watchdog resets it within 8 s | Logs the restart (`seq` went back) |
 | Port open but silent (node hung past its watchdog, wedged USB) | Reset by the reopen (DTR) | After 20 s closes and reopens the port, and keeps doing so every 20 s until readings return |
 | USB unplugged / node rebooting | — | Reopens the port every 3 s; one alert after 20 s of silence; when readings resume, logs it and publishes an info alert resolving it |
@@ -197,12 +199,12 @@ which mirrors them into Supabase's `sensor_events` table
 ([SUPABASE-SETUP.md](SUPABASE-SETUP.md)). On FarmNet the dashboard shows the
 newest reading of any shelf; the remote path waits on the Supabase bridge.
 
-The Light card and History page show both levels' light. The farm map draws
-each level's grow light as bright as its sensor reads: `light_lux` lights the
-map's lowest level, `light_top_lux` its highest. Full brightness is
+The Light card and History page show each level's light. The farm map draws
+each level's grow light as bright as the reading for that level (its
+`level` is the topology's `z`). Full brightness is
 `FULL_GLOW_LUX` in `web/src/lib/farm/map/renderer.ts`: set it to what a sensor
 reads under its light at full brightness. A level with no current reading
-(none in the last 10 s, the sensor `null`, or a middle level of a layout with
-more than two) is drawn as off, never as lit; its tooltip says "no reading".
+(none in the last 10 s, the sensor `null`, or no sensor faces it) is drawn as
+off, never as lit; its tooltip says "no reading".
 This assumes one shelf node, as on this farm: with several, the card and map
 show whichever reported last.

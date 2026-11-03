@@ -7,8 +7,7 @@ const shelf = {
   level: 0,
   temperature_c: 22,
   humidity_pct: 60,
-  light_lux: 800,
-  light_top_lux: 750,
+  lights: [{ level: 0, lux: 800 }, { level: 1, lux: 750 }],
   water_temp_c: 20,
   water_level_ok: true,
   ph: 6.2,
@@ -41,7 +40,7 @@ describe("telemetry validation", () => {
   it("accepts shelf readings whose sensors didn't read", () => {
     assert.equal(isShelfSensorData(shelf), true);
     assert.equal(isShelfSensorData({
-      ...shelf, temperature_c: null, humidity_pct: null, light_lux: null, light_top_lux: null,
+      ...shelf, temperature_c: null, humidity_pct: null, lights: [{ level: 0, lux: null }],
       water_temp_c: null, water_level_ok: null, ph: null,
     }), true);
   });
@@ -50,7 +49,8 @@ describe("telemetry validation", () => {
     assert.equal(isShelfSensorData({ ...shelf, ph: "6.2" }), false);
     assert.equal(isShelfSensorData({ ...shelf, water_level_ok: 1 }), false);
     assert.equal(isShelfSensorData({ ...shelf, level: 0.5 }), false);
-    assert.equal(isShelfSensorData({ ...shelf, light_top_lux: "750" }), false);
+    assert.equal(isShelfSensorData({ ...shelf, lights: [{ level: 0, lux: "750" }] }), false);
+    assert.equal(isShelfSensorData({ ...shelf, lights: 800 }), false);
     const { water_temp_c: _, ...missing } = shelf;
     assert.equal(isShelfSensorData(missing), false);
   });

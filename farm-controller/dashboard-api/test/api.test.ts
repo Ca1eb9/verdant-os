@@ -31,15 +31,17 @@ for (let m = 120; m >= 0; m--) {
 for (const m of [300, 299, 298]) tel.run("robot-02", "charging", "dock", 40, null, m, NOW - m * MIN);
 
 const shelf = db.prepare(
-  `INSERT INTO shelf_sensors (shelf_id, level, temperature_c, humidity_pct, light_lux, light_top_lux, water_temp_c, water_level_ok, ph, timestamp, received_at)
-   VALUES (?, 1, 22.5, NULL, 400, ?, 19, ?, 6.1, ?, ?)`,
+  `INSERT INTO shelf_sensors (shelf_id, level, temperature_c, humidity_pct, lights, water_temp_c, water_level_ok, ph, timestamp, received_at)
+   VALUES (?, 1, 22.5, NULL, ?, 19, ?, 6.1, ?, ?)`,
 );
 // shelf-1 every minute for 2 hours, water level ok / low / unknown in turn, its
-// top light reading only every other minute; shelf-2 once, with no top light
+// level 1 light only every other minute; shelf-2 once, with one light
+const lights = (...l: [number, number][]) => JSON.stringify(l.map(([level, lux]) => ({ level, lux })));
 for (let m = 120; m >= 0; m--) {
-  shelf.run("shelf-1", m % 2 ? null : 300 + m, [1, 0, null][m % 3], NOW - m * MIN, NOW - m * MIN);
+  const lit = m % 2 ? lights([0, 400]) : lights([0, 400], [1, 300 + m]);
+  shelf.run("shelf-1", lit, [1, 0, null][m % 3], NOW - m * MIN, NOW - m * MIN);
 }
-shelf.run("shelf-2", null, 1, NOW - 30 * MIN, NOW - 30 * MIN);
+shelf.run("shelf-2", lights([0, 400]), 1, NOW - 30 * MIN, NOW - 30 * MIN);
 
 const alert = db.prepare(
   `INSERT INTO alerts (alert_id, severity, source, source_type, message, metric, value, threshold, timestamp, resolves, received_at)
@@ -135,8 +137,7 @@ describe("GET /shelves", () => {
       level: 1,
       temperature_c: 22.5,
       humidity_pct: null,
-      light_lux: 400,
-      light_top_lux: 300,
+      lights: [{ level: 0, lux: 400 }, { level: 1, lux: 300 }],
       water_temp_c: 19,
       water_level_ok: true,
       ph: 6.1,
@@ -164,9 +165,8 @@ describe("GET /shelves", () => {
       level: 1,
       temperature_c: 22.5,
       humidity_pct: null,
-      light_lux: 400,
-      // the bucket's readings that have one: 360, 358, ..., 352
-      light_top_lux: 356,
+      // level 1: the bucket's readings that have one, 360, 358, ..., 352
+      lights: [{ level: 0, lux: 400 }, { level: 1, lux: 356 }],
       water_temp_c: 19,
       water_level_ok: false,
       ph: 6.1,

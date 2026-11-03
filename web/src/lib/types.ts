@@ -1,3 +1,5 @@
+import type { LightReading } from "@/lib/farm/types";
+
 export type LiveStatus = "live" | "stale" | "waiting";
 export type FloatSensorState = 0 | 1;
 
@@ -17,10 +19,8 @@ export interface SensorReading {
   ph: number | null;
   /** False when the reservoir is below the level sensor */
   waterLevelOk: boolean | null;
-  /** The bottom level's grow light */
-  lightLux: number | null;
-  /** The top level's grow light */
-  lightTopLux: number | null;
+  /** Each level's grow light */
+  lights: LightReading[];
 }
 
 export interface TelemetrySnapshot {
@@ -46,7 +46,8 @@ export interface HistoryPoint {
   timestamp: string;
   air: { temperature: number | null; humidity: number | null };
   water: { temperature: number | null; ph: number | null };
-  light: { lux: number | null; topLux: number | null };
+  /** Each level's light by its level */
+  light: Record<number, number | null>;
 }
 
 export interface SensorEventPayload {
