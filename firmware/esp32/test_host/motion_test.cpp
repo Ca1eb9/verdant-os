@@ -433,7 +433,28 @@ static void test_with_nav_core() {
   CHECK(d.core.status() == RobotStatus::Error && d.events.back() == RobotEventType::Error);
 }
 
+// The nav task's hooks read millis() after the loop's `now`: a drive that
+// starts a few ms "later" than the check that follows mustn't fault.
+static void test_drive_started_after_now() {
+  SCENARIO("drive started after the loop's now");
+  Sink s;
+  Motion m(s);
+  uint32_t now = 1000;
+  m.follow_edge(N("cp-01"), N("water-01"), EdgeDrive::Forward, now + 3);
+  CHECK(m.check(now, open_road(), false) == nullptr);
+  CHECK(m.check(now += 20, open_road(), false) == nullptr);
+  m.start_docking(now + 3);
+  CHECK(m.check(now, open_road(), false) == nullptr);
+  CHECK(m.check(now += 20, open_road(), false) == nullptr);
+  m.creep(now + 3);
+  CHECK(m.check(now, open_road(), false) == nullptr);
+  // ...and it still times out on schedule after that
+  CHECK(m.check(now += CREEP_TIMEOUT_MS - 1, open_road(), false) == nullptr);
+  CHECK(same(m.check(now += 10, open_road(), false), "no tag found"));
+}
+
 int main() {
+  test_drive_started_after_now();
   test_follow_edge();
   test_slow_zone();
   test_elevator();
