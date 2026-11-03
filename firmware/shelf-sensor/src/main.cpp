@@ -133,7 +133,7 @@ static void allLightsOn() {
 }
 
 // "lights 10": one '1' (on) or '0' (off) per channel, from channel 0. Channels
-// past the end of the line stay on. Anything else is logged and ignored.
+// past the end of the line are turned on. Anything else is logged and ignored.
 static void onInputLine(const char* line) {
   static const char PREFIX[] = "lights ";
   const uint8_t prefixLen = sizeof(PREFIX) - 1;

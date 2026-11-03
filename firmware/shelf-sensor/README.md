@@ -59,7 +59,7 @@ lights 10
 ```
 
 One `1` (light on) or `0` (light off) per channel, from channel 0. A channel
-missing from the end of the line stays on. Anything else is logged as
+missing from the end of the line is turned on. Anything else is logged as
 `# bad input: ...` and changes nothing.
 
 - **Lights start on.** At boot, and whenever the board resets, the relays are

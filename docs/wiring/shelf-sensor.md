@@ -160,8 +160,11 @@ their drawings.
 | ADDR | Uno **3.3V** pin, its own wire | Sets address 0x5C. **Never row 11 and never 5V** (below) |
 
 - **ADDR is never shared.** It isn't a signal to the Uno: it picks the address.
-  Row 11 holds the first sensor's ADDR, unconnected for 0x23. Joined to it,
-  both sensors answer at 0x23, their replies collide and neither light reads.
+  Row 11 holds the first sensor's ADDR, unconnected for 0x23. Joined to it, or
+  with its wire broken in the cable, both sensors answer at 0x23 and their
+  replies merge: `light_lux` shows a believable but **wrong** value with no
+  error, and only `light_top_lux` goes `null`. So a `null` top reading means
+  check the ADDR wire, and don't trust `light_lux` until the top one reads.
 - **3.3V, not 5V, on ADDR.** It goes straight to the BH1750 chip, which runs on
   3.3V and is rated to 4.5V at most.
 - **On the perfboard,** each row's a–e strip is separate from its f–j strip:
@@ -170,8 +173,10 @@ their drawings.
   800 mm. Keep it away from the lights' drivers and mains wiring, and twist
   SCL and SDA each with a GND wire if the cable allows.
 - **Only plug or unplug it with the Uno off.** It's on the first sensor's bus,
-  so a glitch while plugging it can blank both light readings until the bus
-  recovers.
+  so a glitch while plugging it, or on the cable, can leave a sensor holding
+  the bus: both light readings stay `null` until the Uno is power-cycled
+  (unplug its USB for a few seconds). The node keeps reporting everything
+  else, and neither its I2C timeout nor its watchdog powers the sensors off.
 
 **Check:** with the cable at its full length and the grow lights on, leave
 `pio device monitor` running for an hour. No `# bh1750 failed` or
