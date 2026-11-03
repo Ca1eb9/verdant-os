@@ -854,6 +854,22 @@ static void test_bench_charge() {
   s.command(make(CommandType::Resume));
   CHECK(s.status() == RobotStatus::EnRoute && s.task() == "t1");
 
+  // Stopped again while charging: the first stop's task still carries on.
+  Rig s2;
+  s2.core.set_charge_sense_always(true);
+  s2.boot_at("cp-01");
+  s2.command(navigate("t1", "cp-02", TargetAction::Water, 1000));
+  s2.command(make(CommandType::Stop));
+  s2.battery(30);
+  s2.contact();
+  s2.command(make(CommandType::Stop));
+  s2.command(make(CommandType::Resume));
+  CHECK(s2.status() == RobotStatus::Charging);
+  s2.clear();
+  s2.contact_lost();
+  CHECK(s2.emitted({RobotEventType::ChargeComplete}));
+  CHECK(s2.status() == RobotStatus::EnRoute && s2.task() == "t1");
+
   // Resumed while charging: carries on once the charge ends.
   Rig c;
   c.core.set_charge_sense_always(true);

@@ -199,6 +199,10 @@ class NavCore {
   // stopped or initializing), where it goes back to when the charge ends.
   bool bench_charge_ = false;
   RobotStatus bench_from_ = RobotStatus::Idle;
+  // From stopped: what that stop paused, put back when the charge ends
+  bool bench_had_paused_ = false;
+  RobotStatus bench_paused_ = RobotStatus::Idle;
+  uint32_t bench_paused_at_ms_ = 0;
   // Charging: the highest reading so far and since when, for watch_charge().
   bool charge_watched_ = false;
   bool charge_stall_reported_ = false;
