@@ -1,6 +1,6 @@
 VerdantOS Personal Use License
 
-Copyright (c) 2026 Caleb Penley and the VerdantOS contributors.
+Copyright (c) 2026 Caleb Penley, Jameson McMullen and the VerdantOS contributors.
 All rights reserved, except as granted below.
 
 "The Work" means everything in this repository: source code, firmware,
@@ -16,8 +16,8 @@ design itself. "You" means anyone who uses any of it.
 
 3. Credit. Anything you share or publish that uses any part of the Work,
    including its ideas or designs, must clearly credit:
-     "Based on VerdantOS by Caleb Penley and the VerdantOS contributors
-      (https://github.com/Ca1eb9/verdant-os)"
+     "Based on VerdantOS by Caleb Penley, Jameson McMullen and the VerdantOS contributors
+       (https://github.com/Ca1eb9/verdant-os)"
    and include a copy of this license.
 
 4. No commercial use. You may not use the Work, or anything made from it,
