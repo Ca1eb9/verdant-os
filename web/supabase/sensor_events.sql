@@ -15,8 +15,13 @@ create table if not exists public.sensor_events (
   water_temp_c numeric,
   water_level_ok boolean,
   ph numeric,
-  light_lux numeric
+  light_lux numeric,
+  light_top_lux numeric
 );
+
+-- The top level's light sensor, on projects made before it
+alter table public.sensor_events
+  add column if not exists light_top_lux numeric;
 
 -- Columns from the retired laptop serial bridge. The dashboard derives °F from
 -- °C and the level text from water_level_ok, the Pi converts pH, and light is
@@ -67,7 +72,11 @@ create policy "Allow public dashboard reads"
 -- water_level_ok is false if any reading in the bucket was low. It runs as the
 -- caller, so it reads only what RLS already lets the dashboard read.
 
-create or replace function public.shelf_history(p_farm_id text, p_from timestamptz, p_bucket_ms bigint)
+-- Dropped first: create or replace can't change the columns a function returns
+-- (light_top_lux was added), and dropping also lets the file run again
+drop function if exists public.shelf_history(text, timestamptz, bigint);
+
+create function public.shelf_history(p_farm_id text, p_from timestamptz, p_bucket_ms bigint)
 returns table (
   device text,
   bucket_start bigint,
@@ -76,7 +85,8 @@ returns table (
   water_temp_c double precision,
   water_level_ok boolean,
   ph double precision,
-  light_lux double precision
+  light_lux double precision,
+  light_top_lux double precision
 )
 language sql
 stable
@@ -89,7 +99,8 @@ as $$
          avg(e.water_temp_c)::double precision,
          bool_and(e.water_level_ok),
          avg(e.ph)::double precision,
-         avg(e.light_lux)::double precision
+         avg(e.light_lux)::double precision,
+         avg(e.light_top_lux)::double precision
     from public.sensor_events e
    where e.farm_id = p_farm_id
      and e.device is not null

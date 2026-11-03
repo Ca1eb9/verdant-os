@@ -73,6 +73,7 @@ export function isShelfSensorData(v: unknown): v is ShelfSensorData {
     nullableNum(v.temperature_c) &&
     nullableNum(v.humidity_pct) &&
     nullableNum(v.light_lux) &&
+    nullableNum(v.light_top_lux) &&
     nullableNum(v.water_temp_c) &&
     (v.water_level_ok === null || typeof v.water_level_ok === "boolean") &&
     nullableNum(v.ph) &&

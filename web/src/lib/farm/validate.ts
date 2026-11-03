@@ -83,7 +83,7 @@ export function isThresholdLimits(v: unknown): v is ThresholdLimits {
 export function isShelfValues(v: unknown): v is Omit<ShelfSensorData, "level"> {
   return isRecord(v) && typeof v.shelf_id === "string" && v.shelf_id.length > 0 &&
     isNumOrNull(v.temperature_c) && isNumOrNull(v.humidity_pct) &&
-    isNumOrNull(v.light_lux) && isNumOrNull(v.water_temp_c) &&
+    isNumOrNull(v.light_lux) && isNumOrNull(v.light_top_lux) && isNumOrNull(v.water_temp_c) &&
     (v.water_level_ok === null || typeof v.water_level_ok === "boolean") && isNumOrNull(v.ph) &&
     isNum(v.timestamp);
 }

@@ -48,6 +48,7 @@ export function isShelfSensorData(value: unknown): value is Telemetry {
     isNullableNumber(value.temperature_c) &&
     isNullableNumber(value.humidity_pct) &&
     isNullableNumber(value.light_lux) &&
+    isNullableNumber(value.light_top_lux) &&
     isNullableNumber(value.water_temp_c) &&
     (value.water_level_ok === null || typeof value.water_level_ok === "boolean") &&
     isNullableNumber(value.ph) &&

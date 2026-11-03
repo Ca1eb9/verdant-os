@@ -44,6 +44,8 @@ export function parseLine(line: string, shelf: ShelfPort, now: number): NodeRead
     !numOrNull(o.temperature_c) ||
     !numOrNull(o.humidity_pct) ||
     !numOrNull(o.light_lux) ||
+    // Missing from firmware from before the top light sensor
+    !(o.light_top_lux === undefined || numOrNull(o.light_top_lux)) ||
     !numOrNull(o.water_temp_c) ||
     !(o.water_level_ok === null || typeof o.water_level_ok === "boolean") ||
     !numOrNull(o.ph_mv)
@@ -59,6 +61,7 @@ export function parseLine(line: string, shelf: ShelfPort, now: number): NodeRead
       temperature_c: o.temperature_c as number | null,
       humidity_pct: o.humidity_pct as number | null,
       light_lux: o.light_lux as number | null,
+      light_top_lux: (o.light_top_lux as number | null | undefined) ?? null,
       water_temp_c: o.water_temp_c as number | null,
       water_level_ok: o.water_level_ok as boolean | null,
       ph: o.ph_mv === null ? null : phFromMv(o.ph_mv as number, shelf),

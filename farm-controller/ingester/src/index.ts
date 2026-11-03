@@ -65,6 +65,10 @@ if (migrateShelf) {
   `);
 }
 
+// Shelf tables from before the top level's light sensor only need the column
+// added (a rebuilt one above is created with it)
+const addTopLight = !migrateShelf && shelfCols.length > 0 && !shelfCols.some((c) => c.name === "light_top_lux");
+
 // Alert tables from before `resolves` only need the column added
 const alertCols = db.prepare(`PRAGMA table_info(alerts)`).all() as { name: string }[];
 const addResolves = alertCols.length > 0 && !alertCols.some((c) => c.name === "resolves");
@@ -94,6 +98,7 @@ db.exec(`
     temperature_c REAL,
     humidity_pct REAL,
     light_lux REAL,
+    light_top_lux REAL,
     water_temp_c REAL,
     water_level_ok INTEGER,
     ph REAL,
@@ -153,6 +158,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_shelf_received_all ON shelf_sensors(received_at);
 `);
 
+if (addTopLight) {
+  db.exec(`ALTER TABLE shelf_sensors ADD COLUMN light_top_lux REAL`);
+}
+
 if (addResolves) {
   db.exec(`ALTER TABLE alerts ADD COLUMN resolves TEXT`);
 }
@@ -188,8 +197,8 @@ const insertRobot = db.prepare(`
 `);
 
 const insertShelf = db.prepare(`
-  INSERT INTO shelf_sensors (shelf_id, level, temperature_c, humidity_pct, light_lux, water_temp_c, water_level_ok, ph, timestamp)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO shelf_sensors (shelf_id, level, temperature_c, humidity_pct, light_lux, light_top_lux, water_temp_c, water_level_ok, ph, timestamp)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 const insertElevator = db.prepare(`
@@ -293,6 +302,7 @@ async function main() {
       msg.temperature_c ?? null,
       msg.humidity_pct ?? null,
       msg.light_lux ?? null,
+      msg.light_top_lux ?? null,
       msg.water_temp_c ?? null,
       levelOk,
       msg.ph ?? null,

@@ -136,7 +136,8 @@ export function buildHistoricalSeries(farmId: string, hours = 168): HistoryPoint
     timestamp: event.ts,
     air: { temperature: event.air.t_c, humidity: event.air.rh_pct },
     water: { temperature: event.water.t_c, ph: event.water.ph },
-    light: { lux: event.light.lux },
+    // the mock farm has no top level light sensor
+    light: { lux: event.light.lux, topLux: null },
   }));
 }
 

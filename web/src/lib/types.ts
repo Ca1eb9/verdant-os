@@ -17,7 +17,10 @@ export interface SensorReading {
   ph: number | null;
   /** False when the reservoir is below the level sensor */
   waterLevelOk: boolean | null;
+  /** The bottom level's grow light */
   lightLux: number | null;
+  /** The top level's grow light */
+  lightTopLux: number | null;
 }
 
 export interface TelemetrySnapshot {
@@ -43,7 +46,7 @@ export interface HistoryPoint {
   timestamp: string;
   air: { temperature: number | null; humidity: number | null };
   water: { temperature: number | null; ph: number | null };
-  light: { lux: number | null };
+  light: { lux: number | null; topLux: number | null };
 }
 
 export interface SensorEventPayload {

@@ -41,7 +41,7 @@ function toPoints(readings: ShelfReading[], timeWindow: TimeWindow, now: number)
     timestamp: new Date(start).toISOString(),
     air: { temperature: mean(inBucket, (r) => r.data.temperature_c), humidity: mean(inBucket, (r) => r.data.humidity_pct) },
     water: { temperature: mean(inBucket, (r) => r.data.water_temp_c), ph: mean(inBucket, (r) => r.data.ph) },
-    light: { lux: mean(inBucket, (r) => r.data.light_lux) },
+    light: { lux: mean(inBucket, (r) => r.data.light_lux), topLux: mean(inBucket, (r) => r.data.light_top_lux) },
   }));
 }
 

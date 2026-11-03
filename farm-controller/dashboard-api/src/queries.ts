@@ -113,7 +113,7 @@ function shelfBuckets(db: Db, q: HistoryQuery, bucketMs: number): Row[] {
   const rows = db
     .prepare(
       `SELECT shelf_id, MIN(level) AS level, AVG(temperature_c) AS temperature_c,
-         AVG(humidity_pct) AS humidity_pct, AVG(light_lux) AS light_lux,
+         AVG(humidity_pct) AS humidity_pct, AVG(light_lux) AS light_lux, AVG(light_top_lux) AS light_top_lux,
          AVG(water_temp_c) AS water_temp_c, MIN(water_level_ok) AS water_level_ok, AVG(ph) AS ph,
          MAX(timestamp) AS timestamp, MIN(received_at) AS received_at
        FROM shelf_sensors WHERE ${where}
@@ -137,6 +137,7 @@ export function shelfHistory(db: Db, q: HistoryQuery, bucketMs?: number): ShelfR
     temperature_c: (r.temperature_c as number | null) ?? null,
     humidity_pct: (r.humidity_pct as number | null) ?? null,
     light_lux: (r.light_lux as number | null) ?? null,
+    light_top_lux: (r.light_top_lux as number | null) ?? null,
     water_temp_c: (r.water_temp_c as number | null) ?? null,
     // Stored as 0/1: SQLite has no boolean
     water_level_ok: r.water_level_ok == null ? null : r.water_level_ok === 1,

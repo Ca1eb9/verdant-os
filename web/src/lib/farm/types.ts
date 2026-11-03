@@ -154,7 +154,10 @@ export interface ShelfSensorData {
   /** Each reading is null when its sensor failed to read */
   temperature_c: number | null;
   humidity_pct: number | null;
+  /** The bottom level's grow light, at its plants */
   light_lux: number | null;
+  /** The top level's grow light, from a second light sensor on the same node */
+  light_top_lux: number | null;
   /** Hydroponic reservoir water temperature */
   water_temp_c: number | null;
   /** False when the reservoir is below the level sensor */

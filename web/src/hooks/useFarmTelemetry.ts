@@ -19,6 +19,7 @@ function shelfToReading({ data, receivedAt }: ShelfReading): SensorReading {
     ph: data.ph,
     waterLevelOk: data.water_level_ok,
     lightLux: data.light_lux,
+    lightTopLux: data.light_top_lux,
   };
 }
 
@@ -32,10 +33,12 @@ function snapshotToReading(snapshot: TelemetrySnapshot): SensorReading {
     ph: snapshot.water.ph,
     waterLevelOk: snapshot.water.levelFloat === 1,
     lightLux: snapshot.light.lux,
+    // the mock farm has no top level light sensor
+    lightTopLux: null,
   };
 }
 
-const NUMBER_FIELDS = ["airTemperature", "humidity", "waterTemperature", "ph", "lightLux"] as const;
+const NUMBER_FIELDS = ["airTemperature", "humidity", "waterTemperature", "ph", "lightLux", "lightTopLux"] as const;
 
 function isReading(value: unknown): value is SensorReading {
   if (typeof value !== "object" || value === null) return false;
@@ -54,7 +57,9 @@ function readStoredReading(farmId: string): SensorReading | null {
   try {
     const value = window.localStorage.getItem(readingStorageKey(farmId));
     const parsed: unknown = value ? JSON.parse(value) : null;
-    return isReading(parsed) ? parsed : null;
+    // One stored before the top level's light sensor has no lightTopLux
+    const reading = typeof parsed === "object" && parsed !== null ? { lightTopLux: null, ...parsed } : parsed;
+    return isReading(reading) ? reading : null;
   } catch {
     return null;
   }
