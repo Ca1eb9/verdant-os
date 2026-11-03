@@ -19,13 +19,19 @@ float battery_pct_from_voltage(float pack_v, int cells, float full_pack_v);
 class Battery {
  public:
   void begin();
-  // Takes one averaged sample and updates the smoothed values.
+  // Takes one averaged sample and updates the smoothed values, unless it's
+  // under BATTERY_UNPLUGGED_V.
   void sample();
-  float volts() const { return volts_; }  // NAN until first sample
-  float pct() const { return pct_; }      // NAN until first sample
+  // The last good reading, smoothed: NAN until there's been one
+  float volts() const { return volts_; }
+  float pct() const { return pct_; }
+  // The latest sample was a real pack reading: false at BATTERY_UNPLUGGED_V
+  bool ok() const { return ok_; }
 
  private:
   float volts_ = NAN;
   float pct_ = NAN;
+  bool ok_ = false;
+  bool unplugged_logged_ = false;
 };
 #endif

@@ -109,6 +109,7 @@ struct SensorData {
   // Battery
   float battery_v;             // pack voltage (smoothed), NAN until first read
   float battery_pct;           // 0-100, NAN until first read
+  bool battery_ok;             // the latest read was the pack (BATTERY_UNPLUGGED_V)
 
   // Dock charge contact, debounced. Only read while g_charge_sense_on, and
   // not known for the first few readings after: act only when charge_sensed.

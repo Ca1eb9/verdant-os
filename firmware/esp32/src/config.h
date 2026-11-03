@@ -122,7 +122,9 @@ constexpr uint32_t I2C_REAR_HZ = 400000;
 constexpr uint32_t TOF_TIMEOUT_MS = 500;        // no data this long = sensor fault
 constexpr uint32_t TOF_REINIT_MS = 5000;
 // If the ToF sensor stops responding, hold the obstacle flag (motors stay
-// stopped). Safer for the real robot; set false to bench-test without one.
+// stopped). Safer for the real robot; set false to bench-test without one:
+// then a dead sensor's flag clears. Either way it's retried every
+// TOF_REINIT_MS, restarting its I2C bus.
 constexpr bool OBSTACLE_FAILSAFE = true;
 
 // ---- Battery (3S Li-ion, docs/battery-monitoring.md) ------------------------------
@@ -139,6 +141,12 @@ constexpr float BATTERY_CAL_FACTOR = 1.0f;      // tweak after multimeter check
 constexpr uint8_t BATTERY_SAMPLES = 16;         // ADC reads averaged per sample
 constexpr float BATTERY_EMA_ALPHA = 0.2f;       // smoothing, 0..1 (1 = none)
 constexpr uint32_t BATTERY_PERIOD_MS = 500;
+// A reading under this isn't the pack: its protection board cuts out well
+// above it, and the converter can't run the ESP32 below it. It's the divider
+// wire off, or a bench on USB with the pack switched off. The battery
+// protections and charge logic pause until a real reading is back; telemetry
+// keeps the last good one.
+constexpr float BATTERY_UNPLUGGED_V = 6.0f;
 
 // ---- Charge contact (PIN_CHARGE_SENSE, docs/wiring/robot.md) ----------------------
 // Only read while docking or charging (g_charge_sense_on), or always with

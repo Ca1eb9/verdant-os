@@ -96,8 +96,14 @@ const char* Motion::check(uint32_t now, const SensorData& s, bool motors_killed)
 
   float ahead_cm = backward_ ? s.obstacle_rear_cm : s.obstacle_front_cm;
   bool held = motors_killed || (backward_ ? s.obstacle_rear_stop : s.obstacle_front_stop);
-  if (!held) driven_ms_ += now - last_check_ms_;
-  last_check_ms_ = now;
+  // The nav task starts drives with a fresh millis(), so a drive started this
+  // loop can be a few ms ahead of `now`: counting that would wrap to ~49 days
+  // of driving and fault at once. Wait for the clock to catch up instead.
+  int32_t elapsed = (int32_t)(now - last_check_ms_);
+  if (elapsed > 0) {
+    if (!held) driven_ms_ += (uint32_t)elapsed;
+    last_check_ms_ = now;
+  }
 
   if (approaching()) {
     bool entering = phase_ == Phase::Entering;

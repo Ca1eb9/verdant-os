@@ -178,6 +178,10 @@ void NavCore::on_charge_contact() {
     emit(RobotEventType::DockConnected, "charge_sense_always: charging off the dock");
     bench_charge_ = true;
     bench_from_ = status_;
+    // A stop or manual control while charging overwrites the paused status
+    bench_had_paused_ = ctx_.has_paused_status;
+    bench_paused_ = ctx_.paused_status;
+    bench_paused_at_ms_ = ctx_.paused_at_ms;
     status_ = RobotStatus::Charging;
     return;
   }
@@ -271,6 +275,11 @@ void NavCore::finish_charging(const char* details, uint32_t now) {
   if (bench_charge_) {
     bench_charge_ = false;
     out_.halt();
+    if (bench_from_ == RobotStatus::Stopped) {
+      ctx_.has_paused_status = bench_had_paused_;
+      ctx_.paused_status = bench_paused_;
+      ctx_.paused_at_ms = bench_paused_at_ms_;
+    }
     // A resume while charging released the stop: carry on as it says.
     if (bench_from_ == RobotStatus::Stopped && !ctx_.stop_latched) {
       resume_paused(now);

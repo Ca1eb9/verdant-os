@@ -220,15 +220,17 @@ void nav_task(void* /*param*/) {
     uint32_t now = millis();
 
     // Survival overrides first, on the last loop's readings (one loop old).
+    // An unreliable battery reading pauses the battery checks (NAN), rather
+    // than cutting the motor on a loose wire.
     bool ahead_blocked = core.reversing() ? g_obstacle_rear_flag : g_obstacle_front_flag;
-    g_motor_kill_flag = survival.check(sensors.battery_pct, ahead_blocked, now);
+    g_motor_kill_flag = survival.check(sensors.battery_ok ? sensors.battery_pct : NAN, ahead_blocked, now);
 
     // Every reading, in order, so no tag arrival is skipped. tag_seq still
     // shows an arrival whose reading was dropped from a full queue.
     SensorData d;
     while (xQueueReceive(g_sensor_queue, &d, 0) == pdTRUE) {
       sensors = d;
-      core.on_battery(d.battery_pct);
+      core.on_battery(d.battery_ok ? d.battery_pct : NAN);
       if (d.tag_seq == seen_tag_seq) continue;
       seen_tag_seq = d.tag_seq;
       NodeIndex node = node_by_tag(d.tag_uid);
@@ -277,7 +279,11 @@ void nav_task(void* /*param*/) {
       TelemetryMsg t = {};
       core.snapshot(t);
       t.uptime_ms = now;
-      t.battery_pct = sensors.battery_pct;  // NAN until the first sample: comms skips it
+      // The last good reading. NAN (comms skips telemetry) only until the
+      // first sensor data; with never a good reading (a bench with no pack),
+      // 0, so the robot still reports in.
+      t.battery_pct = sensors.battery_pct;
+      if (isnan(t.battery_pct) && sensors.uptime_ms != 0 && !sensors.battery_ok) t.battery_pct = 0;
       t.obstacle_cm = core.reversing() ? sensors.obstacle_rear_cm : sensors.obstacle_front_cm;
       t.temperature_c = sensors.temperature_c;  // NAN: comms leaves it out
       t.humidity_pct = sensors.humidity_pct;

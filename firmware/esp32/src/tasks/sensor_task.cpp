@@ -35,6 +35,7 @@ struct TagState {
   uint32_t last_seen_ms = 0;
   uint32_t seq = 0;
   uint32_t last_reinit_ms = 0;
+  uint32_t last_check_ms = 0;
 };
 TagState s_tag;
 
@@ -58,8 +59,14 @@ void update_rfid(uint32_t now) {
     }
     s_tag.in_field = true;
     s_tag.last_seen_ms = now;
-  } else if (s_tag.in_field && now - s_tag.last_seen_ms >= RFID_TAG_GONE_MS) {
-    s_tag.in_field = false;
+  } else {
+    if (s_tag.in_field && now - s_tag.last_seen_ms >= RFID_TAG_GONE_MS) s_tag.in_field = false;
+    // No tag can also be a reader that reset: ask it now and then, and the
+    // reinit above takes over if it doesn't answer.
+    if (!s_tag.in_field && now - s_tag.last_check_ms >= RFID_REINIT_MS) {
+      s_tag.last_check_ms = now;
+      s_rfid.check();
+    }
   }
 }
 
@@ -159,7 +166,9 @@ void update_obstacle(ObstacleState& obs, uint32_t now) {
           OBSTACLE_FAILSAFE ? " - holding its obstacle flag" : "");
       obs.fault_logged = true;
     }
-    if (OBSTACLE_FAILSAFE) set_obstacle_flag(obs, true, "sensor fault");
+    // Off: a dead sensor blocks nothing, so a flag it had set must not
+    // stay set with no readings left to clear it.
+    set_obstacle_flag(obs, OBSTACLE_FAILSAFE, "sensor fault");
     if (now - obs.last_reinit_ms >= TOF_REINIT_MS) {
       obs.last_reinit_ms = now;
       if (obs.tof->begin()) obs.last_data_ms = now;  // give it a fresh timeout
@@ -281,6 +290,7 @@ void sensor_task(void* /*param*/) {
       d.obstacle_rear_stop = g_obstacle_rear_flag;
       d.battery_v = s_battery.volts();
       d.battery_pct = s_battery.pct();
+      d.battery_ok = s_battery.ok();
       d.charge_sensed = s_charge.known();
       d.charge_contact = s_charge.closed();
       d.temperature_c = s_air.temperature_c;
