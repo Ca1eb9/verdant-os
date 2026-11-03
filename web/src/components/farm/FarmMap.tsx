@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
+import { useLevelLights } from "@/hooks/useLevelLights";
 import { FarmRenderer, type RendererOptions, type RouteDraw } from "@/lib/farm/map/renderer";
 import type { Scene } from "@/lib/farm/map/layout";
 import { resolveNode, type NavGraph } from "@/lib/farm/navigation";
@@ -87,6 +88,7 @@ export function FarmMap({
   }, [theme]);
 
   const draws = useMemo(() => robots.map((robot) => toRobotDraw(robot, graph, now)), [graph, now, robots]);
+  const lights = useLevelLights(scene.levels);
 
   useEffect(() => {
     rendererRef.current?.render({
@@ -100,6 +102,11 @@ export function FarmMap({
       route,
     });
   }, [aisleY, draws, graph, route, scene, selectedRobotId, targetNodeId, targetable]);
+
+  // Each level's light as bright as it reads, without redrawing the farm
+  useEffect(() => {
+    rendererRef.current?.setLights(lights);
+  }, [lights]);
 
   // which aisles currently hold a robot (dot on the tab)
   const occupiedAisles = useMemo(() => {

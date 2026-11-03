@@ -114,6 +114,15 @@ export function HistoryView() {
     {
       key: "light.lux",
       title: "Light",
+      description: "Bottom level",
+      color: color.amber,
+      unit: "lux",
+      precision: 0,
+    },
+    {
+      key: "light.topLux",
+      title: "Light",
+      description: "Top level",
       color: color.amber,
       unit: "lux",
       precision: 0,

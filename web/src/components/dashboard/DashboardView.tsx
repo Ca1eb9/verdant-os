@@ -52,6 +52,7 @@ export function DashboardView() {
   const waterTemperature = reading?.waterTemperature ?? null;
   const waterPh = reading?.ph ?? null;
   const lightLux = reading?.lightLux ?? null;
+  const lightTopLux = reading?.lightTopLux ?? null;
   const waterLevelOk = reading?.waterLevelOk ?? null;
 
   const sensorCards = useMemo(
@@ -95,9 +96,9 @@ export function DashboardView() {
         title: "Light",
         icon: "light" as const,
         accent: "lime" as const,
-        heroLabel: "Light",
+        heroLabel: "Bottom Level",
         heroValue: formatOptionalMetric(lightLux, "lux", 0),
-        metrics: [],
+        metrics: [{ label: "Top Level", value: formatOptionalMetric(lightTopLux, "lux", 0) }],
       },
     ],
     [
@@ -107,6 +108,7 @@ export function DashboardView() {
       fmt,
       humidity,
       lightLux,
+      lightTopLux,
       waterLevelOk,
       waterPh,
       waterTemperature,

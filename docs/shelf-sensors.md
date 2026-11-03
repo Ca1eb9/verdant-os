@@ -7,7 +7,7 @@ publishes it like any other farm message.
 
 ```mermaid
 flowchart LR
-    Sensors["DHT11, BH1750, DS18B20,<br/>level switch, pH board"] --> Uno["Uno R3<br/>firmware/shelf-sensor"]
+    Sensors["DHT11, 2 × BH1750, DS18B20,<br/>level switch, pH board"] --> Uno["Uno R3<br/>firmware/shelf-sensor"]
     Uno -- "USB serial<br/>one JSON line / 5 s" --> Bridge["shelf-bridge<br/>(Pi)"]
     Bridge -- "farm/shelf/{id}/sensors<br/>ShelfSensorData" --> Broker[(Mosquitto)]
     Bridge -- "farm/alerts<br/>shelf silent" --> Broker
@@ -23,7 +23,8 @@ flowchart LR
 | Part | Measures | `ShelfSensorData` field |
 |---|---|---|
 | DHT11 module (blue, 3 pins) | Air temperature, humidity | `temperature_c`, `humidity_pct` |
-| BH1750 / GY-302 board | Light | `light_lux` |
+| BH1750 / GY-302 board, bottom level | The bottom level's grow light | `light_lux` |
+| BH1750 / GY-302 board, top level (ADDR to 3.3V) | The top level's grow light | `light_top_lux` |
 | DS18B20 steel probe | Reservoir water temperature | `water_temp_c` |
 | DFRobot liquid level kit: XKC-Y25-V contactless switch (white disc) + adapter | Reservoir above/below a line | `water_level_ok` |
 | pH electrode + DFRobot pH meter V1.1 board | Reservoir pH | `ph` |
@@ -42,7 +43,10 @@ previous team's DS1307 RTC isn't used: the Pi timestamps readings on receipt
 - **DS18B20 and pH probe:** submerged in the reservoir, away from the pump
   outlet. Never let the pH bulb dry out; store it capped with its storage
   solution.
-- **BH1750:** at plant height, facing the grow light.
+- **BH1750s:** one per level, at plant height, facing that level's grow
+  light and out of the other level's. The bottom one is on the perfboard; the
+  top one is on a cable of up to about 800 mm, sharing the I2C bus
+  ([wiring](wiring/shelf-sensor.md#top-level-light-sensor)).
 - **DHT11:** in the canopy air, out of direct light and away from the water.
 
 ## Running it on the Pi
@@ -175,6 +179,9 @@ Restart the bridge after editing the config: `sudo systemctl restart farm-shelf-
 | pH board or probe unplugged | Reports whatever A0 floats to | pH outside 0–14 becomes `null` |
 | Level switch unplugged | The pull-down reads it as "low" | `water_level_ok: false`, the safe direction |
 | Light sensor reset by a power glitch | Re-sends its mode every report, so at most one wrong reading | — |
+| Top light sensor unplugged or its cable loose | Logs `# bh1750 top failed`, prints `null` for it | `light_top_lux: null`; the map shows the top level with no reading |
+| A light sensor or its cable holding the I2C bus low | Both light sensors share the bus: both `null` until it clears. The I2C timeout keeps the loop running; the watchdog resets the node if not | Both lights `null`; the other readings unaffected |
+| Firmware from before the top light sensor | Its lines have no `light_top_lux` | Published as `light_top_lux: null` |
 | Node hangs (I2C, firmware bug) | Watchdog resets it within 8 s | Logs the restart (`seq` went back) |
 | Port open but silent (node hung past its watchdog, wedged USB) | Reset by the reopen (DTR) | After 20 s closes and reopens the port, and keeps doing so every 20 s until readings return |
 | USB unplugged / node rebooting | — | Reopens the port every 3 s; one alert after 20 s of silence; when readings resume, logs it and publishes an info alert resolving it |
@@ -188,3 +195,11 @@ The readings reach the dashboard two ways: on FarmNet straight from
 which mirrors them into Supabase's `sensor_events` table
 ([SUPABASE-SETUP.md](SUPABASE-SETUP.md)). On FarmNet the dashboard shows the
 newest reading of any shelf; the remote path waits on the Supabase bridge.
+
+The Light card and History page show both levels' light. The farm map draws
+each level's grow light as bright as its sensor reads: `light_lux` lights the
+map's bottom level, `light_top_lux` the one above it. Full brightness is
+`FULL_GLOW_LUX` in `web/src/lib/farm/map/renderer.ts`: set it to what a sensor
+reads under its light at full brightness. A level with no current reading
+(none in the last 10 s, the sensor `null`, or a level above those two) is
+drawn without its beams, never as lit.
