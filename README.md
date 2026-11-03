@@ -69,3 +69,7 @@ git push --force-with-lease # if you pushed before the rebase
 ## Branch Naming
 
 Use `short-description` — e.g. `esp32-wifi-fix` or `pi-api-auth`.
+
+## License
+
+Personal, non-commercial use only, with credit: see [LICENSE](LICENSE). Commercial and academic use need written permission.
