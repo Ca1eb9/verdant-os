@@ -129,6 +129,12 @@ constexpr float BATTERY_CAL_FACTOR = 1.0f;      // tweak after multimeter check
 constexpr uint8_t BATTERY_SAMPLES = 16;         // ADC reads averaged per sample
 constexpr float BATTERY_EMA_ALPHA = 0.2f;       // smoothing, 0..1 (1 = none)
 constexpr uint32_t BATTERY_PERIOD_MS = 500;
+// A reading under this isn't the pack: its protection board cuts out well
+// above it, and the converter can't run the ESP32 below it. It's the divider
+// wire off, or a bench on USB with the pack switched off. The battery
+// protections and charge logic pause until a real reading is back; telemetry
+// keeps the last good one.
+constexpr float BATTERY_UNPLUGGED_V = 6.0f;
 
 // ---- Charge contact (PIN_CHARGE_SENSE, docs/wiring/robot.md) ----------------------
 // Only read while docking or charging (g_charge_sense_on), or always with

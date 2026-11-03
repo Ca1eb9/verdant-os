@@ -52,7 +52,22 @@ void Battery::sample() {
   float adc_v = (total_mv / (float)BATTERY_SAMPLES) / 1000.0f;
   float pack_v = adc_v * (BATTERY_R1_OHMS + BATTERY_R2_OHMS) / BATTERY_R2_OHMS * BATTERY_CAL_FACTOR;
 
-  volts_ = isnan(volts_) ? pack_v : volts_ + BATTERY_EMA_ALPHA * (pack_v - volts_);
+  if (pack_v < BATTERY_UNPLUGGED_V) {
+    if (!unplugged_logged_) {
+      LOG("battery", "reading %.2f V: not the pack (divider wire off, or no battery on); "
+          "battery protections paused (logged once until it's back)", pack_v);
+      unplugged_logged_ = true;
+    }
+    ok_ = false;
+    return;
+  }
+  if (unplugged_logged_) {
+    LOG("battery", "reading back: %.2f V", pack_v);
+    unplugged_logged_ = false;
+  }
+  // Back from a gap: start from this reading, not from the one before it
+  volts_ = isnan(volts_) || !ok_ ? pack_v : volts_ + BATTERY_EMA_ALPHA * (pack_v - volts_);
   pct_ = battery_pct_from_voltage(volts_, BATTERY_CELLS, BATTERY_FULL_V);
+  ok_ = true;
 }
 #endif

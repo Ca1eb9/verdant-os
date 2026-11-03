@@ -283,6 +283,7 @@ void sensor_task(void* /*param*/) {
       d.obstacle_rear_stop = g_obstacle_rear_flag;
       d.battery_v = s_battery.volts();
       d.battery_pct = s_battery.pct();
+      d.battery_ok = s_battery.ok();
       d.charge_sensed = s_charge.known();
       d.charge_contact = s_charge.closed();
       d.temperature_c = s_air.temperature_c;
