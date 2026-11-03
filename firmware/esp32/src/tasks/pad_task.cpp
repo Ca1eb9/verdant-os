@@ -196,8 +196,14 @@ void pad_task(void* /*param*/) {
     bool in_use = look || pad.isConnected() || XboxSeriesXControllerESP32_asukiaaa::advDevice != nullptr;
     bool want_radio = radio.update(in_use, loop_ms) && !joining;
     if (want_radio && !radio_on) {
-      start_bluetooth(pad);
-      radio_on = true;
+      // Said before it starts, and checked again after: comms sets
+      // g_wifi_joining before it reads g_pad_radio_on, so a join can't begin
+      // while Bluetooth is coming up
+      g_pad_radio_on = true;
+      if (!g_wifi_joining) {
+        start_bluetooth(pad);
+        radio_on = true;
+      }
     } else if (!want_radio && radio_on && !pad.isConnected()) {
       radio_on = !stop_bluetooth();  // tried again next loop
     }

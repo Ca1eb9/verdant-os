@@ -74,6 +74,9 @@ bool s_not_found_logged = false;
 int32_t s_ap_channel = 0;
 uint8_t s_ap_bssid[6];
 int32_t s_ap_rssi = 0;
+uint8_t s_join_fails = 0;       // failed joins in a row
+uint32_t s_last_join_ms = 0;
+bool s_backoff_logged = false;
 
 void start_scan(uint32_t now) {
   if (s_wifi_fail_reason) {  // how the last link ended
@@ -107,7 +110,19 @@ bool scan_found() {
   return found;
 }
 
-void end_join() {
+// `failed`: the join was refused or timed out. Stops the driver's own retries,
+// which would otherwise contend with Bluetooth once it restarts.
+void end_join(uint32_t now, bool failed) {
+  if (failed) {
+    WiFi.disconnect();
+    if (s_join_fails < 255) s_join_fails++;
+  } else {
+    s_join_fails = 0;
+    s_backoff_logged = false;
+  }
+  // The next scan waits WIFI_RETRY_MS from here, so Bluetooth gets that long
+  // to find the controller again
+  if (s_wifi_step != WifiStep::Idle || g_wifi_joining) s_wifi_tried_ms = now;
   s_wifi_fail_reason = 0;
   s_wifi_step = WifiStep::Idle;
   g_wifi_joining = false;
@@ -134,6 +149,16 @@ void service_wifi(uint32_t now) {
         break;
       }
       s_not_found_logged = false;
+      if (s_join_fails >= WIFI_JOIN_FAILS_BEFORE_BACKOFF && g_pad_connected &&
+          now - s_last_join_ms < WIFI_JOIN_BACKOFF_MS) {
+        if (!s_backoff_logged) {
+          LOG("comms", "WiFi refused %u times: keeping the controller, joining every %lu ms",
+              s_join_fails, (unsigned long)WIFI_JOIN_BACKOFF_MS);
+        }
+        s_backoff_logged = true;
+        break;
+      }
+      s_last_join_ms = now;
       g_wifi_joining = true;
       s_wifi_step = WifiStep::FreeingRadio;
       s_wifi_step_ms = now;
@@ -159,10 +184,10 @@ void service_wifi(uint32_t now) {
         int r = s_wifi_fail_reason;
         LOG("comms", "WiFi attempt failed: reason %d (%s)", r,
             WiFi.disconnectReasonName((wifi_err_reason_t)r));
-        end_join();
+        end_join(now, true);
       } else if (now - s_wifi_step_ms >= WIFI_JOIN_TIMEOUT_MS) {
         LOG("comms", "WiFi attempt timed out");
-        end_join();
+        end_join(now, true);
       }
       break;
   }
@@ -198,7 +223,7 @@ Link service_link() {
 
   if (!s_wifi_was_up) {
     s_wifi_was_up = true;
-    end_join();
+    end_join(now, false);
     s_mqtt_backoff = MQTT_RETRY_MIN_MS;
     s_mqtt_ever_tried = false;  // try MQTT right away on a fresh WiFi link
     LOG("comms", "WiFi up, IP %s, RSSI %d dBm", WiFi.localIP().toString().c_str(), WiFi.RSSI());
