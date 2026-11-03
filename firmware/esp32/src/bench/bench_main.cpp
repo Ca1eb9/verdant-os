@@ -144,7 +144,9 @@ static void bench_nav_task(void*) {
       // idle needs a known node (docs/firmware-architecture.md, boot rule)
       t.status = current_node[0] ? RobotStatus::Idle : RobotStatus::Initializing;
       strncpy(t.current_node, current_node, sizeof(t.current_node));
-      t.battery_pct = latest.battery_pct;  // NAN until the first sample: comms skips it
+      // As the robot's nav task: the last good reading, 0 if never one
+      t.battery_pct = latest.battery_pct;
+      if (isnan(t.battery_pct) && latest.uptime_ms != 0 && !latest.battery_ok) t.battery_pct = 0;
       t.heading_known = false;
       t.obstacle_cm = latest.obstacle_front_cm;  // the bench never drives, so always front
       t.temperature_c = latest.temperature_c;  // NAN: comms leaves it out
