@@ -73,3 +73,7 @@ Use `short-description` — e.g. `esp32-wifi-fix` or `pi-api-auth`.
 ## License
 
 Personal, non-commercial use only, with credit: see [LICENSE](LICENSE). Commercial and academic use need written permission.
+
+## Credits
+
+This project builds on the original [VerdantOS](https://github.com/TigerShock4982/VerdantOS) by its original contributors.
