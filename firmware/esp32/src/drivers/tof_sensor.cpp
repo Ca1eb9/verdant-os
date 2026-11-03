@@ -7,11 +7,48 @@
 #include "../config.h"
 #include "../log.h"
 
-bool TofSensor::begin() {
-  if (!wire_started_) {
-    bus_.begin(sda_, scl_, hz_);
-    wire_started_ = true;
+namespace {
+
+// A sensor reset mid-transfer can hold SDA low for good, and no new
+// transfer can start until it lets go: clock SCL until it does (at most 9
+// bits, I2C spec 3.1.16), then send a STOP. Returns the clocks it took.
+int free_bus(int sda, int scl) {
+  constexpr uint32_t HALF_BIT_US = 5;  // 100 kHz
+  pinMode(sda, INPUT_PULLUP);
+  pinMode(scl, OUTPUT_OPEN_DRAIN);
+  digitalWrite(scl, HIGH);
+  delayMicroseconds(HALF_BIT_US);
+  int clocks = 0;
+  while (digitalRead(sda) == LOW && clocks < 9) {
+    digitalWrite(scl, LOW);
+    delayMicroseconds(HALF_BIT_US);
+    digitalWrite(scl, HIGH);
+    delayMicroseconds(HALF_BIT_US);
+    clocks++;
   }
+  // STOP: SDA rises while SCL is high
+  pinMode(sda, OUTPUT_OPEN_DRAIN);
+  digitalWrite(sda, LOW);
+  delayMicroseconds(HALF_BIT_US);
+  digitalWrite(scl, HIGH);
+  delayMicroseconds(HALF_BIT_US);
+  digitalWrite(sda, HIGH);
+  delayMicroseconds(HALF_BIT_US);
+  return clocks;
+}
+
+}  // namespace
+
+bool TofSensor::begin() {
+  if (wire_started_) {
+    // A retry after the sensor stopped answering: restart this sensor's bus
+    // (only this one), in case it or the ESP32's I2C hardware is stuck.
+    bus_.end();
+    int clocks = free_bus(sda_, scl_);
+    if (clocks > 0) LOG("tof", "%s I2C bus was stuck: freed with %d clocks", name_, clocks);
+  }
+  bus_.begin(sda_, scl_, hz_);
+  wire_started_ = true;
   dev_.begin();
   dev_.VL53L4CX_Off();
 

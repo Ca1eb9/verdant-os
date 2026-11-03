@@ -110,7 +110,9 @@ constexpr uint32_t I2C_REAR_HZ = 400000;
 constexpr uint32_t TOF_TIMEOUT_MS = 500;        // no data this long = sensor fault
 constexpr uint32_t TOF_REINIT_MS = 5000;
 // If the ToF sensor stops responding, hold the obstacle flag (motors stay
-// stopped). Safer for the real robot; set false to bench-test without one.
+// stopped). Safer for the real robot; set false to bench-test without one:
+// then a dead sensor's flag clears. Either way it's retried every
+// TOF_REINIT_MS, restarting its I2C bus.
 constexpr bool OBSTACLE_FAILSAFE = true;
 
 // ---- Battery (3S Li-ion, docs/battery-monitoring.md) ------------------------------
