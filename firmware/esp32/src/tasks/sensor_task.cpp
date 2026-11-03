@@ -159,7 +159,9 @@ void update_obstacle(ObstacleState& obs, uint32_t now) {
           OBSTACLE_FAILSAFE ? " - holding its obstacle flag" : "");
       obs.fault_logged = true;
     }
-    if (OBSTACLE_FAILSAFE) set_obstacle_flag(obs, true, "sensor fault");
+    // Off: a dead sensor blocks nothing, so a flag it had set must not
+    // stay set with no readings left to clear it.
+    set_obstacle_flag(obs, OBSTACLE_FAILSAFE, "sensor fault");
     if (now - obs.last_reinit_ms >= TOF_REINIT_MS) {
       obs.last_reinit_ms = now;
       if (obs.tof->begin()) obs.last_data_ms = now;  // give it a fresh timeout
