@@ -1,0 +1,43 @@
+VerdantOS Personal Use License
+
+Copyright (c) 2026 Caleb Penley, Jameson McMullen and the VerdantOS contributors.
+All rights reserved, except as granted below.
+
+"The Work" means everything in this repository: source code, firmware,
+documentation, diagrams, wiring and hardware designs, and the system's
+design itself. "You" means anyone who uses any of it.
+
+1. Personal use. You may use, copy, modify, build and run the Work, and
+   build your own projects from it or from its ideas and designs, for your
+   own personal, non-commercial use.
+
+2. Sharing. You may share the Work, or something you made from it, with
+   others for free, under this same license, with the credit in section 3.
+
+3. Credit. Anything you share or publish that uses any part of the Work,
+   including its ideas or designs, must clearly credit:
+     "Based on VerdantOS by Caleb Penley, Jameson McMullen and the VerdantOS contributors
+       (https://github.com/Ca1eb9/verdant-os)"
+   and include a copy of this license.
+
+4. No commercial use. You may not use the Work, or anything made from it,
+   to make money or for any business purpose: no selling it, no paid
+   products or services, and no use inside a company or organization's
+   work. Ask the copyright holders for a separate license.
+
+5. No academic use. You may not submit the Work, or anything made from it,
+   as part of any coursework, assignment, thesis, competition entry or other
+   academic or educational assessment, or use it in academic research or
+   publications, without written permission from the copyright holders.
+   Reading it to learn is fine.
+
+6. No warranty. The Work is provided "as is", without warranty of any kind.
+   The authors are not liable for any damage or loss from its use, including
+   damage to hardware, plants or property. It controls motors and
+   electronics: use it at your own risk.
+
+7. Ending. If you break these terms, your permission to use the Work ends
+   automatically.
+
+For any use not allowed here, contact the copyright holders through
+https://github.com/Ca1eb9/verdant-os.

@@ -251,6 +251,11 @@ extern volatile uint32_t g_pad_connect_requests;
 // connected or not, and millis() of the last change. 0 = never.
 extern volatile bool g_pad_connected;
 extern volatile uint32_t g_pad_link_changed_ms;
+// A WiFi join the comms task is starting, its network found by a scan (comms
+// writes): Bluetooth gives up the radio until it ends. g_pad_radio_on (pad
+// task writes) says whether Bluetooth is still running.
+extern volatile bool g_wifi_joining;
+extern volatile bool g_pad_radio_on;
 
 // Creates every queue. Call once from setup() before creating tasks.
 // Returns false if any allocation failed.

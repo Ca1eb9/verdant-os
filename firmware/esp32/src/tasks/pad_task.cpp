@@ -136,6 +136,7 @@ void pad_task(void* /*param*/) {
   bool looking = false;
   PadRadio radio;
   bool radio_on = false;
+  bool dropped_for_join = false;
 
   for (;;) {
     vTaskDelay(pdMS_TO_TICKS(PAD_LOOP_MS));
@@ -156,16 +157,36 @@ void pad_task(void* /*param*/) {
     }
     if (window_open && (pad.isConnected() || loop_ms - window_opened_ms >= PAD_CONNECT_WINDOW_MS)) {
       window_open = false;
-      if (!pad.isConnected()) LOG("pad", "connect_controller: no controller found");
+      if (!pad.isConnected()) LOG("pad", "no controller found");
+    }
+
+    // A WiFi join fails sharing the radio, so Bluetooth stops for it, a
+    // connected controller included, and looks for that controller again after.
+    bool joining = g_wifi_joining;
+    if (joining && pad.isConnected() && !dropped_for_join) {
+      LOG("pad", "WiFi network found: disconnecting the controller while WiFi joins");
+      dropped_for_join = true;
+      for (NimBLEClient* client : NimBLEDevice::getConnectedClients()) client->disconnect();
+    }
+    if (joining && radio_on) {
+      // A found controller isn't connected now: the scan results it points
+      // into go with Bluetooth. The scan stops first, or it finds it again.
+      stop_scanning();
+      XboxSeriesXControllerESP32_asukiaaa::advDevice = nullptr;
+    }
+    if (!joining && dropped_for_join) {
+      dropped_for_join = false;
+      window_open = true;  // looks for it even once the broker is back
+      window_opened_ms = loop_ms;
     }
 
     // Only look while the robot is on its own (no broker: there's no
     // heartbeat to tell otherwise) or during a connect_controller window.
-    bool look = bluetooth && !pad.isConnected() && (!g_mqtt_connected || window_open);
+    bool look = bluetooth && !joining && !pad.isConnected() && (!g_mqtt_connected || window_open);
     if (look != looking) {
       looking = look;
       if (look) {
-        LOG("pad", "looking for a controller (%s)", window_open ? "connect_controller" : "no broker");
+        LOG("pad", "looking for a controller (%s)", window_open ? "connect_controller or a WiFi join" : "no broker");
       } else if (!pad.isConnected()) {
         LOG("pad", "stopped looking for a controller");
       }
@@ -173,13 +194,20 @@ void pad_task(void* /*param*/) {
     // Bluetooth runs only while in use: off, WiFi answers without the delays
     // its power saving adds.
     bool in_use = look || pad.isConnected() || XboxSeriesXControllerESP32_asukiaaa::advDevice != nullptr;
-    bool want_radio = radio.update(in_use, loop_ms);
+    bool want_radio = radio.update(in_use, loop_ms) && !joining;
     if (want_radio && !radio_on) {
-      start_bluetooth(pad);
-      radio_on = true;
-    } else if (!want_radio && radio_on) {
+      // Said before it starts, and checked again after: comms sets
+      // g_wifi_joining before it reads g_pad_radio_on, so a join can't begin
+      // while Bluetooth is coming up
+      g_pad_radio_on = true;
+      if (!g_wifi_joining) {
+        start_bluetooth(pad);
+        radio_on = true;
+      }
+    } else if (!want_radio && radio_on && !pad.isConnected()) {
       radio_on = !stop_bluetooth();  // tried again next loop
     }
+    g_pad_radio_on = radio_on;
     if (radio_on) {
       if (look) {
         keep_scanning(pad);
