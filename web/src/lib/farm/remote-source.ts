@@ -391,7 +391,11 @@ export function createRemoteSource(farmId: string): FarmDataSource {
             .eq("farm_id", farmId)
             .order("created_at", { ascending: false })
             .limit(RECENT_SHELF_ROWS),
-        ),
+        ).catch((err) => {
+          // Only the readings: a project whose SQL predates light_top_lux still shows the farm
+          warnOnce("sensors", `no shelf readings from Supabase (rerun web/supabase/sensor_events.sql?): ${err instanceof Error ? err.message : err}`);
+          return [];
+        }),
         rowsOf(client.from("farm_topology").select("topology").eq("farm_id", farmId).limit(1)),
         // Only the chart lines: a project whose SQL predates the table still shows the farm
         rowsOf(client.from("alert_thresholds").select("thresholds").eq("farm_id", farmId).limit(1)).catch((err) => {
