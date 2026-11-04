@@ -45,7 +45,10 @@ static std::vector<TofNode> farm_table() {
   std::vector<TofNode> t;
   for (uint8_t i = 0; i < GRAPH_NODE_COUNT; i++) {
     float pos = (float)GRAPH_NODES[i].x * CM_PER_UNIT;
-    t.push_back({GRAPH_NODES[i].id, 230 - pos, pos + 30});
+    float front = 230 - pos, rear = pos + 30;
+    // A board beyond TOF_NAV_MAX_RANGE_CM isn't measured.
+    t.push_back({GRAPH_NODES[i].id, front <= TOF_NAV_MAX_RANGE_CM ? front : 0,
+                 rear <= TOF_NAV_MAX_RANGE_CM ? rear : 0});
   }
   return t;
 }
@@ -196,10 +199,23 @@ static void table_checks() {
   SCENARIO("table: one side only is fine");
   {
     auto t = farm_table();
-    entry(t, "elev-1-L0").front_cm = 0;
-    entry(t, "dock-1").rear_cm = 0;
+    entry(t, "water-01").front_cm = 0;
     TofLocator loc(t.data(), t.size(), LEVELS, 3);
     CHECK(loc.begin() == nullptr);
+  }
+  SCENARIO("table: a reading beyond TOF_NAV_MAX_RANGE_CM");
+  {
+    auto t = farm_table();
+    entry(t, "cp-01").front_cm = TOF_NAV_MAX_RANGE_CM + 1;
+    expect_error(t, "TOF_NAV_MAX_RANGE_CM");
+  }
+  SCENARIO("table: front + rear off the others on its level (no length set)");
+  {
+    auto t = farm_table();
+    // L1's two-sided nodes (water-11 at 100 cm): put one more on that level.
+    entry(t, "cp-11").rear_cm = 140;  // 80 + 140 = 220, not 260
+    const float no_len[] = {0, 0, 0};
+    expect_error(t, "doesn't match", no_len, 3);
   }
 }
 
@@ -308,12 +324,46 @@ static void edges() {
       s.rear_cm = 20;  // something behind it
       CHECK(loc.check_edge(s, tr.now) == NO_NODE);
     }
+    // water-01 has both readings: not taken without both boards in view.
     TofSample s = tr.at(110);
-    s.rear_ms = 0;  // rear out of range: no length check
+    s.rear_ms = 0;
     CHECK(loc.check_edge(s, tr.now) == NO_NODE);
     s = tr.at(111);
     s.rear_cm = NAN;
+    CHECK(loc.check_edge(s, tr.now) == NO_NODE);
+    s = tr.at(112);
+    CHECK(loc.check_edge(s, tr.now) == NO_NODE);
+    s = tr.at(113);
     CHECK(loc.check_edge(s, tr.now) == N("water-01"));
+  }
+  SCENARIO("edge: an object parked in the beam: never a two-sided node");
+  for (int rear_seen = 0; rear_seen < 2; rear_seen++) {
+    TofLocator loc = ready_locator(t);
+    Track tr;
+    loc.on_edge(N("cp-01"), N("water-01"), EdgeDrive::Forward);
+    // Something at 150 cm: front reads 150 - pos. The rear board either in
+    // view (the length check) or not (needs both).
+    for (float p = 50; p < 136; p += 1) {
+      TofSample s = tr.at(p);
+      s.front_cm = 150 - p;
+      if (!rear_seen) s.rear_ms = 0;
+      s.front_stop = s.front_cm < OBSTACLE_STOP_CM;
+      CHECK(loc.check_edge(s, tr.now) == NO_NODE);
+    }
+  }
+  SCENARIO("edge: far past the node, it's missed, not reached");
+  {
+    TofLocator loc = ready_locator(t);
+    Track tr;
+    loc.on_edge(N("cp-01"), N("water-01"), EdgeDrive::Forward);
+    drive(loc, tr, 50, 98, 1, NO_NODE);
+    // Blind from here to well past it (rear missing: water-01 needs both).
+    for (float p = 99; p < 130; p += 1) {
+      TofSample s = tr.at(p);
+      s.rear_ms = 0;
+      CHECK(loc.check_edge(s, tr.now) == NO_NODE);
+    }
+    CHECK(isnan(drive(loc, tr, 130, 160, 1, NO_NODE)));
   }
   SCENARIO("edge: a first reading outside the edge isn't trusted");
   {
@@ -390,12 +440,12 @@ static void edges() {
   SCENARIO("edge: backward on the trailing side (front rising)");
   {
     auto t2 = farm_table();
-    entry(t2, "cp-01").rear_cm = 0;
+    entry(t2, "water-01").rear_cm = 0;
     TofLocator loc = ready_locator(t2);
     Track tr;
-    loc.on_edge(N("water-01"), N("cp-01"), EdgeDrive::Backward);
-    float at = drive(loc, tr, 100, 30, 1, N("cp-01"));
-    CHECK(at == 49);  // front 180 at 50
+    loc.on_edge(N("cp-02"), N("water-01"), EdgeDrive::Backward);
+    float at = drive(loc, tr, 150, 80, 1, N("water-01"));
+    CHECK(at == 99);  // front 130 at 100
   }
   SCENARIO("edge: resumed after rolling on a stop's length past the node");
   {
@@ -410,17 +460,26 @@ static void edges() {
   }
   SCENARIO("edge: toward an elevator, the board behind (the platform may be gone)");
   {
-    TofLocator loc = ready_locator(t);
-    Track tr;
-    loc.on_edge(N("cp-02"), N("elev-1-L0"), EdgeDrive::Forward);
-    // Platform elsewhere: the front sees down the shaft. Rear rises to 230.
-    float at = NAN;
-    for (float p = 150; p <= 210 && isnan(at); p += 1) {
-      TofSample s = tr.at(p);
-      s.front_cm = 400;
-      if (loc.check_edge(s, tr.now) == N("elev-1-L0")) at = p;
+    // A short farm, every board in range: 25 cm a unit, front = 130 - pos,
+    // rear = pos + 30.
+    std::vector<TofNode> t2;
+    for (uint8_t i = 0; i < GRAPH_NODE_COUNT; i++) {
+      float pos = (float)GRAPH_NODES[i].x * 25;
+      t2.push_back({GRAPH_NODES[i].id, 130 - pos, pos + 30});
     }
-    CHECK(at == 201);
+    const float no_len[] = {0, 0, 0};
+    TofLocator loc(t2.data(), t2.size(), no_len, 3);
+    CHECK(loc.begin() == nullptr);
+    loc.on_edge(N("cp-02"), N("elev-1-L0"), EdgeDrive::Forward);
+    // Platform elsewhere: the front sees down the shaft. Rear rises to 130.
+    float at = NAN;
+    uint32_t now = 1000;
+    for (float p = 75; p <= 110 && isnan(at); p += 1) {
+      now += 33;
+      TofSample s = {400, now, false, p + 30, now, false};
+      if (loc.check_edge(s, now) == N("elev-1-L0")) at = p;
+    }
+    CHECK(at == 101);
   }
   SCENARIO("elevator: driving off forward, front board");
   {
@@ -508,8 +567,8 @@ static void creep_and_localize() {
     // L0's nodes measured differently from L1's: on L1's numbers, nothing on L0 matches.
     for (auto& e : t2) {
       if (GRAPH_NODES[N(e.node)].z == 0) {
-        e.front_cm += 3 * TOF_LOCALIZE_TOL_CM;
-        e.rear_cm += 3 * TOF_LOCALIZE_TOL_CM;
+        if (e.front_cm > 0) e.front_cm += 3 * TOF_LOCALIZE_TOL_CM;
+        if (e.rear_cm > 0) e.rear_cm += 3 * TOF_LOCALIZE_TOL_CM;
       }
     }
     const float no_len[] = {0, 0, 0};
@@ -692,17 +751,16 @@ static void creep_and_localize() {
   {
     auto t2 = farm_table();
     // water-01 by its front only, cp-02 by its rear only, measured so that
-    // at 125 cm both are within tolerance.
+    // at 110 cm both are within tolerance.
     entry(t2, "water-01").rear_cm = 0;
-    entry(t2, "water-01").front_cm = 105;
+    entry(t2, "water-01").front_cm = 120;
     entry(t2, "cp-02").front_cm = 0;
-    entry(t2, "cp-02").rear_cm = 155;
-    entry(t2, "cp-01").front_cm = 180;
+    entry(t2, "cp-02").rear_cm = 140;
     TofLocator loc = ready_locator(t2);
     CHECK(loc.ready());
     Track tr;
     for (int i = 0; i < 100; i++) {
-      TofSample s = tr.at(125);
+      TofSample s = tr.at(110);
       CHECK(loc.localize(0, NO_NODE, s, tr.now) == NO_NODE);
     }
   }

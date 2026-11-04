@@ -488,6 +488,9 @@ changes**: positions are still node ids, with the same events and telemetry.
 - Readings it doesn't trust (stale, held, further than the robot could have
   moved, or front + rear short of the level's length) never make a node: a
   node is late rather than wrong, and the missed-tag fault applies as for a tag.
+  A node with both readings is only taken with both boards in view, and never
+  further past it than a stop's roll-on (that's a missed node). A node
+  measured on one side only can be fooled by something parked in that beam.
 - Recovering from `error` without a tag: drive the robot by hand (`manual`)
   onto a node. Still there for `TOF_STILL_MS`, it counts as that node's tag
   read, and leaving manual (`resume` or the timeout) recovers from there. In

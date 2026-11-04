@@ -52,7 +52,10 @@ static std::vector<TofNode> farm_table() {
   std::vector<TofNode> t;
   for (uint8_t i = 0; i < GRAPH_NODE_COUNT; i++) {
     float pos = (float)GRAPH_NODES[i].x * CM_PER_UNIT;
-    t.push_back({GRAPH_NODES[i].id, 230 - pos, pos + 30});
+    float front = 230 - pos, rear = pos + 30;
+    // A board beyond TOF_NAV_MAX_RANGE_CM isn't measured.
+    t.push_back({GRAPH_NODES[i].id, front <= TOF_NAV_MAX_RANGE_CM ? front : 0,
+                 rear <= TOF_NAV_MAX_RANGE_CM ? rear : 0});
   }
   return t;
 }
@@ -93,6 +96,13 @@ class Farm : public NavOutput {
   // A person in front of the robot, this far from its front sensor (NAN: none).
   float person_cm = NAN;
   float noise_cm = 0;  // added to every reading, alternating sign
+  // Realistic readings: independent Gaussian noise on each side (this sigma,
+  // cm), each measured this long before it reaches nav.
+  float sigma_cm = 0;
+  uint32_t lag_ms = 0;
+  uint32_t seed = 1;
+  // Each arrival's distance from its node's spot (cm), the worst so far.
+  float worst_miss_cm = 0;
   std::vector<RobotEventType> events;
   std::vector<std::string> arrivals;  // node ids, as NavCore saw them
 
@@ -149,18 +159,31 @@ class Farm : public NavOutput {
   void loop() {
     move(NAV_LOOP_MS);
     now += NAV_LOOP_MS;
+    past_.push_back({now, pos});
     if (now - read_ms_ >= TOF_PERIOD_MS) {
       read_ms_ = now;
       float n = (reads_++ % 2 ? noise_cm : -noise_cm);
-      s_.obstacle_front_cm = front() + n;
-      s_.obstacle_rear_cm = rear() + n;
+      // Where it was lag_ms ago.
+      float was = pos;
+      for (auto it = past_.rbegin(); it != past_.rend(); ++it) {
+        if (now - it->first >= lag_ms) {
+          was = it->second;
+          break;
+        }
+      }
+      float lagged = was - pos;
+      s_.obstacle_front_cm = front() - lagged + n + gauss() * sigma_cm;
+      s_.obstacle_rear_cm = rear() + lagged + n + gauss() * sigma_cm;
       s_.tof_front_ms = now;
       s_.tof_rear_ms = now;
     }
+    if (past_.size() > 64) past_.erase(past_.begin());
     s_.obstacle_front_stop = s_.obstacle_front_cm < motion.stop_cm(false);
     s_.obstacle_rear_stop = s_.obstacle_rear_cm < motion.stop_cm(true);
-    // The dock's contacts.
-    if (core.status() == RobotStatus::Docking && rear() <= DOCK_STOP_CM + 0.5f) {
+    // The dock's contacts: sprung pads, they touch within a few cm. (Motion
+    // brakes on the first reading at DOCK_STOP_CM, so with noisy readings it
+    // can stop a few cm short: DOCK_STOP_CM is tuned on the farm.)
+    if (core.status() == RobotStatus::Docking && rear() <= DOCK_STOP_CM + 5) {
       core.on_charge_contact();
     }
 
@@ -170,6 +193,9 @@ class Farm : public NavOutput {
     NodeIndex reached = tof.update(on_track, core.status(), core.current_node(), ts, now);
     if (reached != NO_NODE) {
       arrivals.push_back(GRAPH_NODES[reached].id);
+      float miss = fabsf(pos - (float)GRAPH_NODES[reached].x * CM_PER_UNIT);
+      if (GRAPH_NODES[reached].z != level) miss = INFINITY;
+      if (miss > worst_miss_cm) worst_miss_cm = miss;
       tof.on_tag(reached);
       core.on_tag(reached, now);
     }
@@ -229,7 +255,17 @@ class Farm : public NavOutput {
     pos += speed_ * ms / 1000.0f;
   }
 
+  float gauss() {
+    float sum = 0;
+    for (int i = 0; i < 12; i++) {
+      seed = seed * 1664525u + 1013904223u;
+      sum += (seed >> 8) / 16777216.0f;
+    }
+    return sum - 6;
+  }
+
   static const uint8_t NO_LEVEL = 0xFF;
+  std::vector<std::pair<uint32_t, float>> past_;
   SensorData s_ = {};
   float speed_ = 0;
   float ramp_from_ = 0;
@@ -465,6 +501,39 @@ static void test_ride_resumed() {
   CHECK(!f.saw(RobotEventType::Error));
 }
 
+static void test_realistic_missions() {
+  SCENARIO("realistic readings: noise, lag, many missions up a level and back");
+  int done = 0, runs = 0;
+  float worst = 0;
+  for (float sigma : {1.0f, 2.0f}) {
+    for (uint32_t seed = 1; seed <= 15; seed++) {
+      Farm f;
+      f.sigma_cm = sigma;
+      f.lag_ms = 35;
+      f.seed = seed;
+      boot(f, 20);
+      f.command(navigate("t1", "water-11", TargetAction::Water, 0));
+      bool up = f.run_until([&] { return f.core.status() == RobotStatus::Idle ||
+                                         f.core.status() == RobotStatus::Error; }, 120000);
+      bool ok = up && f.core.current_node() == N("water-11") && f.level == 1;
+      if (ok) {
+        f.command(make(CommandType::ReturnToDock));
+        ok = f.run_until([&] { return f.core.status() == RobotStatus::Charging ||
+                                      f.core.status() == RobotStatus::Error; }, 120000) &&
+             f.core.status() == RobotStatus::Charging && f.level == 0;
+      }
+      runs++;
+      if (ok) done++;
+      if (f.worst_miss_cm > worst) worst = f.worst_miss_cm;
+    }
+  }
+  printf("  realistic missions: %d/%d completed, worst arrival %.1f cm from its spot\n", done,
+         runs, worst);
+  // Never a wrong node: within the roll-on window of every spot, on its level.
+  CHECK(worst <= TOF_NAV_MAX_STEP_CM + TOF_NAV_MAX_SPEED_CM_S * STOP_RAMP_MS / 2000.0f);
+  CHECK(done == runs);
+}
+
 int main() {
   test_boot();
   test_up_and_back();
@@ -477,6 +546,7 @@ int main() {
   test_hand_after_ride();
   test_ride_cut_short();
   test_ride_resumed();
+  test_realistic_missions();
   if (failures) {
     printf("tof_nav_test: %d failure(s)\n", failures);
     return 1;

@@ -247,6 +247,8 @@ constexpr uint32_t TOF_NAV_FRESH_MS = 150;
 constexpr float TOF_NAV_MAX_STEP_CM = 6.0f;
 // The robot's top speed, for how far it may have moved while it had no
 // readings at all: TOF_NAV_MAX_STEP_CM grows by this much a second of that.
+// Keep it well above the real speed at CRUISE_SPEED, or real readings are
+// rejected as too far.
 constexpr float TOF_NAV_MAX_SPEED_CM_S = 60.0f;  // TBD: measure at CRUISE_SPEED
 // Readings that weren't trusted, in a row, before it starts the edge's
 // reading again from the edge's bounds (noise, or a hand that's gone).
@@ -265,12 +267,17 @@ constexpr uint32_t TOF_STILL_MS = 1000;
 constexpr uint8_t TOF_BOOT_LEVEL = 0;
 // Two nodes' readings on one level closer than this can't be told apart.
 constexpr float TOF_MIN_NODE_GAP_CM = 10.0f;
+// The furthest a board reads reliably (medium mode, a light board). A
+// TOF_NODES reading beyond it is refused at boot: use 0 for that side. TBD:
+// check on the farm's boards.
+constexpr float TOF_NAV_MAX_RANGE_CM = 150.0f;
 // With both boards in view, front + rear is the same anywhere on a level
-// (TOF_LEVEL_LENGTH_CM); further off than this, something is in one beam and
-// neither reading is trusted.
-constexpr float TOF_NAV_LENGTH_TOL_CM = 6.0f;
-// Front + rear (cm) on each level, by level (z): read anywhere on it. 0: no
-// length check on that level. TBD: measure on the farm.
+// (TOF_LEVEL_LENGTH_CM); shorter by more than this, something is in one beam
+// and neither reading is trusted. Two sensors' noise adds up: not too tight.
+constexpr float TOF_NAV_LENGTH_TOL_CM = 9.0f;
+// Front + rear (cm) on each level, by level (z): read anywhere on it. 0: the
+// average of that level's TOF_NODES with both readings (none: no length
+// check, and anything that stays in a beam can pass for a node). TBD: measure.
 constexpr float TOF_LEVEL_LENGTH_CM[] = {0, 0, 0};
 // While on, log both readings this often while the robot isn't driving an
 // edge: for measuring TOF_NODES.

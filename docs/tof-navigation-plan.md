@@ -352,5 +352,30 @@ Changes from the plan above, mostly from review:
   the same code as the nav task (`test_host/tof_nav_test.cpp` runs the whole
   farm with no tags).
 
+From the robustness review (closed-loop stress runs with noise, lag, dropouts
+and objects in the beams):
+
+- **No arrival far past the node:** a reading past the seed window (more than
+  `TOF_NAV_MAX_STEP_CM` plus the roll-on beyond it) never makes the node; the
+  edge faults instead. Late arrivals of up to 85 cm were possible before.
+- **Both boards for a two-sided node:** with a level length, a node that has
+  both readings is only taken with both fresh, so an object parked in one beam
+  with the far board out of range can't pass for it.
+- **Level length from the table** when `TOF_LEVEL_LENGTH_CM` is 0: the average
+  of the level's two-sided nodes, each of which must agree with it.
+- **`TOF_NAV_MAX_RANGE_CM`:** a reading beyond it is refused at boot (use 0),
+  so a node is never referenced to a board the sensor can't reliably see.
+- **Recovering by hand with noise:** one reading just outside the tolerance no
+  longer restarts the stillness timer (only a clearly-off one does). Before,
+  1-2 cm of noise made recovery by hand almost impossible.
+- `TOF_NAV_LENGTH_TOL_CM` 6 → 9 (two sensors' noise adds up).
+- `tof_nav_test` now also runs 30 missions with independent per-side noise and
+  35 ms of reading lag, and checks every arrival's position.
+
+Known limits: a node measured on one side only can be fooled by an object
+parked in that beam (no second board to check against); the elevator
+platform's end wall is the board at that end of each level, so with the
+platform moved elsewhere edges toward it fault.
+
 Not done, by decision: the optional `position_source` telemetry field (no
 MQTT contract change was needed); a mid-level board.

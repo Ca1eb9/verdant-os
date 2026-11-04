@@ -41,6 +41,10 @@ constexpr float ROLL_ON_CM = TOF_NAV_MAX_SPEED_CM_S * STOP_RAMP_MS / 2000.0f;
 
 static_assert(2 * TOF_LOCALIZE_TOL_CM < TOF_MIN_NODE_GAP_CM,
               "two nodes TOF_MIN_NODE_GAP_CM apart could both match within TOF_LOCALIZE_TOL_CM");
+// A reading is a measurement (TOF_TIMING_BUDGET_US) old when the sensor task
+// polls it, and reaches nav a loop or two later.
+static_assert(TOF_NAV_FRESH_MS > TOF_TIMING_BUDGET_US / 1000 + SENSOR_PERIOD_MS + NAV_LOOP_MS,
+              "TOF_NAV_FRESH_MS is too short: no reading would ever be fresh");
 
 }  // namespace
 
@@ -83,14 +87,16 @@ const char* TofLocator::begin() {
     if ((front_[i] > 0 && front_[i] <= OBSTACLE_CLEAR_CM) || (rear_[i] > 0 && rear_[i] <= OBSTACLE_CLEAR_CM)) {
       return fail("TOF_NODES: %s is within OBSTACLE_CLEAR_CM of a board (use 0 for that side)", id);
     }
+    // Out of range it never reads, and the robot would drive on to the board.
+    if (front_[i] > TOF_NAV_MAX_RANGE_CM || rear_[i] > TOF_NAV_MAX_RANGE_CM) {
+      return fail("TOF_NODES: %s reads beyond TOF_NAV_MAX_RANGE_CM (use 0 for that side)", id);
+    }
     uint8_t level = level_of(i);
-    if (level >= level_count_) return fail("TOF_LEVEL_LENGTH_CM has no entry for %s's level", id);
-    float length = level_cm_[level];
-    if (!(length >= 0)) return fail("TOF_LEVEL_LENGTH_CM: %s's level has a negative (or not a number) length", id);
-    // A typo on one side: creep and localize could never match it.
-    if (length > 0 && front_[i] > 0 && rear_[i] > 0 &&
-        fabsf(front_[i] + rear_[i] - length) > TOF_NAV_LENGTH_TOL_CM) {
-      return fail("TOF_NODES: %s's front + rear isn't its level's TOF_LEVEL_LENGTH_CM", id);
+    if (level >= level_count_ || level >= MAX_PATH_LEN) {
+      return fail("TOF_LEVEL_LENGTH_CM has no entry for %s's level", id);
+    }
+    if (!(level_cm_[level] >= 0)) {
+      return fail("TOF_LEVEL_LENGTH_CM: %s's level has a negative (or not a number) length", id);
     }
     if (level == TOF_BOOT_LEVEL) boot_level = true;
     // Every pair on a level, in order along the track: far enough apart to
@@ -111,6 +117,27 @@ const char* TofLocator::begin() {
     }
   }
   if (!boot_level) return fail("TOF_BOOT_LEVEL has no nodes");
+
+  // Each level's front + rear: as set, else the average of its two-sided
+  // nodes. Every two-sided node must agree (a typo on one side could never
+  // be matched).
+  for (size_t level = 0; level < level_count_ && level < MAX_PATH_LEN; level++) {
+    float sum = 0;
+    int count = 0;
+    for (NodeIndex i = 0; i < GRAPH_NODE_COUNT; i++) {
+      if (level_of(i) == level && front_[i] > 0 && rear_[i] > 0) {
+        sum += front_[i] + rear_[i];
+        count++;
+      }
+    }
+    length_[level] = level_cm_[level] > 0 ? level_cm_[level] : (count ? sum / count : 0);
+    for (NodeIndex i = 0; i < GRAPH_NODE_COUNT; i++) {
+      if (level_of(i) == level && front_[i] > 0 && rear_[i] > 0 &&
+          fabsf(front_[i] + rear_[i] - length_[level]) > TOF_NAV_LENGTH_TOL_CM) {
+        return fail("TOF_NODES: %s's front + rear doesn't match its level's", GRAPH_NODES[i].id);
+      }
+    }
+  }
 
   ready_ = true;
   return nullptr;
@@ -252,7 +279,14 @@ NodeIndex TofLocator::check_edge(const TofSample& s, uint32_t now) {
   rejected_ = 0;
   track_cm_ = cm;
 
-  if (!past(cm) || !length_ok(level, s, now)) {
+  // Further on than a stop's roll-on past it: the node was missed (or this
+  // is something in the beam). Later than that is wrong, not late.
+  bool too_far = toward_ ? cm < seed_lo_cm_ : cm > seed_hi_cm_;
+  // A node with both readings is only taken with both boards in view, so the
+  // length check can see an object parked in a beam.
+  bool both_seen = !(length_[level] > 0 && front_[target_] > 0 && rear_[target_] > 0) ||
+                   (fresh(s.front_cm, s.front_ms, now) && fresh(s.rear_cm, s.rear_ms, now));
+  if (!past(cm) || too_far || !both_seen || !length_ok(level, s, now)) {
     count_ = 0;
     return NO_NODE;
   }
@@ -295,6 +329,9 @@ NodeIndex TofLocator::localize(uint8_t level, NodeIndex current, const TofSample
     off_since_ms_ = 0;
   }
   NodeIndex m = match(level, s, now);
+  // A reading just outside the tolerance (noise) keeps the candidate's time,
+  // unless it's clearly off it.
+  if (m == NO_NODE && candidate_ != NO_NODE && !clearly_off(candidate_, s, now)) return NO_NODE;
   // Like a tag: a robot left sitting on its node doesn't keep reading it.
   if (m == NO_NODE || (m == current && !away_)) {
     candidate_ = NO_NODE;
@@ -336,9 +373,9 @@ bool TofLocator::clearly_off(NodeIndex node, const TofSample& s, uint32_t now) c
 }
 
 bool TofLocator::length_ok(uint8_t level, const TofSample& s, uint32_t now) const {
-  if (level >= level_count_ || !(level_cm_[level] > 0)) return true;
+  if (level >= level_count_ || level >= MAX_PATH_LEN || !(length_[level] > 0)) return true;
   if (!fresh(s.front_cm, s.front_ms, now) || !fresh(s.rear_cm, s.rear_ms, now)) return true;
   // Something in a beam only ever makes the sum shorter. Longer: a board
   // isn't there (the elevator platform on another level), so it can't check.
-  return s.front_cm + s.rear_cm - level_cm_[level] >= -TOF_NAV_LENGTH_TOL_CM;
+  return s.front_cm + s.rear_cm - length_[level] >= -TOF_NAV_LENGTH_TOL_CM;
 }

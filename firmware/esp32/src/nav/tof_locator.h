@@ -30,7 +30,10 @@
 //     a stop's roll-on past the end one);
 //   - a reading while that side's obstacle flag is set;
 //   - with both boards in view, readings that don't add up to the level's
-//     length (TOF_LEVEL_LENGTH_CM).
+//     length (TOF_LEVEL_LENGTH_CM, else from TOF_NODES); and a node with both
+//     readings is only taken with both boards in view;
+//   - a reading further past the node than a stop's roll-on: the node was
+//     missed (or that's something in the beam), so the edge faults.
 // Toward an elevator node it reads the board behind if it can: the one ahead
 // is the platform, which may be on another level.
 //
@@ -125,6 +128,8 @@ class TofLocator {
   // By NodeIndex, from TOF_NODES. 0: no reading for that side.
   float front_[MAX_PATH_LEN] = {};
   float rear_[MAX_PATH_LEN] = {};
+  // By level: front + rear (TOF_LEVEL_LENGTH_CM, or from TOF_NODES). 0: unknown.
+  float length_[MAX_PATH_LEN] = {};
 
   Mode mode_ = Mode::Off;
   uint8_t level_ = TOF_BOOT_LEVEL;
