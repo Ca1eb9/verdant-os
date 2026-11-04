@@ -47,6 +47,12 @@ constexpr uint32_t I2C_TIMEOUT_US = 25000;      // a stuck bus aborts instead of
 // about 100 kHz (the I2C bus clear, NXP UM10204 3.1.16)
 constexpr uint8_t I2C_CLEAR_PULSES = 9;
 constexpr uint8_t I2C_CLEAR_HALF_PERIOD_US = 5;
+// A line counts as held low only on this many reads in a row this far apart: a
+// noise spike on the long cable isn't a stuck bus
+constexpr uint8_t I2C_STUCK_SAMPLES = 5;
+constexpr uint8_t I2C_STUCK_SAMPLE_GAP_US = 10;
+// A released line rising slowly through the cable isn't one a sensor holds
+constexpr uint16_t I2C_RISE_TIMEOUT_US = 100;
 // No "lights" line from the Pi this long: every light back on, as if the Uno
 // had no power. The bridge resends the state with every reading (5 s).
 constexpr uint32_t LIGHTS_TIMEOUT_MS = 30000;

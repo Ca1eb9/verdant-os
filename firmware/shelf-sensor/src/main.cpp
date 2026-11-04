@@ -64,33 +64,57 @@ static void i2cLine(uint8_t pin, bool low) {
   delayMicroseconds(I2C_CLEAR_HALF_PERIOD_US);
 }
 
+// Low on every one of a few reads: one noisy read isn't a stuck bus
+static bool lineHeldLow(uint8_t pin) {
+  for (uint8_t i = 0; i < I2C_STUCK_SAMPLES; i++) {
+    if (digitalRead(pin) == HIGH) return false;
+    delayMicroseconds(I2C_STUCK_SAMPLE_GAP_US);
+  }
+  return true;
+}
+
+// Released, a line rises within I2C_RISE_TIMEOUT_US unless something holds it
+static bool lineRises(uint8_t pin) {
+  uint32_t start = micros();
+  while (digitalRead(pin) == LOW) {
+    if (micros() - start > I2C_RISE_TIMEOUT_US) return false;
+  }
+  return true;
+}
+
 /**
  * A sensor left holding SDA low mid-byte (a glitch on the long cable, a board
- * plugged in powered) blocks the bus for good: the TWI timeout only resets the
- * Uno's side. Clocking SCL until it lets go, then a STOP, frees it without
- * anyone unplugging the Uno. Costs two pin reads when the bus is idle.
- * Returns true when it had to clear the bus, so the meters are configured
- * again; logs a bus it can't clear (SCL held low) once until it can.
+ * plugged in powered, the Uno reset mid-transfer) blocks the bus for good: the
+ * TWI timeout only resets the Uno's side. Clocking SCL until it lets go, then a
+ * STOP, frees it without anyone unplugging the Uno. Costs two pin reads when
+ * the bus is idle. Returns true when it had to clear the bus, so the meters are
+ * configured again; logs a bus it can't clear (SCL held low) once until it can.
  */
 static bool clearStuckBus() {
   static bool stuckLogged = false;
-  if (digitalRead(SDA) == HIGH && digitalRead(SCL) == HIGH) {
+  if (!lineHeldLow(SDA) && !lineHeldLow(SCL)) {
     stuckLogged = false;
     return false;
   }
   Wire.end();
   i2cLine(SDA, false);
   i2cLine(SCL, false);
-  for (uint8_t i = 0; i < I2C_CLEAR_PULSES && digitalRead(SDA) == LOW && digitalRead(SCL) == HIGH; i++) {
+  if (lineRises(SDA) && lineRises(SCL)) {
+    // Nothing held it: the Uno's own TWI side, now reset
+    Wire.begin();
+    Wire.setWireTimeout(I2C_TIMEOUT_US, true);
+    return false;
+  }
+  for (uint8_t i = 0; i < I2C_CLEAR_PULSES && digitalRead(SDA) == LOW && lineRises(SCL); i++) {
     i2cLine(SCL, true);
     i2cLine(SCL, false);
   }
   // STOP: SDA rises while SCL is high
-  if (digitalRead(SCL) == HIGH) {
+  if (lineRises(SCL)) {
     i2cLine(SDA, true);
     i2cLine(SDA, false);
   }
-  bool cleared = digitalRead(SDA) == HIGH && digitalRead(SCL) == HIGH;
+  bool cleared = lineRises(SDA) && lineRises(SCL);
   Wire.begin();
   Wire.setWireTimeout(I2C_TIMEOUT_US, true);
   if (cleared) {
@@ -282,6 +306,9 @@ void setup() {
   dht.begin();
   Wire.begin();
   Wire.setWireTimeout(I2C_TIMEOUT_US, true);
+  // A reset can land mid-transfer (the Pi opening the port resets the Uno),
+  // leaving a sensor holding the bus
+  clearStuckBus();
   // Measuring by the first report, so it has both light readings
   lightReady = startLight(lightMeter, LIGHT_ADDR);
   topLightReady = startLight(topLightMeter, LIGHT_TOP_ADDR);
