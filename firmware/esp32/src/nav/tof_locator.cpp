@@ -153,6 +153,18 @@ bool TofLocator::past(float cm) const {
   return toward_ ? cm <= target_cm_ + TOF_ARRIVE_LEAD_CM : cm >= target_cm_ - TOF_ARRIVE_LEAD_CM;
 }
 
+NodeIndex TofLocator::update(bool on_track, RobotStatus status, NodeIndex current,
+                             const TofSample& s, uint32_t now) {
+  if (on_track) return check_edge(s, now);
+  if (status != RobotStatus::Error && status != RobotStatus::Manual &&
+      status != RobotStatus::Initializing) {
+    return NO_NODE;
+  }
+  // Driven or set down by hand: the node it's on.
+  uint8_t level = current < GRAPH_NODE_COUNT ? level_of(current) : TOF_BOOT_LEVEL;
+  return localize(level, current, s, now);
+}
+
 NodeIndex TofLocator::check_edge(const TofSample& s, uint32_t now) {
   if (!ready_) return NO_NODE;
   if (mode_ == Mode::Creep) return check_creep(s, now);

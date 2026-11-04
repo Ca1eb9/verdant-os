@@ -72,6 +72,14 @@ class TofLocator {
   void on_creep();
   void on_untracked_move();
 
+  // Every nav loop with no tag read: the node reached, or NO_NODE.
+  // `on_track`: Motion is driving an edge or creeping (driving_edge(),
+  // creeping()); then check_edge(). Otherwise, in error, manual or
+  // initializing, localize() on NavCore's node's level (TOF_BOOT_LEVEL
+  // before the first).
+  NodeIndex update(bool on_track, RobotStatus status, NodeIndex current, const TofSample& s,
+                   uint32_t now);
+
   // While Motion drives an edge (only then: not on the elevator platform) or
   // creeps: the node reached, once, or NO_NODE.
   NodeIndex check_edge(const TofSample& s, uint32_t now);

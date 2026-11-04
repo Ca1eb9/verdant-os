@@ -66,6 +66,10 @@ class Motion {
 
   // The distance under which the sensor task should flag that side.
   float stop_cm(bool rear) const;
+  // Driving an edge toward its next tag (not onto the elevator or dock), or
+  // creeping after boot: ToF navigation reads the track only then.
+  bool driving_edge() const { return phase_ == Phase::Driving; }
+  bool creeping() const { return phase_ == Phase::Creeping; }
 
  private:
   enum class Phase : uint8_t { Idle, Driving, Creeping, Entering, Riding, Docking, AtDock, Manual, Failed };

@@ -16,6 +16,7 @@
 #include "../nav/motion.h"
 #include "../nav/nav_core.h"
 #include "../nav/survival.h"
+#include "../nav/tof_locator.h"
 #include "../types.h"
 #include "../utils/nav_helpers.h"
 
@@ -45,10 +46,12 @@ class QueueOutput : public NavOutput {
 
   void jog(JogDirection direction) override {
     last_jog_ms = millis();
+    if (tof) tof->on_untracked_move();
     motion.jog(direction, last_jog_ms);
   }
   void drive(int16_t speed) override {
     last_jog_ms = millis();
+    if (tof) tof->on_untracked_move();
     motion.drive(speed, last_jog_ms);
   }
 
@@ -56,12 +59,19 @@ class QueueOutput : public NavOutput {
     LOG("nav", "follow %s -> %s (%s)", GRAPH_NODES[from].id, GRAPH_NODES[to].id,
         drive == EdgeDrive::Backward || drive == EdgeDrive::ElevatorBackward ? "backward"
                                                                              : "forward");
+    if (tof) tof->on_edge(from, to, drive);
     motion.follow_edge(from, to, drive, millis());
   }
-  void creep() override { motion.creep(millis()); }
+  void creep() override {
+    if (tof) tof->on_creep();
+    motion.creep(millis());
+  }
 
   // Charge contact detection is the dock sequence card's.
-  void start_docking() override { motion.start_docking(millis()); }
+  void start_docking() override {
+    if (tof) tof->on_untracked_move();
+    motion.start_docking(millis());
+  }
 
   void note(const char* message) override {
     uint32_t now = millis();
@@ -79,6 +89,8 @@ class QueueOutput : public NavOutput {
   uint32_t last_note_ms = 0;
   const char* last_logged_note = nullptr;
   uint32_t last_logged_note_ms = 0;
+  // ToF navigation (TOF_NAV_ENABLED with a usable TOF_NODES), else null.
+  TofLocator* tof = nullptr;
 
  private:
   class MailboxSink : public DriveSink {
@@ -215,6 +227,19 @@ void nav_task(void* /*param*/) {
 
   LOG("nav", "graph '%s': %u nodes, dock %s", GRAPH_VERSION, GRAPH_NODE_COUNT,
       GRAPH_NODES[GRAPH_DOCK].id);
+  // Before core.begin(): its creep is the first move ToF navigation follows.
+  TofLocator tof(TOF_NODES, sizeof(TOF_NODES) / sizeof(TOF_NODES[0]), TOF_LEVEL_LENGTH_CM,
+                 sizeof(TOF_LEVEL_LENGTH_CM) / sizeof(TOF_LEVEL_LENGTH_CM[0]));
+  uint32_t tof_logged_ms = 0;
+  if (TOF_NAV_ENABLED) {
+    const char* problem = tof.begin();
+    if (problem) {
+      LOG("nav", "ToF navigation OFF, tags only: %s", problem);
+    } else {
+      out.tof = &tof;
+      LOG("nav", "ToF navigation ON: set the robot down on level %u", (unsigned)TOF_BOOT_LEVEL);
+    }
+  }
   core.set_charge_sense_always(CHARGE_SENSE_ALWAYS);
   core.begin();
 
@@ -230,6 +255,7 @@ void nav_task(void* /*param*/) {
     // Every reading, in order, so no tag arrival is skipped. tag_seq still
     // shows an arrival whose reading was dropped from a full queue.
     SensorData d;
+    bool tag_read = false;
     while (xQueueReceive(g_sensor_queue, &d, 0) == pdTRUE) {
       sensors = d;
       core.on_battery(d.battery_ok ? d.battery_pct : NAN);
@@ -241,12 +267,46 @@ void nav_task(void* /*param*/) {
         unknown_tag_ms = now;
       } else {
         known_tag_ms = now;
+        if (out.tof) {
+          // ToF got there first: the same node again would only re-plan.
+          bool on_path = core.status() == RobotStatus::EnRoute ||
+                         core.status() == RobotStatus::ReturningToDock;
+          if (on_path && node == core.current_node()) {
+            LOG("nav", "tag for %s: already reached by ToF", GRAPH_NODES[node].id);
+            continue;
+          }
+          out.tof->on_tag(node);
+          tag_read = true;
+        }
       }
       core.on_tag(node, now);
     }
 
     Command cmd;
     while (xQueueReceive(g_command_queue, &cmd, 0) == pdTRUE) core.on_command(cmd, now);
+
+    // ToF navigation: a node reached without a tag, as if its tag were read.
+    // A real tag this loop wins.
+    bool on_track = out.motion.driving_edge() || out.motion.creeping();
+    if (out.tof && !tag_read) {
+      TofSample ts = {sensors.obstacle_front_cm, sensors.tof_front_ms, sensors.obstacle_front_stop,
+                      sensors.obstacle_rear_cm,  sensors.tof_rear_ms,  sensors.obstacle_rear_stop};
+      NodeIndex reached = out.tof->update(on_track, core.status(), core.current_node(), ts, now);
+      if (reached != NO_NODE) {
+        LOG("nav", "ToF: front %.1f rear %.1f cm, at %s", sensors.obstacle_front_cm,
+            sensors.obstacle_rear_cm, GRAPH_NODES[reached].id);
+        known_tag_ms = now;
+        out.tof->on_tag(reached);
+        core.on_tag(reached, now);
+      }
+    }
+    // For measuring TOF_NODES: both readings now and then while not driving an edge.
+    if (TOF_NAV_ENABLED && !on_track && now - tof_logged_ms >= TOF_NAV_LOG_MS) {
+      tof_logged_ms = now;
+      LOG("nav", "ToF: front %.1f rear %.1f cm (sum %.1f), at %s", sensors.obstacle_front_cm,
+          sensors.obstacle_rear_cm, sensors.obstacle_front_cm + sensors.obstacle_rear_cm,
+          core.current_node() == NO_NODE ? "no node yet" : GRAPH_NODES[core.current_node()].id);
+    }
 
     // Docking acts on the contact's state, not its change: a robot sent to
     // dock again while still on the charger (e.g. resumed after an error) has
