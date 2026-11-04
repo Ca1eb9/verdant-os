@@ -154,28 +154,44 @@ static void table_checks() {
   SCENARIO("table: inside the obstacle stop");
   {
     auto t = farm_table();
-    entry(t, "elev-1-L0").front_cm = OBSTACLE_STOP_CM;
-    expect_error(t, "OBSTACLE_STOP_CM");
+    entry(t, "elev-1-L0").front_cm = OBSTACLE_CLEAR_CM;  // the flag would hold it short
+    expect_error(t, "OBSTACLE_CLEAR_CM");
   }
   SCENARIO("table: out of order along the track");
   {
     auto t = farm_table();
+    const float no_len[] = {0, 0, 0};  // or the front + rear check finds it first
     entry(t, "cp-01").front_cm = 100;  // below water-01's 130
-    expect_error(t, "front reading");
+    expect_error(t, "front reading", no_len, 3);
     t = farm_table();
     entry(t, "water-01").rear_cm = 60;  // below cp-01's 80
-    expect_error(t, "rear reading");
+    expect_error(t, "rear reading", no_len, 3);
   }
   SCENARIO("table: two nodes too close to tell apart");
   {
     auto t = farm_table();
     entry(t, "cp-01").front_cm = 130 + TOF_MIN_NODE_GAP_CM - 1;
-    expect_error(t, "TOF_MIN_NODE_GAP_CM");
+    const float no_len[] = {0, 0, 0};
+    expect_error(t, "TOF_MIN_NODE_GAP_CM", no_len, 3);
   }
   SCENARIO("table: a level with no length entry");
   {
     auto t = farm_table();
     expect_error(t, "TOF_LEVEL_LENGTH_CM", LEVELS, 2);
+  }
+  SCENARIO("table: front + rear off the level's length (a typo)");
+  {
+    auto t = farm_table();
+    entry(t, "water-01").rear_cm = 145;
+    expect_error(t, "front + rear");
+  }
+  SCENARIO("table: a negative or NAN level length");
+  {
+    auto t = farm_table();
+    const float bad[] = {260, -1, 260};
+    expect_error(t, "TOF_LEVEL_LENGTH_CM", bad, 3);
+    const float nan_len[] = {NAN, 260, 260};
+    expect_error(t, "TOF_LEVEL_LENGTH_CM", nan_len, 3);
   }
   SCENARIO("table: one side only is fine");
   {
@@ -251,15 +267,18 @@ static void edges() {
     Track tr;
     loc.on_edge(N("cp-01"), N("water-01"), EdgeDrive::Forward);
     drive(loc, tr, 50, 70, 1, NO_NODE);
-    // Robot slowed to a crawl by the hand 40 cm ahead: front reads 40.
-    for (int i = 0; i < 200; i++) {
-      TofSample s = tr.at(70 + i * 0.02f);
-      s.front_cm = 40;
+    // A hand at 120 cm (front reads 120 - pos, past the node's 130) while
+    // the robot keeps driving up to it: never the node.
+    for (float p = 70; p < 102; p += 0.5f) {
+      TofSample s = tr.at(p);
+      s.front_cm = 120 - p;
+      s.front_stop = s.front_cm < OBSTACLE_STOP_CM;
       CHECK(loc.check_edge(s, tr.now) == NO_NODE);
     }
-    // Hand gone, the robot barely moved: the board again, and on to the node.
-    float at = drive(loc, tr, 75, 130, 1, N("water-01"));
-    CHECK(at == 101);
+    // Hand gone, the robot a long way on (past the node): back on the board,
+    // reached within the roll-on window.
+    float at = drive(loc, tr, 102, 130, 1, N("water-01"));
+    CHECK(!isnan(at) && at <= 106);
   }
   SCENARIO("edge: the obstacle flag on that side stops it counting");
   {
@@ -335,10 +354,83 @@ static void edges() {
     float at = drive(loc, tr, 99, 130, 1, N("water-01"));
     CHECK(at == 101);
   }
-  SCENARIO("edge: lead takes it early");
+  SCENARIO("edge: noisy readings (2-3 cm) never lose the node");
   {
-    // TOF_ARRIVE_LEAD_CM is 0 in config.h: nothing to check beyond past().
-    CHECK(TOF_ARRIVE_LEAD_CM >= 0);
+    uint32_t seed = 12345;
+    auto noise = [&](float sigma) {
+      // Sum of uniforms, roughly Gaussian with this sigma.
+      float sum = 0;
+      for (int i = 0; i < 12; i++) {
+        seed = seed * 1664525u + 1013904223u;
+        sum += (seed >> 8) / 16777216.0f;
+      }
+      return (sum - 6) * sigma;
+    };
+    for (float sigma : {2.0f, 3.0f}) {
+      int lost = 0, early = 0;
+      for (int run = 0; run < 500; run++) {
+        TofLocator loc = ready_locator(t);
+        Track tr;
+        loc.on_edge(N("cp-01"), N("water-01"), EdgeDrive::Forward);
+        float at = NAN;
+        for (float p = 50; p <= 140 && isnan(at); p += 1) {
+          TofSample s = tr.at(p);
+          s.front_cm += noise(sigma);
+          s.rear_cm += noise(sigma);
+          if (loc.check_edge(s, tr.now) != NO_NODE) at = p;
+        }
+        if (isnan(at)) lost++;
+        else if (at < 100 - 3 * sigma) early++;
+      }
+      if (lost || early) printf("  sigma %.0f: %d lost, %d early of 500\n", sigma, lost, early);
+      CHECK(lost == 0);
+      CHECK(early == 0);
+    }
+  }
+  SCENARIO("edge: backward on the trailing side (front rising)");
+  {
+    auto t2 = farm_table();
+    entry(t2, "cp-01").rear_cm = 0;
+    TofLocator loc = ready_locator(t2);
+    Track tr;
+    loc.on_edge(N("water-01"), N("cp-01"), EdgeDrive::Backward);
+    float at = drive(loc, tr, 100, 30, 1, N("cp-01"));
+    CHECK(at == 49);  // front 180 at 50
+  }
+  SCENARIO("edge: resumed after rolling on a stop's length past the node");
+  {
+    TofLocator loc = ready_locator(t);
+    Track tr;
+    loc.on_edge(N("cp-01"), N("water-01"), EdgeDrive::Forward);
+    drive(loc, tr, 50, 98, 1, NO_NODE);
+    loc.on_untracked_move();
+    loc.on_edge(N("cp-01"), N("water-01"), EdgeDrive::Forward);
+    float at = drive(loc, tr, 109, 115, 1, N("water-01"));
+    CHECK(at == 110);
+  }
+  SCENARIO("edge: toward an elevator, the board behind (the platform may be gone)");
+  {
+    TofLocator loc = ready_locator(t);
+    Track tr;
+    loc.on_edge(N("cp-02"), N("elev-1-L0"), EdgeDrive::Forward);
+    // Platform elsewhere: the front sees down the shaft. Rear rises to 230.
+    float at = NAN;
+    for (float p = 150; p <= 210 && isnan(at); p += 1) {
+      TofSample s = tr.at(p);
+      s.front_cm = 400;
+      if (loc.check_edge(s, tr.now) == N("elev-1-L0")) at = p;
+    }
+    CHECK(at == 201);
+  }
+  SCENARIO("elevator: driving off forward, front board");
+  {
+    TofLocator loc = ready_locator(t);
+    Track tr;
+    // A platform west of its level's nodes would drive off forward: front
+    // falls to elev-1-L1's 30 cm (pos 200) here.
+    loc.on_edge(N("elev-1-L0"), N("elev-1-L1"), EdgeDrive::ElevatorForward);
+    float at = drive(loc, tr, 180, 210, 1, N("elev-1-L1"));
+    CHECK(at == 201);
   }
   SCENARIO("edge: a turn, or not ready, does nothing");
   {
@@ -420,10 +512,36 @@ static void creep_and_localize() {
         e.rear_cm += 3 * TOF_LOCALIZE_TOL_CM;
       }
     }
-    TofLocator loc = ready_locator(t2);
+    const float no_len[] = {0, 0, 0};
+    TofLocator loc(t2.data(), t2.size(), no_len, 3);
+    CHECK(loc.begin() == nullptr);
     Track tr;
     loc.on_creep();
     CHECK(isnan(drive(loc, tr, 140, 160, 0.5f, NO_NODE)));  // cp-11 is at 150 on L1
+  }
+
+  SCENARIO("creep: one side never read, past 2^31 ms of uptime");
+  {
+    TofLocator loc = ready_locator(t);
+    loc.on_creep();
+    Track tr;
+    tr.now = 0x80000100u;
+    // rear never read: only the front, matching nothing two-sided; then both.
+    NodeIndex got = NO_NODE;
+    for (int i = 0; i < 5 && got == NO_NODE; i++) {
+      TofSample s = tr.at(50);
+      got = loc.check_edge(s, tr.now);
+    }
+    CHECK(got == N("cp-01"));
+    TofLocator loc2 = ready_locator(t);
+    loc2.on_creep();
+    got = NO_NODE;
+    for (int i = 0; i < 5; i++) {
+      TofSample s = tr.at(50);
+      s.rear_ms = 0;
+      s.rear_cm = NAN;
+      CHECK(loc2.check_edge(s, tr.now) == NO_NODE);  // cp-01 needs its rear too
+    }
   }
 
   SCENARIO("localize: left sitting on its node, nothing");
@@ -440,7 +558,9 @@ static void creep_and_localize() {
     TofLocator loc = ready_locator(t);
     Track tr;
     TofSample s = tr.at(80);
-    CHECK(loc.localize(0, N("cp-01"), s, tr.now) == NO_NODE);
+    for (uint32_t start = tr.now; tr.now - start <= TOF_STILL_MS + 50; s = tr.at(80)) {
+      CHECK(loc.localize(0, N("cp-01"), s, tr.now) == NO_NODE);
+    }
     NodeIndex got = NO_NODE;
     uint32_t start = 0;
     for (int i = 0; i < 100 && got == NO_NODE; i++) {
@@ -454,6 +574,25 @@ static void creep_and_localize() {
     for (int i = 0; i < 100; i++) {
       s = tr.at(50);
       CHECK(loc.localize(0, N("cp-01"), s, tr.now) == NO_NODE);
+    }
+  }
+  SCENARIO("localize: someone walking past a robot left on its node");
+  {
+    TofLocator loc = ready_locator(t);
+    Track tr;
+    for (int i = 0; i < 100; i++) {
+      TofSample s = tr.at(50);
+      if (i >= 10 && i < 13) s.front_cm = 90;  // a person, briefly
+      CHECK(loc.localize(0, N("cp-01"), s, tr.now) == NO_NODE);
+    }
+    // Even with the length check off.
+    const float no_len[] = {0, 0, 0};
+    TofLocator loc2(t.data(), t.size(), no_len, 3);
+    CHECK(loc2.begin() == nullptr);
+    for (int i = 0; i < 100; i++) {
+      TofSample s = tr.at(50);
+      if (i >= 10 && i < 13) s.front_cm = 90;
+      CHECK(loc2.localize(0, N("cp-01"), s, tr.now) == NO_NODE);
     }
   }
   SCENARIO("localize: a different node, once still");

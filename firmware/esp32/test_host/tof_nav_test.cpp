@@ -361,6 +361,23 @@ static void test_object_in_track() {
   CHECK(f.saw(RobotEventType::Recovery));
 }
 
+static void test_hand_mid_edge() {
+  SCENARIO("a hand in front mid-edge, then taken away: arrives, no fault");
+  Farm f;
+  boot(f, 20);
+  f.command(navigate("t1", "cp-02", TargetAction::Water, 0));
+  CHECK(f.run_until([&] { return f.pos >= 65; }, 20000));
+  f.object_at = f.pos + 35;  // slows it, then holds it at OBSTACLE_STOP_CM
+  f.run_until([] { return false; }, 4000);
+  CHECK(f.core.current_node() == N("cp-01"));
+  f.object_at = NAN;
+  CHECK(f.run_until([&] { return f.core.status() == RobotStatus::Idle; }, 20000));
+  CHECK(f.core.current_node() == N("cp-02"));
+  std::vector<std::string> want = {"cp-01", "water-01", "cp-02"};
+  CHECK(f.arrivals == want);
+  CHECK(!f.saw(RobotEventType::Error));
+}
+
 int main() {
   test_boot();
   test_up_and_back();
@@ -368,6 +385,7 @@ int main() {
   test_stop_past_node();
   test_noise();
   test_object_in_track();
+  test_hand_mid_edge();
   if (failures) {
     printf("tof_nav_test: %d failure(s)\n", failures);
     return 1;

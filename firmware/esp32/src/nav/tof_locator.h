@@ -22,12 +22,22 @@
 //   - a reading older than TOF_NAV_FRESH_MS (the sensor task holds one);
 //   - a reading further from the last trusted one than the robot could have
 //     moved (TOF_NAV_MAX_STEP_CM, plus TOF_NAV_MAX_SPEED_CM_S for time with no
-//     reading at all): a hand or a leaf in the beam. Once rejected, it never
-//     becomes trusted by staying there;
-//   - an edge's first reading outside what lies between its two nodes;
+//     reading at all): a hand or a leaf in the beam, or noise. After
+//     TOF_NAV_RESEED_COUNT of them in a row it starts again, as at the edge's
+//     start;
+//   - an edge's first reading outside what lies between its two nodes (or
+//     a stop's roll-on past the end one);
 //   - a reading while that side's obstacle flag is set;
 //   - with both boards in view, readings that don't add up to the level's
 //     length (TOF_LEVEL_LENGTH_CM).
+// Toward an elevator node it reads the board behind if it can: the one ahead
+// is the platform, which may be on another level.
+//
+// The length check only catches a sum that's short: a longer one means a
+// board is missing (the platform away), and it's skipped.
+// What it can't catch without the length check (TOF_LEVEL_LENGTH_CM): an
+// object that stays in the beam while the robot drives up to it reads like
+// the board coming closer, and can pass for the node. Measure the lengths.
 // It can't tell levels apart: after an elevator ride it trusts the plan.
 //
 // Pure C++ (no Arduino or FreeRTOS calls), so test_host can drive it.
@@ -122,9 +132,11 @@ class TofLocator {
   uint32_t track_ms_ = 0; // the last reading seen, trusted or not
   uint32_t last_ms_ = 0;  // the last reading used, so each counts once
   uint8_t count_ = 0;
+  uint8_t rejected_ = 0;  // readings in a row not trusted
   bool fired_ = false;
   // Creep and localize: the node it's on, and since when.
   NodeIndex candidate_ = NO_NODE;
   uint32_t candidate_ms_ = 0;
   bool away_ = false;     // localize: clearly off NavCore's node since the last arrival
+  uint32_t off_since_ms_ = 0;  // localize: clearly off it since (0: isn't)
 };

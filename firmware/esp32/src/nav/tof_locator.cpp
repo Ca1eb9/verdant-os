@@ -35,6 +35,13 @@ bool fresh(float cm, uint32_t ms, uint32_t now) {
 // the way, not a board.
 bool usable(float cm, uint32_t ms, bool stop, uint32_t now) { return !stop && fresh(cm, ms, now); }
 
+// How far the robot rolls on while a stop ramps down from top speed: a stop
+// pressed just before a node can leave it this far past.
+constexpr float ROLL_ON_CM = TOF_NAV_MAX_SPEED_CM_S * STOP_RAMP_MS / 2000.0f;
+
+static_assert(2 * TOF_LOCALIZE_TOL_CM < TOF_MIN_NODE_GAP_CM,
+              "two nodes TOF_MIN_NODE_GAP_CM apart could both match within TOF_LOCALIZE_TOL_CM");
+
 }  // namespace
 
 const char* TofLocator::fail(const char* format, const char* id) {
@@ -58,7 +65,9 @@ const char* TofLocator::begin() {
     NodeIndex n = node_by_id(t.node);
     if (n == NO_NODE) return fail("TOF_NODES: %s isn't in the graph", t.node ? t.node : "(null)");
     if (listed[n]) return fail("TOF_NODES: %s is listed twice", t.node);
-    if (!(t.front_cm >= 0) || !(t.rear_cm >= 0)) return fail("TOF_NODES: %s has a negative reading", t.node);
+    if (!(t.front_cm >= 0) || !(t.rear_cm >= 0)) {
+      return fail("TOF_NODES: %s has a negative (or not a number) reading", t.node);
+    }
     listed[n] = true;
     front_[n] = t.front_cm;
     rear_[n] = t.rear_cm;
@@ -69,22 +78,30 @@ const char* TofLocator::begin() {
     const char* id = GRAPH_NODES[i].id;
     if (!listed[i]) return fail("TOF_NODES: no entry for %s", id);
     if (front_[i] == 0 && rear_[i] == 0) return fail("TOF_NODES: %s has no reading yet (measure it)", id);
-    // Driving toward the board, the obstacle stop would hold it short of the node.
-    if ((front_[i] > 0 && front_[i] <= OBSTACLE_STOP_CM) || (rear_[i] > 0 && rear_[i] <= OBSTACLE_STOP_CM)) {
-      return fail("TOF_NODES: %s is within OBSTACLE_STOP_CM of a board", id);
+    // Driving toward the board, the obstacle flag (set under OBSTACLE_STOP_CM,
+    // cleared only above OBSTACLE_CLEAR_CM) would hold it short of the node.
+    if ((front_[i] > 0 && front_[i] <= OBSTACLE_CLEAR_CM) || (rear_[i] > 0 && rear_[i] <= OBSTACLE_CLEAR_CM)) {
+      return fail("TOF_NODES: %s is within OBSTACLE_CLEAR_CM of a board (use 0 for that side)", id);
     }
     uint8_t level = level_of(i);
     if (level >= level_count_) return fail("TOF_LEVEL_LENGTH_CM has no entry for %s's level", id);
+    float length = level_cm_[level];
+    if (!(length >= 0)) return fail("TOF_LEVEL_LENGTH_CM: %s's level has a negative (or not a number) length", id);
+    // A typo on one side: creep and localize could never match it.
+    if (length > 0 && front_[i] > 0 && rear_[i] > 0 &&
+        fabsf(front_[i] + rear_[i] - length) > TOF_NAV_LENGTH_TOL_CM) {
+      return fail("TOF_NODES: %s's front + rear isn't its level's TOF_LEVEL_LENGTH_CM", id);
+    }
     if (level == TOF_BOOT_LEVEL) boot_level = true;
     // Every pair on a level, in order along the track: far enough apart to
     // tell apart, and falling toward the front board, rising away from the rear.
     for (NodeIndex j = 0; j < GRAPH_NODE_COUNT; j++) {
       if (j == i || level_of(j) != level || !(along(i) < along(j))) continue;
       if (front_[i] > 0 && front_[j] > 0 && front_[i] - front_[j] < TOF_MIN_NODE_GAP_CM) {
-        return fail("TOF_NODES: %s's front reading isn't TOF_MIN_NODE_GAP_CM above the next node's", id);
+        return fail("TOF_NODES: %s's front reading must be TOF_MIN_NODE_GAP_CM above every node's further along", id);
       }
       if (rear_[i] > 0 && rear_[j] > 0 && rear_[j] - rear_[i] < TOF_MIN_NODE_GAP_CM) {
-        return fail("TOF_NODES: %s's rear reading isn't TOF_MIN_NODE_GAP_CM below the next node's", id);
+        return fail("TOF_NODES: %s's rear reading must be TOF_MIN_NODE_GAP_CM below every node's further along", id);
       }
     }
     for (NodeIndex j = 0; j < GRAPH_NODE_COUNT; j++) {
@@ -93,7 +110,7 @@ const char* TofLocator::begin() {
       }
     }
   }
-  if (!boot_level) return fail("TOF_BOOT_LEVEL has no nodes%s");
+  if (!boot_level) return fail("TOF_BOOT_LEVEL has no nodes");
 
   ready_ = true;
   return nullptr;
@@ -103,6 +120,7 @@ void TofLocator::on_tag(NodeIndex /*node*/) {
   mode_ = Mode::Off;
   candidate_ = NO_NODE;
   away_ = false;
+  off_since_ms_ = 0;
 }
 
 void TofLocator::on_edge(NodeIndex from, NodeIndex to, EdgeDrive drive) {
@@ -112,27 +130,34 @@ void TofLocator::on_edge(NodeIndex from, NodeIndex to, EdgeDrive drive) {
   track_cm_ = NAN;
   track_ms_ = 0;
   last_ms_ = 0;
+  rejected_ = 0;
   candidate_ = NO_NODE;
   away_ = false;
+  off_since_ms_ = 0;
   if (!ready_ || drive == EdgeDrive::Turn || to >= GRAPH_NODE_COUNT) return;
 
   bool backward = drive == EdgeDrive::Backward || drive == EdgeDrive::ElevatorBackward;
-  toward_ = (backward ? rear_[to] : front_[to]) > 0;
+  bool same_level = from < GRAPH_NODE_COUNT && level_of(from) == level_of(to);
+  float ahead_cm = backward ? rear_[to] : front_[to];
+  float behind_cm = backward ? front_[to] : rear_[to];
+  // Toward the elevator, the board ahead is the platform's end wall, which
+  // isn't there while the platform is on another level: use the board behind.
+  bool to_elevator = same_level && GRAPH_NODES[to].type == NodeType::Elevator;
+  toward_ = ahead_cm > 0 && !(to_elevator && behind_cm > 0);
   use_rear_ = toward_ == backward;
   target_cm_ = use_rear_ ? rear_[to] : front_[to];
   if (!(target_cm_ > 0)) return;
-  // The first reading should lie between the two nodes. `from` on another
-  // level (an elevator ride) leaves that end open.
-  float from_cm = 0;
-  if (from < GRAPH_NODE_COUNT && level_of(from) == level_of(to)) {
-    from_cm = use_rear_ ? rear_[from] : front_[from];
-  }
+  // The first reading should lie between the two nodes, or a stop's roll-on
+  // past the end one (resumed). `from` on another level (an elevator ride)
+  // leaves that end open.
+  float from_cm = same_level ? (use_rear_ ? rear_[from] : front_[from]) : 0;
+  float past_cm = TOF_NAV_MAX_STEP_CM + ROLL_ON_CM;
   if (toward_) {
-    seed_lo_cm_ = target_cm_ - TOF_NAV_MAX_STEP_CM;  // already past it (resumed)
+    seed_lo_cm_ = target_cm_ - past_cm;
     seed_hi_cm_ = from_cm > 0 ? from_cm + TOF_NAV_MAX_STEP_CM : INFINITY;
   } else {
     seed_lo_cm_ = from_cm > 0 ? from_cm - TOF_NAV_MAX_STEP_CM : -INFINITY;
-    seed_hi_cm_ = target_cm_ + TOF_NAV_MAX_STEP_CM;
+    seed_hi_cm_ = target_cm_ + past_cm;
   }
   target_ = to;
   mode_ = Mode::Edge;
@@ -176,15 +201,15 @@ NodeIndex TofLocator::check_edge(const TofSample& s, uint32_t now) {
   if (!fresh(cm, ms, now) || ms == last_ms_) return NO_NODE;
   last_ms_ = ms;
 
+  uint8_t level = level_of(target_);
   bool trusted;
   if (stop) {
     trusted = false;
   } else if (isnan(track_cm_)) {
-    trusted = cm >= seed_lo_cm_ && cm <= seed_hi_cm_;
+    trusted = cm >= seed_lo_cm_ && cm <= seed_hi_cm_ && length_ok(level, s, now);
   } else {
-    // Only time with no reading at all lets it have moved further: a
-    // rejected reading still counts as seeing, so whatever is in the beam
-    // never becomes trusted by staying there.
+    // The robot can't have moved further than this since the last reading
+    // seen. A rejected one counts as seen, so a run of them doesn't widen it.
     int32_t gap_ms = (int32_t)(ms - track_ms_);
     float allowed = TOF_NAV_MAX_STEP_CM + TOF_NAV_MAX_SPEED_CM_S * (gap_ms > 0 ? gap_ms : 0) / 1000.0f;
     trusted = fabsf(cm - track_cm_) <= allowed;
@@ -192,11 +217,18 @@ NodeIndex TofLocator::check_edge(const TofSample& s, uint32_t now) {
   if (!isnan(track_cm_) || trusted) track_ms_ = ms;
   if (!trusted) {
     count_ = 0;
+    // The robot kept moving meanwhile (noise, a leaf, a hand that's gone):
+    // start again from the edge's bounds rather than the stale reading.
+    if (!isnan(track_cm_) && ++rejected_ >= TOF_NAV_RESEED_COUNT) {
+      track_cm_ = NAN;
+      rejected_ = 0;
+    }
     return NO_NODE;
   }
+  rejected_ = 0;
   track_cm_ = cm;
 
-  if (!past(cm) || !length_ok(level_of(target_), s, now)) {
+  if (!past(cm) || !length_ok(level, s, now)) {
     count_ = 0;
     return NO_NODE;
   }
@@ -206,8 +238,9 @@ NodeIndex TofLocator::check_edge(const TofSample& s, uint32_t now) {
 }
 
 NodeIndex TofLocator::check_creep(const TofSample& s, uint32_t now) {
-  // Each new reading (either side) counts once.
-  uint32_t newest = (int32_t)(s.front_ms - s.rear_ms) > 0 ? s.front_ms : s.rear_ms;
+  // Each new reading (either side) counts once. 0: that side never read.
+  uint32_t newest = s.front_ms;
+  if (s.rear_ms != 0 && (newest == 0 || (int32_t)(s.rear_ms - newest) > 0)) newest = s.rear_ms;
   if (newest == last_ms_) return NO_NODE;
   last_ms_ = newest;
   NodeIndex m = match(TOF_BOOT_LEVEL, s, now);
@@ -228,7 +261,14 @@ NodeIndex TofLocator::check_creep(const TofSample& s, uint32_t now) {
 
 NodeIndex TofLocator::localize(uint8_t level, NodeIndex current, const TofSample& s, uint32_t now) {
   if (!ready_) return NO_NODE;
-  if (current != NO_NODE && current < GRAPH_NODE_COUNT && clearly_off(current, s, now)) away_ = true;
+  // Clearly off its node for TOF_STILL_MS, readings that add up: it was moved.
+  // Not one passing reading (someone walking by).
+  if (current < GRAPH_NODE_COUNT && length_ok(level, s, now) && clearly_off(current, s, now)) {
+    if (off_since_ms_ == 0) off_since_ms_ = now;
+    if ((int32_t)(now - off_since_ms_) >= (int32_t)TOF_STILL_MS) away_ = true;
+  } else {
+    off_since_ms_ = 0;
+  }
   NodeIndex m = match(level, s, now);
   // Like a tag: a robot left sitting on its node doesn't keep reading it.
   if (m == NO_NODE || (m == current && !away_)) {
@@ -273,5 +313,7 @@ bool TofLocator::clearly_off(NodeIndex node, const TofSample& s, uint32_t now) c
 bool TofLocator::length_ok(uint8_t level, const TofSample& s, uint32_t now) const {
   if (level >= level_count_ || !(level_cm_[level] > 0)) return true;
   if (!fresh(s.front_cm, s.front_ms, now) || !fresh(s.rear_cm, s.rear_ms, now)) return true;
-  return fabsf(s.front_cm + s.rear_cm - level_cm_[level]) <= TOF_NAV_LENGTH_TOL_CM;
+  // Something in a beam only ever makes the sum shorter. Longer: a board
+  // isn't there (the elevator platform on another level), so it can't check.
+  return s.front_cm + s.rear_cm - level_cm_[level] >= -TOF_NAV_LENGTH_TOL_CM;
 }

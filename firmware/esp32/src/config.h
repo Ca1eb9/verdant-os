@@ -248,7 +248,11 @@ constexpr float TOF_NAV_MAX_STEP_CM = 6.0f;
 // The robot's top speed, for how far it may have moved while it had no
 // readings at all: TOF_NAV_MAX_STEP_CM grows by this much a second of that.
 constexpr float TOF_NAV_MAX_SPEED_CM_S = 60.0f;  // TBD: measure at CRUISE_SPEED
-// Taken as reached this much early, for the roll-on after the stop ramp.
+// Readings that weren't trusted, in a row, before it starts the edge's
+// reading again from the edge's bounds (noise, or a hand that's gone).
+constexpr uint8_t TOF_NAV_RESEED_COUNT = 3;
+// Taken as reached this much early, for the roll-on after the stop ramp and
+// the readings' age (up to a sensor loop plus half a measurement, ~35 ms).
 constexpr float TOF_ARRIVE_LEAD_CM = 0.0f;       // TBD: tune on the farm
 // Not driving an edge (idle, stopped, error, manual, initializing): the robot
 // is on a node when every reading that node has is within this of its own,
