@@ -55,7 +55,9 @@ export type GrowthStage = "seedling" | "vegetative" | "mature" | "harvest_ready"
 
 export type CommandType =
   | "navigate" | "return_to_dock" | "stop" | "resume" | "cancel" | "jog" | "connect_controller"
-  | "charge_complete";
+  | "charge_complete"
+  /** The node the robot is driving to is reached (the Backup nav page; farm network only) */
+  | "node_reached";
 
 export type JogDirection = "forward" | "backward";
 

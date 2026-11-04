@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { isActive, NAV_ITEMS } from "@/components/layout/nav-items";
+import { isActive, navItems } from "@/components/layout/nav-items";
+import { useBackupNav } from "@/hooks/useBackupNav";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { VerdantMark } from "@/components/brand/VerdantMark";
 import { AppIcon } from "@/components/ui/AppIcon";
@@ -27,6 +28,7 @@ function Arrow({ direction }: { direction: "left" | "right" }) {
 /** Desktop navigation (980px and up); collapses to an icon rail */
 export function SideNav() {
   const pathname = usePathname();
+  const backupNav = useBackupNav();
   const { setPref } = usePreferences();
 
   return (
@@ -65,7 +67,7 @@ export function SideNav() {
       </div>
 
       <nav className={styles.nav}>
-        {NAV_ITEMS.map((item) => {
+        {navItems(backupNav).map((item) => {
           const active = isActive(pathname, item.href);
           return (
             <Link

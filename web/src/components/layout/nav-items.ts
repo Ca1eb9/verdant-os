@@ -18,6 +18,16 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
+/** The Backup nav page: only where useBackupNav() says so */
+const BACKUP_NAV_ITEM: NavItem = { href: "/backup-nav", label: "Backup", icon: "backupNav" };
+
+/** The pages to show, with Backup nav after Farm when it's on */
+export function navItems(backupNav: boolean) {
+  if (!backupNav) return NAV_ITEMS;
+  const farm = NAV_ITEMS.findIndex((item) => item.href === "/farm");
+  return [...NAV_ITEMS.slice(0, farm + 1), BACKUP_NAV_ITEM, ...NAV_ITEMS.slice(farm + 1)];
+}
+
 export function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }

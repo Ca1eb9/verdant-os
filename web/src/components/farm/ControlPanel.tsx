@@ -64,6 +64,7 @@ const COMMAND_LABEL: Record<RobotCommand["command"], string> = {
   jog: "Jog",
   connect_controller: "Connect to RC",
   charge_complete: "Charge complete",
+  node_reached: "Reached next node",
 };
 
 function readKey() {

@@ -57,6 +57,16 @@ const ICONS = {
       </>
     ),
   },
+  backupNav: {
+    viewBox: "0 0 64 64",
+    body: (
+      <>
+        <rect x="12" y="40" width="40" height="4" rx="2" fill={CYAN} fillOpacity="0.75" />
+        <circle cx="32" cy="24" r="13" stroke={TEAL} strokeWidth="4" />
+        <path d="M26 24.5l4.5 4.5 8-9" stroke={LIME} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+      </>
+    ),
+  },
   air: {
     viewBox: "0 0 96 96",
     body: (
