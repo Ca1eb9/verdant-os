@@ -10,6 +10,7 @@
 
 #include "../comms/comms_json.h"
 #include "../config.h"
+#include "../drivers/battery.h"
 #include "../graph.h"
 #include "../log.h"
 #include "../nav/motion.h"
@@ -208,6 +209,7 @@ void nav_task(void* /*param*/) {
   RobotStatus sent_status = RobotStatus::Initializing;
   NodeIndex sent_node = NO_NODE;
   bool sent_controller = false;
+  float reported_pct = NAN;  // telemetry's battery_pct (battery_pct_steady)
   uint32_t last_telemetry = 0;
   bool telemetry_sent = false;
 
@@ -279,10 +281,11 @@ void nav_task(void* /*param*/) {
       TelemetryMsg t = {};
       core.snapshot(t);
       t.uptime_ms = now;
-      // The last good reading. NAN (comms skips telemetry) only until the
-      // first sensor data; with never a good reading (a bench with no pack),
-      // 0, so the robot still reports in.
-      t.battery_pct = sensors.battery_pct;
+      // The last good reading, held steady (battery_pct_steady). NAN (comms
+      // skips telemetry) only until the first sensor data; with never a good
+      // reading (a bench with no pack), 0, so the robot still reports in.
+      reported_pct = battery_pct_steady(sensors.battery_pct, reported_pct, BATTERY_PCT_HYSTERESIS);
+      t.battery_pct = reported_pct;
       if (isnan(t.battery_pct) && sensors.uptime_ms != 0 && !sensors.battery_ok) t.battery_pct = 0;
       t.obstacle_cm = core.reversing() ? sensors.obstacle_rear_cm : sensors.obstacle_front_cm;
       t.temperature_c = sensors.temperature_c;  // NAN: comms leaves it out

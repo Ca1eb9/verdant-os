@@ -15,6 +15,12 @@
 // Sprint 3: replace the table with one measured on the real pack.
 float battery_pct_from_voltage(float pack_v, int cells, float full_pack_v);
 
+// The percentage to report: a whole number that only moves once `pct` is
+// `hysteresis` past the half-way point to the next one, so a reading
+// hovering on a boundary doesn't flip it back and forth (95, 96, 95...).
+// `reported` is its last value, NAN before the first; a NAN `pct` keeps it.
+float battery_pct_steady(float pct, float reported, float hysteresis);
+
 #ifdef ARDUINO
 class Battery {
  public:
