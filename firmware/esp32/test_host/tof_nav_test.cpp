@@ -109,6 +109,11 @@ class Farm : public NavOutput {
   EncoderAssist assist{ENCODER.data(), ENCODER.size()};
   int guesses = 0;
   int refusals = 0;
+  int dropped = 0;  // guesses ToF said were short
+  // The wheel spins in place: counts, no travel (a wet rail, a low snag).
+  bool stalled = false;
+  // Something behind the robot (NAN: nothing), at this pos.
+  float rear_object_at = NAN;
   uint32_t now = 1000;
   float pos = 0;
   uint8_t level = 0;
@@ -178,7 +183,11 @@ class Farm : public NavOutput {
     if (!isnan(person_cm)) cm = fminf(cm, person_cm);
     return cm;
   }
-  float rear() const { return pos + 30; }
+  float rear() const {
+    float cm = pos + 30;
+    if (!isnan(rear_object_at) && rear_object_at < pos) cm = fminf(cm, pos - rear_object_at);
+    return cm;
+  }
 
   void command(const Command& c) { core.on_command(c, now); }
 
@@ -187,7 +196,9 @@ class Farm : public NavOutput {
   void loop() {
     float before = pos;
     move(NAV_LOOP_MS);
-    if (encoder) assist.on_counts((int32_t)lround((pos - before) * COUNTS_PER_CM));
+    float wheel = pos - before + spun_cm_;
+    spun_cm_ = 0;
+    if (encoder) assist.on_counts((int32_t)lround(wheel * COUNTS_PER_CM));
     now += NAV_LOOP_MS;
     past_.push_back({now, pos});
     if (!blind && now - read_ms_ >= TOF_PERIOD_MS) {
@@ -224,14 +235,14 @@ class Farm : public NavOutput {
     TofSample ts = {s_.obstacle_front_cm, s_.tof_front_ms, s_.obstacle_front_stop,
                     s_.obstacle_rear_cm,  s_.tof_rear_ms,  s_.obstacle_rear_stop};
     NodeIndex reached = tof.update(on_track, core.status(), core.current_node(), ts, now);
-    float progress = encoder && reached != NO_NODE ? assist.progress_to(reached) : -1;
+    float progress = encoder && reached != NO_NODE ? assist.progress_to(reached) : NAN;
     bool arrived = false;
-    if (progress >= 0 && progress < TOF_NAV_ENCODER_MIN_RATIO) {
+    if (!isnan(progress) && progress < TOF_NAV_ENCODER_MIN_RATIO) {
       refusals++;
       tof.reject();
     } else if (reached != NO_NODE) {
       arrived = true;
-      assist.on_tag();
+      assist.on_tof_node(progress, tof.overshoot_cm(), tof.edge_cm());
       arrivals.push_back(GRAPH_NODES[reached].id);
       float miss = fabsf(pos - (float)GRAPH_NODES[reached].x * CM_PER_UNIT);
       if (GRAPH_NODES[reached].z != level) miss = INFINITY;
@@ -239,7 +250,13 @@ class Farm : public NavOutput {
       tof.on_tag(reached);
       core.on_tag(reached, now);
     }
-    NodeIndex guessed = encoder && !arrived ? assist.check(core.status()) : NO_NODE;
+    bool guess_ok = encoder && !arrived && tof.level_known();
+    NodeIndex guessed = guess_ok ? assist.check(core.status()) : NO_NODE;
+    if (guessed != NO_NODE && tof.says_short_of(guessed, ts, now)) {
+      dropped++;
+      assist.drop_guess();
+      guessed = NO_NODE;
+    }
     if (guessed != NO_NODE) {
       guesses++;
       arrivals.push_back(GRAPH_NODES[guessed].id);
@@ -301,6 +318,10 @@ class Farm : public NavOutput {
       want = 0;
     }
     speed_ = want;
+    if (stalled) {
+      spun_cm_ += speed_ * ms / 1000.0f;
+      speed_ = 0;
+    }
     pos += speed_ * ms / 1000.0f;
   }
 
@@ -317,6 +338,7 @@ class Farm : public NavOutput {
   std::vector<std::pair<uint32_t, float>> past_;
   SensorData s_ = {};
   float speed_ = 0;
+  float spun_cm_ = 0;
   float ramp_from_ = 0;
   uint32_t cmd_ms_ = 0;
   uint32_t read_ms_ = 0;
@@ -681,6 +703,45 @@ static void test_encoder_after_guess() {
   CHECK(near(f.pos, pos_of("cp-02"), 10));
 }
 
+static void test_encoder_reversing() {
+  SCENARIO("back the other way off a node, something behind reading the next node: not taken");
+  Farm f(NO_LEVELS);
+  f.encoder = true;
+  f.range_cm = TOF_NAV_MAX_RANGE_CM;
+  boot(f, 20);
+  f.command(navigate("t1", "water-01", TargetAction::Water, 0));
+  CHECK(f.run_until([&] { return f.core.status() == RobotStatus::Idle; }, 20000));
+  f.run_until([] { return false; }, 1000);  // stopped rolling, a few cm past
+  // Back to the dock: cp-01 is read from the rear board only (80 cm), and
+  // with the front board dark there's no length check. A box behind the
+  // robot reads under 80 already, as it starts reversing (progress just
+  // under 0).
+  f.range_cm = 125;
+  f.rear_object_at = f.pos - 75;
+  size_t before = f.arrivals.size();
+  f.command(make(CommandType::ReturnToDock));
+  f.run_until([&] { return f.arrivals.size() > before; }, 20000);
+  CHECK(f.refusals > 0);
+  CHECK(f.worst_miss_cm <= 10);  // never taken a whole edge early
+}
+
+static void test_encoder_stall() {
+  SCENARIO("the wheel spins in place mid-edge: the encoder's guess is dropped");
+  Farm f;
+  f.encoder = true;
+  boot(f, 20);
+  f.command(navigate("t1", "water-01", TargetAction::Water, 0));
+  CHECK(f.run_until([&] { return f.pos >= 70; }, 20000));
+  f.stalled = true;
+  f.run_until([] { return false; }, 3000);
+  CHECK(f.core.current_node() == N("cp-01"));  // not guessed at 70 cm
+  CHECK(f.dropped > 0);
+  f.stalled = false;
+  CHECK(f.run_until([&] { return f.core.status() == RobotStatus::Idle; }, 20000));
+  CHECK(f.core.current_node() == N("water-01"));
+  CHECK(f.worst_miss_cm <= 10);
+}
+
 int main() {
   test_boot();
   test_up_and_back();
@@ -698,6 +759,8 @@ int main() {
   test_encoder_refuses_early();
   test_encoder_covers_blind();
   test_encoder_after_guess();
+  test_encoder_reversing();
+  test_encoder_stall();
   if (failures) {
     printf("tof_nav_test: %d failure(s)\n", failures);
     return 1;

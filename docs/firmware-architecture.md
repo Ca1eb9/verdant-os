@@ -504,7 +504,8 @@ changes**: positions are still node ids, with the same events and telemetry.
   one node a loop. A ToF node starts the encoder's count like a tag, so the
   encoder covers one node ToF misses; and a ToF node reached before
   `TOF_NAV_ENCODER_MIN_RATIO` of the edge's counts is refused as something in
-  the beam.
+  the beam. The other way round, an encoder guess is dropped while ToF says
+  the robot isn't there yet (a wheel spinning in place).
 - It can't tell levels apart: the robot must be set down on `TOF_BOOT_LEVEL`,
   and it switches level when it drives off an elevator, trusting the plan. A
   ride cut short (a stop and another command, a forced return) leaves the

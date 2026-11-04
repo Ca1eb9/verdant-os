@@ -291,6 +291,10 @@ constexpr float TOF_LEVEL_LENGTH_CM[] = {0, 0, 0};
 // is something in the beam, not the node, and is refused. A real arrival
 // comes at about 1 (wheel slip only adds counts).
 constexpr float TOF_NAV_ENCODER_MIN_RATIO = 0.85f;
+// A ToF node taken under this share of the edge's counts came early (an
+// object accepted at TOF_NAV_ENCODER_MIN_RATIO): the encoder counts on from
+// where it puts the node, not from where ToF fired.
+constexpr float TOF_NAV_ENCODER_TRUST_RATIO = 0.95f;
 // While on, log both readings this often while the robot isn't driving an
 // edge: for measuring TOF_NODES.
 constexpr uint32_t TOF_NAV_LOG_MS = 2000;

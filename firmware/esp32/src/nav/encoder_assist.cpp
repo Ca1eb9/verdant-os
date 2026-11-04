@@ -3,6 +3,7 @@
 
 #include "encoder_assist.h"
 
+#include <math.h>
 #include <string.h>
 
 void EncoderAssist::on_tag() {
@@ -44,8 +45,30 @@ void EncoderAssist::resync() {
 
 void EncoderAssist::on_counts(int32_t counts) { counts_ += counts; }
 
+void EncoderAssist::on_tof_node(float progress, float past_cm, float edge_cm) {
+  int32_t sign = backward_ ? -1 : 1;
+  bool measured = edge_counts_ > 0;
+  if (placed_ && measured && !isnan(progress) && progress < TOF_NAV_ENCODER_TRUST_RATIO) {
+    counts_ -= sign * edge_counts_;
+    placed_ = true;
+  } else if (measured && edge_cm > 0) {
+    counts_ = sign * (int32_t)lround(past_cm / edge_cm * edge_counts_);
+    placed_ = true;
+  } else {
+    counts_ = 0;
+    placed_ = past_cm <= TOF_NAV_MAX_STEP_CM;
+  }
+  guessed_ = false;
+  to_ = NO_NODE;
+  edge_counts_ = 0;
+}
+
+void EncoderAssist::drop_guess() {
+  counts_ += backward_ ? -edge_counts_ : edge_counts_;  // undo check()'s re-base
+}
+
 float EncoderAssist::progress_to(NodeIndex node) const {
-  if (!placed_ || edge_counts_ <= 0 || node != to_) return -1;
+  if (!placed_ || edge_counts_ <= 0 || node != to_) return NAN;
   int32_t along = backward_ ? -counts_ : counts_;
   return (float)along / edge_counts_;
 }

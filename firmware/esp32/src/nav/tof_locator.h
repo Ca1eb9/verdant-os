@@ -98,6 +98,15 @@ class TofLocator {
   NodeIndex update(bool on_track, RobotStatus status, NodeIndex current, const TofSample& s,
                    uint32_t now);
 
+  // Just after update() gave a node: how far past it the robot was then, and
+  // the edge's length on the side read (0: unknown, e.g. off an elevator).
+  float overshoot_cm() const;
+  float edge_cm() const;
+  // Driving the edge to `node`: a fresh reading clearly short of it (by
+  // TOF_NAV_MAX_STEP_CM), or a fresh trusted one not there yet. The encoder's
+  // guess for it is then a slipping wheel, not the node.
+  bool says_short_of(NodeIndex node, const TofSample& s, uint32_t now) const;
+
   // The node update() just gave was refused (the encoder says the robot
   // can't be there yet): watch the same edge again from its bounds.
   void reject();
@@ -146,7 +155,10 @@ class TofLocator {
   NodeIndex target_ = NO_NODE;
   bool use_rear_ = false;
   bool toward_ = false;   // that side is the one it drives toward: it falls
+  bool backward_ = false; // the edge is driven backward
   float target_cm_ = 0;
+  float from_cm_ = 0;     // the start node's reading on that side (0: none)
+  float fired_cm_ = NAN;  // the reading the node was taken at
   float seed_lo_cm_ = 0;  // a first reading outside these isn't trusted
   float seed_hi_cm_ = 0;
   float track_cm_ = 0;    // NAN: none yet this edge

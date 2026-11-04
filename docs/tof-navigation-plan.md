@@ -401,6 +401,26 @@ platform moved elsewhere edges toward it fault.
 - A late real tag for a node already taken (ToF or a guess) resyncs the
   encoder's count there (`EncoderAssist::resync()`) without re-planning.
 - No encoder guess while ToF has lost the level (a ride cut short).
+
+From the Phase 3 stress review (wheel slip, a spinning wheel, encoder noise,
+`ENCODER_EDGES` off by 3%):
+
+- **Checked whenever the encoder can say**, including just under 0 (just after
+  reversing): `progress_to()` gives NAN, not -1, when it can't. Before, an
+  object behind a reversing robot passed for the next node a whole edge early.
+- **A guess ToF contradicts is dropped** (`TofLocator::says_short_of()`,
+  `EncoderAssist::drop_guess()`): a fresh reading clearly short of the node, or
+  a trusted one not there yet, means a slipping wheel. Before, a wheel spinning
+  in place made it guess nodes up to 58 cm early.
+- **The count starts where the robot is** after a ToF node
+  (`EncoderAssist::on_tof_node()`): the overshoot past the node, converted with
+  the edge's length; or, for a node ToF took early (under
+  `TOF_NAV_ENCODER_TRUST_RATIO`, 0.95), the encoder's own idea of the node.
+  Before, ToF firing a few cm late made the next edge's correct arrival look
+  early (refused) and the next guess late.
+- Left as a team decision: allowing the stop roll-on past a node only when the
+  same edge is resumed. Under heavy dropouts it removes late (15-20 cm)
+  arrivals but doubles faults.
 - `tof_nav_test` runs ToF and the encoder together on noisy, lagged,
   range-limited readings, a box in a one-sided node's beam (refused), and a
   blind stretch (the encoder takes the node).

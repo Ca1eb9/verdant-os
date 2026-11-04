@@ -179,6 +179,8 @@ void TofLocator::on_edge(NodeIndex from, NodeIndex to, EdgeDrive drive) {
   if (!ready_ || !level_known_ || drive == EdgeDrive::Turn || to >= GRAPH_NODE_COUNT) return;
 
   bool backward = drive == EdgeDrive::Backward || drive == EdgeDrive::ElevatorBackward;
+  backward_ = backward;
+  fired_cm_ = NAN;
   bool same_level = from < GRAPH_NODE_COUNT && level_of(from) == level_of(to);
   float ahead_cm = backward ? rear_[to] : front_[to];
   float behind_cm = backward ? front_[to] : rear_[to];
@@ -193,6 +195,7 @@ void TofLocator::on_edge(NodeIndex from, NodeIndex to, EdgeDrive drive) {
   // past the end one (resumed). `from` on another level (an elevator ride)
   // leaves that end open.
   float from_cm = same_level ? (use_rear_ ? rear_[from] : front_[from]) : 0;
+  from_cm_ = from_cm;
   float past_cm = TOF_NAV_MAX_STEP_CM + ROLL_ON_CM;
   if (toward_) {
     seed_lo_cm_ = target_cm_ - past_cm;
@@ -219,6 +222,31 @@ void TofLocator::on_untracked_move() {
 void TofLocator::lose_level() {
   riding_ = false;
   level_known_ = false;
+}
+
+float TofLocator::overshoot_cm() const {
+  if (isnan(fired_cm_)) return 0;
+  float past_cm = toward_ ? target_cm_ - fired_cm_ : fired_cm_ - target_cm_;
+  return past_cm > 0 ? past_cm : 0;
+}
+
+float TofLocator::edge_cm() const { return from_cm_ > 0 ? fabsf(from_cm_ - target_cm_) : 0; }
+
+bool TofLocator::says_short_of(NodeIndex node, const TofSample& s, uint32_t now) const {
+  if (!ready_ || !level_known_ || mode_ != Mode::Edge || node != target_) return false;
+  // Positive: further from the node than it, the way the edge is driven
+  // (front readings fall going forward, rear readings rise).
+  auto short_by = [&](float want, float cm, uint32_t ms, bool stop, bool front) -> float {
+    if (!(want > 0) || !usable(cm, ms, stop, now)) return 0.0f;
+    float d = front ? cm - want : want - cm;
+    return backward_ ? -d : d;
+  };
+  if (short_by(front_[node], s.front_cm, s.front_ms, s.front_stop, true) > TOF_NAV_MAX_STEP_CM ||
+      short_by(rear_[node], s.rear_cm, s.rear_ms, s.rear_stop, false) > TOF_NAV_MAX_STEP_CM) {
+    return true;
+  }
+  return !isnan(track_cm_) && (int32_t)(now - track_ms_) <= (int32_t)TOF_NAV_FRESH_MS &&
+         !past(track_cm_);
 }
 
 void TofLocator::reject() {
@@ -300,6 +328,7 @@ NodeIndex TofLocator::check_edge(const TofSample& s, uint32_t now) {
   }
   if (++count_ < TOF_NAV_CONFIRM_COUNT) return NO_NODE;
   fired_ = true;
+  fired_cm_ = cm;
   return target_;
 }
 
