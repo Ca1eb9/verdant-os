@@ -36,6 +36,12 @@ void EncoderAssist::on_edge(NodeIndex from, NodeIndex to, EdgeDrive drive) {
 
 void EncoderAssist::on_untracked_move() { placed_ = false; }
 
+void EncoderAssist::resync() {
+  placed_ = true;
+  guessed_ = false;
+  counts_ = 0;
+}
+
 void EncoderAssist::on_counts(int32_t counts) { counts_ += counts; }
 
 float EncoderAssist::progress_to(NodeIndex node) const {
@@ -50,5 +56,8 @@ NodeIndex EncoderAssist::check(RobotStatus status) {
   int32_t along = backward_ ? -counts_ : counts_;
   if (along < ENCODER_PASS_RATIO * edge_counts_) return NO_NODE;
   guessed_ = true;
+  // Count on from the guessed node, as if its tag had been read there, so the
+  // next edge's progress (progress_to) means something.
+  counts_ -= backward_ ? -edge_counts_ : edge_counts_;
   return to_;
 }

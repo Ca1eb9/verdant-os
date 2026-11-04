@@ -391,8 +391,16 @@ platform moved elsewhere edges toward it fault.
   is refused and `TofLocator::reject()` (new) watches the edge again. The plan
   said 0.6; 0.85 because an object that stays in the beam is accepted as soon as
   the ratio is reached, so the ratio is how early a wrong arrival can be.
-- The encoder doesn't count elevator rides or creeps, so those arrivals (and
-  localising by hand) aren't checked.
+- The check only runs where the encoder knows how far it has come: not on
+  the first edge off the dock, the drive-off after a ride (until the first
+  node on the new level), an edge after a jog or the controller's drive, or a
+  creep or localising by hand. There a one-sided node has no second check.
+- An encoder guess re-bases its count on the guessed node (as if its tag had
+  been read there), so the check still works on the next edge; it still
+  guesses at most once until a real tag or ToF node.
+- A late real tag for a node already taken (ToF or a guess) resyncs the
+  encoder's count there (`EncoderAssist::resync()`) without re-planning.
+- No encoder guess while ToF has lost the level (a ride cut short).
 - `tof_nav_test` runs ToF and the encoder together on noisy, lagged,
   range-limited readings, a box in a one-sided node's beam (refused), and a
   blind stretch (the encoder takes the node).

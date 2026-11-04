@@ -552,7 +552,9 @@ read (forward positive).
   path.
 - The serial log says so: `encoder: no tag after 2310 counts (2100
   expected), taking water-01 as read`.
-- Real tags always win: each one starts the count again.
+- Real tags always win: each one starts the count again. With ToF navigation
+  on, so does each node ToF reaches (see "ToF navigation (optional)"). A guess
+  counts on from the guessed node, as if its tag had been read there.
 
 **What it doesn't do.**
 

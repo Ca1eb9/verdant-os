@@ -660,6 +660,27 @@ static void test_encoder_covers_blind() {
   CHECK(!f.saw(RobotEventType::Error));
 }
 
+static void test_encoder_after_guess() {
+  SCENARIO("the encoder guesses a node, then a box early on the next edge: still refused");
+  Farm f(NO_LEVELS);
+  f.encoder = true;
+  f.range_cm = TOF_NAV_MAX_RANGE_CM;
+  boot(f, 20);
+  f.command(navigate("t1", "cp-02", TargetAction::Water, 0));
+  CHECK(f.run_until([&] { return f.pos >= 85; }, 20000));
+  f.blind = true;  // water-01 missed by ToF: the encoder takes it
+  CHECK(f.run_until([&] { return f.guesses == 1; }, 20000));
+  f.blind = false;
+  f.object_at = 190;  // cp-02's front reading while the robot's at 110
+  CHECK(f.run_until([&] { return f.pos >= 130; }, 20000));
+  CHECK(f.core.current_node() == N("water-01"));
+  CHECK(f.refusals > 0);
+  f.object_at = NAN;
+  CHECK(f.run_until([&] { return f.core.status() == RobotStatus::Idle; }, 20000));
+  CHECK(f.core.current_node() == N("cp-02"));
+  CHECK(near(f.pos, pos_of("cp-02"), 10));
+}
+
 int main() {
   test_boot();
   test_up_and_back();
@@ -676,6 +697,7 @@ int main() {
   test_encoder_missions();
   test_encoder_refuses_early();
   test_encoder_covers_blind();
+  test_encoder_after_guess();
   if (failures) {
     printf("tof_nav_test: %d failure(s)\n", failures);
     return 1;

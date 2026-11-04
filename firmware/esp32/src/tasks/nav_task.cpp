@@ -24,6 +24,9 @@
 
 namespace {
 
+static_assert(TOF_NAV_ENCODER_MIN_RATIO < ENCODER_PASS_RATIO,
+              "the encoder would refuse every ToF node until it guessed");
+
 // NavOutput over the FreeRTOS queues.
 class QueueOutput : public NavOutput {
  public:
@@ -241,6 +244,7 @@ void nav_task(void* /*param*/) {
   uint32_t tof_logged_ms = 0;
   bool tof_level_known = true;
   uint32_t tof_refused_ms = 0;
+  NodeIndex tof_refused_node = NO_NODE;
   if (TOF_NAV_ENABLED) {
     const char* problem = tof.begin();
     if (problem) {
@@ -291,6 +295,7 @@ void nav_task(void* /*param*/) {
                          core.status() == RobotStatus::ReturningToDock;
           if (on_path && node == core.current_node()) {
             LOG("nav", "tag for %s: already there", GRAPH_NODES[node].id);
+            out.assist.resync();  // the encoder counts from the real tag
             continue;
           }
           out.tof->on_tag(node);
@@ -319,11 +324,12 @@ void nav_task(void* /*param*/) {
       // With the encoder: far too early along the edge is something in the beam.
       float progress = encoder && reached != NO_NODE ? out.assist.progress_to(reached) : -1;
       if (progress >= 0 && progress < TOF_NAV_ENCODER_MIN_RATIO) {
-        if (now - tof_refused_ms >= NOTE_REPEAT_MS) {
+        if (reached != tof_refused_node || now - tof_refused_ms >= NOTE_REPEAT_MS) {
           LOG("nav", "ToF: %s refused, only %.0f%% of the edge driven (encoder)",
               GRAPH_NODES[reached].id, progress * 100);
+          tof_refused_node = reached;
+          tof_refused_ms = now;
         }
-        tof_refused_ms = now;
         out.tof->reject();
       } else if (reached != NO_NODE) {
         LOG("nav", "ToF: front %.1f rear %.1f cm, at %s", sensors.obstacle_front_cm,
@@ -359,7 +365,9 @@ void nav_task(void* /*param*/) {
     }
 
     // Encoder assist: a missed tag taken as read, as if it had been.
-    NodeIndex guessed = encoder && !arrived ? out.assist.check(core.status()) : NO_NODE;
+    // Not on a level ToF has lost (a ride cut short): it can't be anchored there.
+    bool guess_ok = encoder && !arrived && !(out.tof && !out.tof->level_known());
+    NodeIndex guessed = guess_ok ? out.assist.check(core.status()) : NO_NODE;
     if (guessed != NO_NODE) {
       LOG("nav", "encoder: no tag after %ld counts (%ld expected), taking %s as read",
           (long)out.assist.counts_since_tag(), (long)out.assist.edge_counts(),

@@ -2,16 +2,16 @@
 // Optional encoder assist (ENCODER_ASSIST_ENABLED, docs/firmware-architecture.md
 // "Encoder (optional)"): stands in for one missed tag.
 //
-// Counts are kept from the last real tag (forward positive). Driving an edge
-// with counts in ENCODER_EDGES, once the counts the way it drives pass
-// ENCODER_PASS_RATIO of the edge's with no tag, check() gives the edge's end
-// tag. The nav task hands it to NavCore::on_tag(), so the robot does what
+// Counts are kept from the last real tag (forward positive), or, with ToF
+// navigation, the last node it reached. Driving an edge with counts in
+// ENCODER_EDGES, once the counts the way it drives pass ENCODER_PASS_RATIO of
+// the edge's with no tag, check() gives the edge's end tag. The nav task hands it to NavCore::on_tag(), so the robot does what
 // that tag would have made it do: arrive, start the elevator or dock approach
 // (ToF), or carry on. Counts the other way take progress off, so a swapped A
 // and B never guesses. Real tags always win: each one starts the count again.
 //
-// It guesses at most once in a row: after a guess it waits for a real tag,
-// and the missed-tag timeout (nav/motion) faults as before. Nor does it guess
+// It guesses at most once in a row: after a guess it waits for a real tag
+// (or a ToF node), and the missed-tag timeout (nav/motion) faults as before. Nor does it guess
 // after any move that isn't along an edge it has counts for (creep, jog,
 // drive, docking, an elevator ride, an edge not listed), as it no longer
 // knows how far it is from the last tag. A stop or an obstacle hold keeps
@@ -54,8 +54,12 @@ class EncoderAssist {
   int32_t edge_counts() const { return edge_counts_; }
   // How much of the edge to `node` it has driven since the last tag (1: all
   // of it), or a negative number when it can't say (not that edge, no counts,
-  // or not placed). ToF navigation checks its arrivals against it.
+  // or not placed). After a guess it counts from the guessed node. ToF
+  // navigation checks its arrivals against it.
   float progress_to(NodeIndex node) const;
+  // A real tag for the node the robot already took (by ToF or a guess), with
+  // the next edge already started: count from here, keeping that edge.
+  void resync();
 
  private:
   const EncoderEdge* edges_;
