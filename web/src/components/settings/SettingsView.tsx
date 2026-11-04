@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { signOut } from "@/app/login/actions";
+import { BackupNavPanel } from "@/components/backup-nav/BackupNavPanel";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
 import { TIME_ZONES, type ThemePreference, type TimeZoneSetting } from "@/lib/preferences";
 import styles from "@/components/settings/SettingsView.module.css";
@@ -217,6 +218,8 @@ export function SettingsView({ account }: { account: string | null }) {
           </Row>
         </div>
       ) : null}
+
+      <BackupNavPanel />
     </section>
   );
 }

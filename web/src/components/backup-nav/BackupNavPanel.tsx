@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useSelectedFarm } from "@/components/farms/FarmContext";
-import { NoFarmNotice } from "@/components/farms/NoFarmNotice";
 import { useBackupNav } from "@/hooks/useBackupNav";
 import { useFarmLive } from "@/hooks/useFarmLive";
-import { resolveNode } from "@/lib/farm/navigation";
+import { resolveNode, type NavGraph } from "@/lib/farm/navigation";
 import { isStale, statusLabel, type RobotView } from "@/lib/farm/robots";
 import type { CommandType, RobotStatus } from "@/lib/farm/types";
-import styles from "@/components/backup-nav/BackupNavView.module.css";
+import styles from "@/components/backup-nav/BackupNavPanel.module.css";
 
 /**
  * Same as CONFIRM_NAV_MIN_MS on the robot: it ignores a tap this soon after
@@ -22,16 +20,27 @@ const TAPPABLE: RobotStatus[] = ["initializing", "en_route", "returning_to_dock"
 
 type Feedback = { tone: "ok" | "error" | "wait"; text: string };
 
-/** The node after the robot's current one on the orchestrator's planned path */
-function nextNode(robot: RobotView, currentId: string | undefined) {
+/**
+ * The node after the robot's current one on the orchestrator's planned path.
+ * A ride over several levels is one edge on the robot: it drives off at the last.
+ */
+function nextNode(graph: NavGraph, robot: RobotView, currentId: string | undefined) {
   const path = robot.expectedPath ?? [];
-  const i = currentId ? path.indexOf(currentId) : -1;
-  return i >= 0 ? path[i + 1] : undefined;
+  let i = currentId ? path.indexOf(currentId) : -1;
+  if (i < 0 || i + 1 >= path.length) return undefined;
+  const elevator = (id: string | undefined) => (id ? graph.nodes.get(id)?.type === "elevator" : false);
+  if (elevator(path[i]) && elevator(path[i + 1])) {
+    while (i + 2 < path.length && elevator(path[i + 2])) i++;
+  }
+  return path[i + 1];
 }
 
-export function BackupNavView() {
-  const { farm } = useSelectedFarm();
-  const enabled = useBackupNav();
+/** At the bottom of Settings, only where useBackupNav() says so: nothing otherwise */
+export function BackupNavPanel() {
+  return useBackupNav() ? <BackupNavControls /> : null;
+}
+
+function BackupNavControls() {
   const { source, graph, robots, now } = useFarmLive();
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [cooling, setCooling] = useState(false);
@@ -40,10 +49,15 @@ export function BackupNavView() {
   // The tap waiting for the robot's answer: its node when tapped
   const pending = useRef<{ robotId: string; node: string | null; timer: number } | null>(null);
 
-  const robot = robots.find((r) => r.id === pickedId) ?? robots[0];
+  // The first robot seen until one is picked, so a robot appearing later
+  // can't take the taps over
+  useEffect(() => {
+    if (!pickedId && robots[0]) setPickedId(robots[0].id);
+  }, [pickedId, robots]);
+  const robot = robots.find((r) => r.id === pickedId) ?? (pickedId ? undefined : robots[0]);
   const online = Boolean(robot && !isStale(robot, now) && robot.status !== "lost");
   const current = robot ? resolveNode(graph, robot.currentNode) : undefined;
-  const next = robot ? nextNode(robot, current?.id) : undefined;
+  const next = robot ? nextNode(graph, robot, current?.id) : undefined;
   const status = robot?.status;
 
   // The robot's answer to a tap: its node moved, or not by TAP_ANSWER_MS
@@ -62,21 +76,6 @@ export function BackupNavView() {
     [],
   );
 
-  if (!farm) return <NoFarmNotice title="Backup nav" />;
-
-  if (!enabled) {
-    return (
-      <section className="pageSection">
-        <header className={styles.header}>
-          <span className="eyebrow">Backup navigation</span>
-          <h1 className="pageTitle">Backup nav</h1>
-          <p className="pageLead">Only available on the farm Wi-Fi, on a dashboard set up for it.</p>
-        </header>
-      </section>
-    );
-  }
-
-  // On FarmNet straight to the broker: never queued, so never late
   const send = async (command: CommandType) => {
     if (!robot) return false;
     try {
@@ -122,76 +121,74 @@ export function BackupNavView() {
   const reaching = status === "initializing" ? "the dock (it starts there)" : next ?? "the next node";
 
   return (
-    <section className="pageSection">
-      <header className={styles.header}>
-        <span className="eyebrow">Backup navigation</span>
-        <h1 className="pageTitle">Backup nav</h1>
-        <p className="pageLead">Tap the moment the robot reaches each node. It only uses this when it can&apos;t read tags.</p>
-      </header>
-
-      <div className={`glassPanel ${styles.card}`}>
-        {robots.length > 1 && (
-          <div className="segmented" role="group" aria-label="Robot">
-            {robots.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                className="segment"
-                aria-pressed={r.id === robot?.id}
-                onClick={() => {
-                  setPickedId(r.id);
-                  setFeedback(null);
-                }}
-              >
-                {r.id}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {!robot ? (
-          <p className={styles.muted}>Waiting for robot telemetry.</p>
-        ) : (
-          <>
-            <dl className={styles.facts}>
-              <div>
-                <dt>{robot.id}</dt>
-                <dd>{online ? statusLabel(robot.status) : "Offline"}</dd>
-              </div>
-              <div>
-                <dt>At</dt>
-                <dd>{current?.id ?? robot.currentNode ?? "No node yet"}</dd>
-              </div>
-              <div className={styles.wide}>
-                <dt>Driving to</dt>
-                <dd className={styles.next}>{canTap ? reaching : "Nothing right now"}</dd>
-              </div>
-            </dl>
-
+    <div className={`glassPanel ${styles.card}`}>
+      <h2 className={styles.title}>Backup navigation</h2>
+      <p className={styles.muted}>
+        For a robot set up to navigate without tags: tap the moment it reaches each node.
+      </p>
+      {(robots.length > 1 || (!robot && robots.length > 0)) && (
+        <div className="segmented" role="group" aria-label="Robot">
+          {robots.map((r) => (
             <button
+              key={r.id}
               type="button"
-              className={styles.reached}
-              onClick={() => void tap()}
-              disabled={!canTap || cooling || busy}
+              className="segment"
+              aria-pressed={r.id === robot?.id}
+              onClick={() => {
+                setPickedId(r.id);
+                setFeedback(null);
+                if (pending.current) window.clearTimeout(pending.current.timer);
+                pending.current = null;
+              }}
             >
-              Reached next node
+              {r.id}
             </button>
+          ))}
+        </div>
+      )}
 
-            <p className={`${styles.feedback} ${feedback ? styles[feedback.tone] : ""}`} role="status" aria-live="polite">
-              {feedback?.text ?? (online ? "" : "The robot is offline.")}
-            </p>
-
-            <div className={styles.row}>
-              <button type="button" className={styles.stop} onClick={() => void stop()}>
-                Stop
-              </button>
-              <button type="button" className={styles.resume} onClick={() => void resume()}>
-                Resume
-              </button>
+      {!robot ? (
+        <p className={styles.muted}>Waiting for robot telemetry.</p>
+      ) : (
+        <>
+          <dl className={styles.facts}>
+            <div>
+              <dt>{robot.id}</dt>
+              <dd>{online ? statusLabel(robot.status) : "Offline"}</dd>
             </div>
-          </>
-        )}
-      </div>
-    </section>
+            <div>
+              <dt>At</dt>
+              <dd>{current?.id ?? robot.currentNode ?? "No node yet"}</dd>
+            </div>
+            <div className={styles.wide}>
+              <dt>Driving to</dt>
+              <dd className={styles.next}>{canTap ? reaching : "Nothing right now"}</dd>
+            </div>
+          </dl>
+
+          <button
+            type="button"
+            className={styles.reached}
+            onClick={() => void tap()}
+            disabled={!canTap || cooling || busy}
+          >
+            Reached next node
+          </button>
+
+          <p className={`${styles.feedback} ${feedback ? styles[feedback.tone] : ""}`} role="status" aria-live="polite">
+            {feedback?.text ?? (online ? "" : "The robot is offline.")}
+          </p>
+
+          <div className={styles.row}>
+            <button type="button" className={styles.stop} onClick={() => void stop()}>
+              Stop
+            </button>
+            <button type="button" className={styles.resume} onClick={() => void resume()}>
+              Resume
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
