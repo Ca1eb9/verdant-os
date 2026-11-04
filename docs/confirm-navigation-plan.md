@@ -9,7 +9,7 @@ it is, e.g. at a live demo.
 ## 1. The idea
 
 An operator watches the robot and taps **Reached next node** on their phone
-the moment it reaches each node. The command, `node_reached`, carries **no
+the moment it reaches each node, in **Backup navigation** at the bottom of the dashboard's Settings. The command, `node_reached`, carries **no
 node id**: it only says "the node you were driving to is reached". The robot
 knows which one that is, because it planned the path itself.
 
@@ -36,11 +36,11 @@ ignores it: it reads its own tags), `comms_json.cpp` and its host tests.
 late moves the robot on one node at the wrong moment, and the online path
 (Vercel → Supabase → bridge) can hold a command and deliver it after a
 reconnect. So it's refused at every step off FarmNet: the dashboard never
-shows the page there, `/api/commands` refuses it, the bridge marks the row
+shows it there, `/api/commands` refuses it, the bridge marks the row
 failed, and the orchestrator only forwards it from `farm/commands/local`.
-FarmNet has no sign-in, so the page can't be limited to one account: it's
-shown only by a Pi built with `NEXT_PUBLIC_CONFIRM_NAV=true`. Anyone on the
-farm Wi-Fi who opens it can use it, as they can already stop or jog a robot.
+FarmNet has no sign-in, so it can't be limited to one account: it's
+shown only by a Pi built with `NEXT_PUBLIC_CONFIRM_NAV=true`. Without the flag Settings looks as it always did. Anyone on the
+farm Wi-Fi who opens Settings there can use it, as they can already stop or jog a robot.
 
 ## 3. Robot side
 
@@ -55,20 +55,24 @@ farm Wi-Fi who opens it can use it, as they can already stop or jog a robot.
   `core.on_tag(node)` runs as for a tag read. Ignored taps go to
   `NavOutput::note()` (log, and the LED's two dim blips);
 - every real tag also calls `on_tag()`. A real tag for the node a tap just
-  reached is dropped while driving, so it doesn't re-plan.
+  reached is dropped while driving, so it doesn't re-plan; any other real tag
+  counts as usual.
 
 | Status | A tap means | Why |
 |---|---|---|
 | `initializing` | on the dock (`GRAPH_DOCK`) | there's no "next" yet; it's set down there with `BOOT_CREEP` off (enforced by a `static_assert`) |
 | `en_route`, `returning_to_dock` | the end of the edge it's driving | the normal case |
+| the same, turned back partway along an edge | the node it left | a return to the dock, or a task the other way: `NavCore` plans from the last node reached, so the robot reaches that one first. The dashboard's "Driving to" (the orchestrator's path) may show the node after it |
 | `stopped`, `error`, `manual` | the end of the edge it was driving | an operator stopped it there, or drove it there after a missed node; `NavCore` re-plans from that node when it carries on |
-| anything else | ignored | nothing to drive to (idle, working, docking, charging, a cancelled task) |
+| anything else | ignored | nothing to drive to: idle, working, docking, charging. A cancelled task leaves nothing either, so a later stop or jog doesn't bring it back |
 
 Also ignored: during an elevator ride (on the platform, not at the node),
 and within `CONFIRM_NAV_MIN_MS` (1 s) of setting off for that node. That
 catches a double tap or a duplicated message: the time is read when the next
 edge starts, so the second tap of a pair always lands inside it. A resume
-toward the same node keeps the time it first set off.
+toward the same node keeps the time it first set off. After an elevator ride
+the time counts from the start of the ride, so it's long past when it drives
+off: a tap during the ride is what's refused there.
 
 ## 4. Safety for a live demo
 
@@ -82,7 +86,7 @@ toward the same node keeps the time it first set off.
 | Firmware built without it | `node_reached` is ignored with a note; RFID behaviour unchanged |
 | Wrong node after a mistake | Stop, drive it by hand to the node it was heading for, tap, Resume |
 
-The page also has **Stop** and **Resume**, and says when the robot didn't take
+The panel also has **Stop** and **Resume**, and says when the robot didn't take
 a tap: no node change within 2.5 s.
 
 ## 5. With the other backups
@@ -109,6 +113,6 @@ hook `follow_edge()` and the tag loop the same way.
   double tap in one loop, the elevator ride, a missed node (error, then a tap;
   and error, jog, tap), stop and resume, manual, cancel, and a real tag mixed in.
 - Run for real: the Pi services, the dashboard built with
-  `NEXT_PUBLIC_CONFIRM_NAV=true` on FarmNet, and the robot with
+  `NEXT_PUBLIC_CONFIRM_NAV=true` on FarmNet (Settings → Backup navigation), and the robot with
   `CONFIRM_NAV_ENABLED`. Drive dock → water-01 → dock by taps, then: double tap,
   no tap (missed-tag error and recovery), a stop mid-edge, and an elevator ride.

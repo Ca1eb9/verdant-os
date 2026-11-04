@@ -287,8 +287,8 @@ before the bridge has sent what's buffered.
 - **Commands in:** follows this farm's `remote_commands` rows with Realtime and,
   on each new row and every (re)connect, sends every `pending` row, oldest
   first, to `farm/commands/remote`, then marks it `sent` (or `failed` with a
-  reason). Rows the orchestrator would drop, and `jog` / `connect_controller`
-  (farm network only), fail instead. Rows pending longer than
+  reason). Rows the orchestrator would drop, and `jog` / `connect_controller` /
+  `node_reached` (farm network only), fail instead. Rows pending longer than
   `stale_command_ms`, by Supabase's clock, fail as `stale`. With the broker
   down nothing is sent; rows wait and go stale. If Supabase fails partway, it
   tries again every `retry_interval_ms`.

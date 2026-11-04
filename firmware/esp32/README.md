@@ -111,13 +111,13 @@ To bench-test the contact and the charge flow off the dock, set `CHARGE_SENSE_AL
 
 ## Confirmed navigation (backup)
 
-For a farm where the robot can't read its tags: the operator taps **Reached next node** on the dashboard's **Backup nav** page (FarmNet only, `NEXT_PUBLIC_CONFIRM_NAV=true` on the Pi) the moment the robot reaches each node. The `node_reached` command names no node: `nav/confirm_nav` takes the end of the edge the robot was driving, and the nav task hands it to `NavCore::on_tag()` as if that node's tag were read. Everything after is the normal state machine: arrivals, the elevator and dock approaches (ToF), the missed-tag timeout, recovery. The plan and its edge cases are in [docs/confirm-navigation-plan.md](../../docs/confirm-navigation-plan.md).
+For a farm where the robot can't read its tags: the operator taps **Reached next node** in **Backup navigation** at the bottom of the dashboard's Settings (FarmNet only, `NEXT_PUBLIC_CONFIRM_NAV=true` on the Pi) the moment the robot reaches each node. The `node_reached` command names no node: `nav/confirm_nav` takes the end of the edge the robot was driving, and the nav task hands it to `NavCore::on_tag()` as if that node's tag were read. Everything after is the normal state machine: arrivals, the elevator and dock approaches (ToF), the missed-tag timeout, recovery. The plan and its edge cases are in [docs/confirm-navigation-plan.md](../../docs/confirm-navigation-plan.md).
 
 To use it:
 
 1. In `config.h` set `CONFIRM_NAV_ENABLED = true` and `BOOT_CREEP = false` (the build fails with one and not the other), and flash.
 2. Set the robot down on the dock, then turn it on. It waits in `initializing`; the boot log says `confirmed navigation ON`.
-3. On the Backup nav page, tap once: the robot is on the dock (`idle`). Send work as usual.
+3. In Settings → Backup navigation, tap once: the robot is on the dock (`idle`). Send work as usual.
 4. Tap as it reaches each node. The robot shows the white flash a tag read gives; a tap it ignores gets the two dim blips, and the log says why.
 
 What it does with a tap:
@@ -125,11 +125,11 @@ What it does with a tap:
 | Status | A tap means |
 |---|---|
 | `initializing` | it's on the dock |
-| `en_route`, `returning_to_dock` | the edge's end is reached. During an elevator ride, ignored until it's driving off the platform |
+| `en_route`, `returning_to_dock` | the edge's end is reached. During an elevator ride, ignored until it's driving off the platform. Turned back partway along an edge (sent to the dock, say): the node it left, the first it reaches again |
 | `stopped`, `error`, `manual` | it's at the end of the edge it was driving (stopped there, or driven there by hand after a missed node); it re-plans from that node when it carries on |
-| anything else | ignored: nothing to drive to |
+| anything else | ignored: nothing to drive to (idle, working, on the dock, or a cancelled task) |
 
-A tap within `CONFIRM_NAV_MIN_MS` (1 s) of setting off for a node is ignored, so a double tap or a repeated message can't skip one. Real tags still work alongside it. A missed tap is a missed tag: after `MISSED_TAG_TIMEOUT_MS` (5 s) of driving the robot stops with `error`. Drive it to the node it was heading for (jog or the controller) and tap. Never turn it on with another backup that reaches nodes by itself (ToF navigation, encoder assist): a node could be counted twice.
+A tap within `CONFIRM_NAV_MIN_MS` (1 s) of setting off for a node is ignored (for the node after an elevator ride, from the start of the ride), so a double tap or a repeated message can't skip one. Real tags still work alongside it. A missed tap is a missed tag: after `MISSED_TAG_TIMEOUT_MS` (5 s) of driving the robot stops with `error`. Drive it to the node it was heading for (jog or the controller) and tap. Never turn it on with another backup that reaches nodes by itself (ToF navigation, encoder assist): a node could be counted twice.
 
 ## Motor driver
 
