@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
-import { isActive, navItems } from "@/components/layout/nav-items";
-import { useBackupNav } from "@/hooks/useBackupNav";
+import { isActive, NAV_ITEMS } from "@/components/layout/nav-items";
 import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 import { VerdantMark } from "@/components/brand/VerdantMark";
 import { AppIcon } from "@/components/ui/AppIcon";
@@ -23,7 +22,6 @@ const NET_CLASS = {
 
 export function TopNav() {
   const pathname = usePathname();
-  const backupNav = useBackupNav();
   const { farms, activeFarmId, setActiveFarmId, locked, loading } = useSelectedFarm();
   const connection = useFarmConnection();
   const state = connection?.state ?? "connecting";
@@ -69,7 +67,7 @@ export function TopNav() {
       </div>
 
       <nav className={styles.bottomDock} aria-label="Main navigation">
-        {navItems(backupNav).map((item) => {
+        {NAV_ITEMS.map((item) => {
           const active = isActive(pathname, item.href);
 
           return (

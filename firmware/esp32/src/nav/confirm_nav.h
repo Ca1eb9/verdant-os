@@ -11,10 +11,13 @@
 //   - initializing (no node yet): the dock, where the robot is set down;
 //   - en_route or returning_to_dock: the end of the edge it's driving. An
 //     elevator ride's end only once it's driving off the platform: during
-//     the ride it's on the platform, not at the node;
+//     the ride it's on the platform, not at the node. Turned back partway
+//     along an edge (a return to the dock, a task the other way), NavCore
+//     plans from the node it left, which is the first one it reaches: that one;
 //   - stopped, error (e.g. the missed-tag timeout) or manual, after such an
 //     edge: its end, for an operator who stopped or drove it there. NavCore
-//     re-plans from that node when it carries on.
+//     re-plans from that node when it carries on. Not once it's idle (a
+//     cancel), working, docking or charging: nothing is left to reach.
 // Ignored, with why: nothing it was driving to, the elevator ride still under
 // way, or within CONFIRM_NAV_MIN_MS of starting toward that node (a double
 // tap, or a repeat).
@@ -33,10 +36,11 @@ class ConfirmNav {
  public:
   // The NavOutput follow_edge() hook. Again for the same node (a resume)
   // keeps the time it started toward it.
-  void on_edge(NodeIndex to, EdgeDrive drive, uint32_t now);
-  // Every nav loop: Motion is driving an edge (Motion::driving_edge()), which
-  // after an elevator ride means driving off the platform.
-  void update(bool driving_edge);
+  void on_edge(NodeIndex from, NodeIndex to, EdgeDrive drive, uint32_t now);
+  // Every nav loop: NavCore's status, and whether Motion is driving an edge
+  // (Motion::driving_edge()), which after an elevator ride means driving off
+  // the platform.
+  void update(RobotStatus status, bool driving_edge);
   // Any node reached, a real tag or reached(): call before NavCore::on_tag(),
   // which may start the next edge.
   void on_tag();
@@ -45,7 +49,9 @@ class ConfirmNav {
   NodeIndex reached(RobotStatus status, uint32_t now, const char** why) const;
 
  private:
+  NodeIndex from_ = NO_NODE;    // the start of the last edge
   NodeIndex target_ = NO_NODE;  // the end of the last edge, until reached
+  bool plain_ = false;          // that edge is no elevator ride
   bool armed_ = false;          // driving to it (off the platform, after a ride)
   uint32_t since_ms_ = 0;       // when it started toward target_
 };

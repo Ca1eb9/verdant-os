@@ -58,7 +58,7 @@ class QueueOutput : public NavOutput {
         drive == EdgeDrive::Backward || drive == EdgeDrive::ElevatorBackward ? "backward"
                                                                              : "forward");
     uint32_t now = millis();
-    if (confirm) confirm->on_edge(to, drive, now);
+    if (confirm) confirm->on_edge(from, to, drive, now);
     motion.follow_edge(from, to, drive, now);
   }
   void creep() override { motion.creep(millis()); }
@@ -221,6 +221,7 @@ void nav_task(void* /*param*/) {
   LOG("nav", "graph '%s': %u nodes, dock %s", GRAPH_VERSION, GRAPH_NODE_COUNT,
       GRAPH_NODES[GRAPH_DOCK].id);
   ConfirmNav confirm;
+  NodeIndex tapped_node = NO_NODE;  // the last node a tap reached, until a real tag
   if (CONFIRM_NAV_ENABLED) {
     out.confirm = &confirm;
     LOG("nav", "confirmed navigation ON: set the robot down on %s, then tap Reached next node",
@@ -253,13 +254,14 @@ void nav_task(void* /*param*/) {
       } else {
         known_tag_ms = now;
         if (out.confirm) {
-          // Reached already (node_reached): the same node again would only re-plan.
+          // A tap reached it already: the same node again would only re-plan.
           bool on_path = core.status() == RobotStatus::EnRoute ||
                          core.status() == RobotStatus::ReturningToDock;
-          if (on_path && node == core.current_node()) {
-            LOG("nav", "tag for %s: already reached", GRAPH_NODES[node].id);
+          if (on_path && node == tapped_node && node == core.current_node()) {
+            LOG("nav", "tag for %s: already reached by node_reached", GRAPH_NODES[node].id);
             continue;
           }
+          tapped_node = NO_NODE;
           out.confirm->on_tag();
         }
       }
@@ -281,6 +283,7 @@ void nav_task(void* /*param*/) {
       }
       LOG("nav", "node_reached: at %s", GRAPH_NODES[reached].id);
       known_tag_ms = now;
+      tapped_node = reached;
       out.confirm->on_tag();
       core.on_tag(reached, now);
     }
@@ -304,7 +307,7 @@ void nav_task(void* /*param*/) {
     core.tick(now);
     const char* fault = out.motion.check(now, sensors, g_motor_kill_flag);
     if (fault) core.fault(fault);
-    if (out.confirm) out.confirm->update(out.motion.driving_edge());
+    if (out.confirm) out.confirm->update(core.status(), out.motion.driving_edge());
     // For the sensor task's obstacle flags: lowered while creeping in.
     g_obstacle_front_stop_cm = out.motion.stop_cm(false);
     g_obstacle_rear_stop_cm = out.motion.stop_cm(true);

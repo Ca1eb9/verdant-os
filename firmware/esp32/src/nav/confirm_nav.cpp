@@ -5,17 +5,38 @@
 
 #include "../config.h"
 
-void ConfirmNav::on_edge(NodeIndex to, EdgeDrive drive, uint32_t now) {
+void ConfirmNav::on_edge(NodeIndex from, NodeIndex to, EdgeDrive drive, uint32_t now) {
   if (drive == EdgeDrive::Turn) {  // it faults: there's nothing to reach
     on_tag();
     return;
   }
+  bool plain = drive == EdgeDrive::Forward || drive == EdgeDrive::Backward;
+  // From the same node to another before reaching the last edge's end: it
+  // turned back, and the node it left is the first it reaches. Its time
+  // still counts from leaving there.
+  if (target_ != NO_NODE && plain && plain_ && from == from_ && to != target_) {
+    target_ = from;
+    armed_ = true;
+    return;
+  }
   if (to != target_) since_ms_ = now;
+  from_ = from;
   target_ = to;
-  armed_ = drive == EdgeDrive::Forward || drive == EdgeDrive::Backward;
+  plain_ = plain;
+  armed_ = plain;
 }
 
-void ConfirmNav::update(bool driving_edge) {
+void ConfirmNav::update(RobotStatus status, bool driving_edge) {
+  switch (status) {
+    case RobotStatus::Idle:
+    case RobotStatus::Working:
+    case RobotStatus::Docking:
+    case RobotStatus::Charging:
+      on_tag();  // arrived, cancelled, or on the dock: nothing left to reach
+      return;
+    default:
+      break;
+  }
   if (driving_edge && target_ != NO_NODE) armed_ = true;
 }
 

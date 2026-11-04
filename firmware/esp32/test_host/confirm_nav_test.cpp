@@ -74,7 +74,7 @@ class Rig : public NavOutput {
   void follow_edge(NodeIndex from, NodeIndex to, EdgeDrive d) override {
     last_edge = std::string(GRAPH_NODES[from].id) + ">" + GRAPH_NODES[to].id;
     // The nav task reads millis() here, a little after the loop's `now`
-    confirm.on_edge(to, d, now + 2);
+    confirm.on_edge(from, to, d, now + 2);
     motion.follow_edge(from, to, d, now + 2);
   }
   void creep() override { motion.creep(now); }
@@ -120,7 +120,7 @@ class Rig : public NavOutput {
       core.tick(now);
       const char* fault = motion.check(now, sensors, false);
       if (fault) core.fault(fault);
-      confirm.update(motion.driving_edge());
+      confirm.update(core.status(), motion.driving_edge());
     }
   }
   const char* node() const { return at(core.current_node()); }
@@ -261,6 +261,30 @@ static void test_stop_and_manual() {
   c.command(CommandType::Cancel);
   CHECK(c.core.status() == RobotStatus::Idle);
   CHECK(!c.tap() && same(c.node(), "dock-1"));
+  // Not after a stop from there either
+  c.run(NAV_LOOP_MS);
+  c.command(CommandType::Stop);
+  c.run(CONFIRM_NAV_MIN_MS + 100);
+  CHECK(c.core.status() == RobotStatus::Stopped);
+  CHECK(!c.tap() && same(c.node(), "dock-1"));
+}
+
+static void test_turned_back() {
+  SCENARIO("turned back partway along an edge");
+  Rig r;
+  r.tap();
+  r.command(CommandType::Navigate, "water-01");
+  r.run(CONFIRM_NAV_MIN_MS + 100);
+  CHECK(r.tap() && same(r.node(), "cp-01") && r.last_edge == "cp-01>water-01");
+  // Halfway to water-01, back to the dock: planned from cp-01, which it
+  // reaches first again
+  r.run(CONFIRM_NAV_MIN_MS + 100);
+  r.command(CommandType::ReturnToDock);
+  CHECK(r.core.status() == RobotStatus::ReturningToDock && r.last_edge == "cp-01>dock-1");
+  CHECK(r.tap() && same(r.node(), "cp-01") && r.core.status() == RobotStatus::ReturningToDock);
+  CHECK(r.last_edge == "cp-01>dock-1");
+  r.run(CONFIRM_NAV_MIN_MS + 100);
+  CHECK(r.tap() && same(r.node(), "dock-1") && r.core.status() == RobotStatus::Docking);
 }
 
 static void test_real_tags() {
@@ -281,6 +305,7 @@ int main() {
   test_elevator();
   test_missed();
   test_stop_and_manual();
+  test_turned_back();
   test_real_tags();
   printf("confirm_nav_test: %s\n", failures ? "FAILED" : "passed");
   return failures ? 1 : 0;
