@@ -98,6 +98,10 @@ class TofLocator {
   NodeIndex update(bool on_track, RobotStatus status, NodeIndex current, const TofSample& s,
                    uint32_t now);
 
+  // The node update() just gave was refused (the encoder says the robot
+  // can't be there yet): watch the same edge again from its bounds.
+  void reject();
+
   // While Motion drives an edge (only then: not on the elevator platform) or
   // creeps: the node reached, once, or NO_NODE.
   NodeIndex check_edge(const TofSample& s, uint32_t now);

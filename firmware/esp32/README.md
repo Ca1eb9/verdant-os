@@ -133,6 +133,8 @@ Each level is one straight line and the robot never turns, so the front sensor a
 - `missed tag`: the node's reading never came (something in the beam, a moved board). Drive it by hand (the controller or dashboard jogs) onto a node: still there for `TOF_STILL_MS`, it takes that node as read, and `resume` (or the manual timeout) carries on from there. A robot pushed onto a node in `error` doesn't recover by itself, as it would on a tag: in `error` nothing is taken, so someone standing in a beam can't restart it. A robot left sitting on its node doesn't keep re-reading it; it has to have been off it first.
 - Tune on the farm: `TOF_ARRIVE_LEAD_CM` for where it stops at a station, `TOF_NAV_MAX_STEP_CM` and `TOF_NAV_MAX_SPEED_CM_S` for the noise and speed, and `MISSED_TAG_TIMEOUT_MS` for the longest edge.
 
+**With the encoder assist too** (`ENCODER_ASSIST_ENABLED`, `ENCODER_EDGES` measured): a real tag wins, then ToF, then the encoder, one node a loop. Every ToF node starts the encoder's count, as a tag does, so the encoder covers one node ToF misses (`encoder: no tag after ... taking water-01 as read`), and ToF picks up again on the next edge. The encoder also checks ToF: a node reached before `TOF_NAV_ENCODER_MIN_RATIO` (85%) of the edge's counts is something in the beam, and is refused (`ToF: cp-02 refused, only 20% of the edge driven (encoder)`) until the robot has driven far enough. That's the check one-sided nodes otherwise lack. `ENCODER_EDGES` can be measured with ToF alone: the `encoder: ... counts since the last tag` line is logged at ToF nodes too.
+
 ## Motor driver
 
 An Adafruit DRV8871 drives the one motor from `PIN_MOTOR_IN1` and `PIN_MOTOR_IN2` (GPIO 5 and 6). Wiring, power and the reasons for each part are in [docs/wiring/robot.md](../../docs/wiring/robot.md).
@@ -252,7 +254,7 @@ Needs g++ or clang++ (on Windows, MSYS2's `mingw-w64-ucrt-x86_64-gcc`). `run.sh`
 - the motion hooks (`motion_test.cpp`): the drive commands they send, the ToF slow zone (manual driving included) and approaches, and each fault;
 - the survival overrides (`survival_test.cpp`): each battery threshold in each status, and the obstacle events;
 - ToF navigation (`tof_locator_test.cpp`): the `TOF_NODES` checks, each edge and side, noisy readings, and everything it mustn't take as a node (a hand, a stale or held reading, readings that don't add up); and (`tof_nav_test.cpp`) the robot driving the farm with no tags at all, up a level and back to the dock, stopped and resumed, held by a hand, faulted and recovered by hand;
-- the encoder assist (`encoder_assist_test.cpp`): a missed tag taken as read at a target, before the elevator and dock approaches and mid-path, once in a row, and never without counts, after a jog or on an edge with no counts;
+- the encoder assist (`encoder_assist_test.cpp`): a missed tag taken as read at a target, before the elevator and dock approaches and mid-path, once in a row, and never without counts, after a jog or on an edge with no counts; and with ToF (`tof_nav_test.cpp`): realistic missions, a ToF node refused as too early, a blind stretch covered by the encoder;
 - the motor rules (`motor_test.cpp`): each command, the timed Drive, the reversal ramp and the safety flags;
 - the controller rules (`pad_test.cpp`): the stick's deadzone, speed and drive repeat, the centre-first rule and the buttons.
 

@@ -286,6 +286,11 @@ constexpr float TOF_NAV_LENGTH_TOL_CM = 9.0f;
 // average of that level's TOF_NODES with both readings (none: no length
 // check, and anything that stays in a beam can pass for a node). TBD: measure.
 constexpr float TOF_LEVEL_LENGTH_CM[] = {0, 0, 0};
+// With the encoder assist on too (ENCODER_ASSIST_ENABLED): a node ToF reaches
+// before the robot has driven this share of the edge's ENCODER_EDGES counts
+// is something in the beam, not the node, and is refused. A real arrival
+// comes at about 1 (wheel slip only adds counts).
+constexpr float TOF_NAV_ENCODER_MIN_RATIO = 0.85f;
 // While on, log both readings this often while the robot isn't driving an
 // edge: for measuring TOF_NODES.
 constexpr uint32_t TOF_NAV_LOG_MS = 2000;

@@ -38,6 +38,12 @@ void EncoderAssist::on_untracked_move() { placed_ = false; }
 
 void EncoderAssist::on_counts(int32_t counts) { counts_ += counts; }
 
+float EncoderAssist::progress_to(NodeIndex node) const {
+  if (!placed_ || edge_counts_ <= 0 || node != to_) return -1;
+  int32_t along = backward_ ? -counts_ : counts_;
+  return (float)along / edge_counts_;
+}
+
 NodeIndex EncoderAssist::check(RobotStatus status) {
   if (!placed_ || guessed_ || edge_counts_ <= 0) return NO_NODE;
   if (status != RobotStatus::EnRoute && status != RobotStatus::ReturningToDock) return NO_NODE;

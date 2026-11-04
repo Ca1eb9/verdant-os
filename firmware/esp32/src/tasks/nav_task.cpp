@@ -240,6 +240,7 @@ void nav_task(void* /*param*/) {
                  sizeof(TOF_LEVEL_LENGTH_CM) / sizeof(TOF_LEVEL_LENGTH_CM[0]));
   uint32_t tof_logged_ms = 0;
   bool tof_level_known = true;
+  uint32_t tof_refused_ms = 0;
   if (TOF_NAV_ENABLED) {
     const char* problem = tof.begin();
     if (problem) {
@@ -269,7 +270,9 @@ void nav_task(void* /*param*/) {
     // Every reading, in order, so no tag arrival is skipped. tag_seq still
     // shows an arrival whose reading was dropped from a full queue.
     SensorData d;
-    bool tag_read = false;
+    // One node a loop, whichever way it came: a real tag, else ToF, else the
+    // encoder assist.
+    bool arrived = false;
     while (xQueueReceive(g_sensor_queue, &d, 0) == pdTRUE) {
       sensors = d;
       core.on_battery(d.battery_ok ? d.battery_pct : NAN);
@@ -291,8 +294,8 @@ void nav_task(void* /*param*/) {
             continue;
           }
           out.tof->on_tag(node);
-          tag_read = true;
         }
+        arrived = true;
         // What ENCODER_EDGES is measured from.
         if (encoder) {
           LOG("nav", "encoder: %ld counts since the last tag, at %s",
@@ -309,16 +312,33 @@ void nav_task(void* /*param*/) {
     // ToF navigation: a node reached without a tag, as if its tag were read.
     // A real tag this loop wins.
     bool on_track = out.motion.driving_edge() || out.motion.creeping();
-    if (out.tof && !tag_read) {
+    if (out.tof && !arrived) {
       TofSample ts = {sensors.obstacle_front_cm, sensors.tof_front_ms, sensors.obstacle_front_stop,
                       sensors.obstacle_rear_cm,  sensors.tof_rear_ms,  sensors.obstacle_rear_stop};
       NodeIndex reached = out.tof->update(on_track, core.status(), core.current_node(), ts, now);
-      if (reached != NO_NODE) {
+      // With the encoder: far too early along the edge is something in the beam.
+      float progress = encoder && reached != NO_NODE ? out.assist.progress_to(reached) : -1;
+      if (progress >= 0 && progress < TOF_NAV_ENCODER_MIN_RATIO) {
+        if (now - tof_refused_ms >= NOTE_REPEAT_MS) {
+          LOG("nav", "ToF: %s refused, only %.0f%% of the edge driven (encoder)",
+              GRAPH_NODES[reached].id, progress * 100);
+        }
+        tof_refused_ms = now;
+        out.tof->reject();
+      } else if (reached != NO_NODE) {
         LOG("nav", "ToF: front %.1f rear %.1f cm, at %s", sensors.obstacle_front_cm,
             sensors.obstacle_rear_cm, GRAPH_NODES[reached].id);
         known_tag_ms = now;
         out.tof->on_tag(reached);
+        // The encoder counts on from here, as from a tag (and what
+        // ENCODER_EDGES is measured from without tags).
+        if (encoder) {
+          LOG("nav", "encoder: %ld counts since the last tag, at %s",
+              (long)out.assist.counts_since_tag(), GRAPH_NODES[reached].id);
+        }
+        out.assist.on_tag();
         core.on_tag(reached, now);
+        arrived = true;
       }
     }
     if (out.tof && out.tof->level_known() != tof_level_known) {
@@ -339,11 +359,13 @@ void nav_task(void* /*param*/) {
     }
 
     // Encoder assist: a missed tag taken as read, as if it had been.
-    NodeIndex guessed = encoder ? out.assist.check(core.status()) : NO_NODE;
+    NodeIndex guessed = encoder && !arrived ? out.assist.check(core.status()) : NO_NODE;
     if (guessed != NO_NODE) {
       LOG("nav", "encoder: no tag after %ld counts (%ld expected), taking %s as read",
           (long)out.assist.counts_since_tag(), (long)out.assist.edge_counts(),
           GRAPH_NODES[guessed].id);
+      // Not assist.on_tag(): it guesses at most once until a real tag or ToF.
+      if (out.tof) out.tof->on_tag(guessed);
       core.on_tag(guessed, now);
     }
 

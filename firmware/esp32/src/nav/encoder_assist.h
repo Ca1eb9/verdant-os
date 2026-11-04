@@ -52,6 +52,10 @@ class EncoderAssist {
   // For the log: counts since the last tag, and the edge's (0: none).
   int32_t counts_since_tag() const { return counts_; }
   int32_t edge_counts() const { return edge_counts_; }
+  // How much of the edge to `node` it has driven since the last tag (1: all
+  // of it), or a negative number when it can't say (not that edge, no counts,
+  // or not placed). ToF navigation checks its arrivals against it.
+  float progress_to(NodeIndex node) const;
 
  private:
   const EncoderEdge* edges_;

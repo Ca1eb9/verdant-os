@@ -69,8 +69,8 @@ CORE_FLAGS=(-std=c++17 -Wall -Wextra -DARDUINOJSON_USE_LONG_LONG=1 -I../src -I"$
 "$CXX" -std=c++17 -Wall -Wextra -I../src tof_locator_test.cpp ../src/nav/tof_locator.cpp \
   ../src/utils/nav_helpers.cpp ../src/graph.cpp -o out/tof_locator_test
 ./out/tof_locator_test
-"$CXX" "${CORE_FLAGS[@]}" tof_nav_test.cpp ../src/nav/tof_locator.cpp ../src/nav/motion.cpp \
-  "${CORE_SRC[@]:1}" ../src/graph.cpp -o out/tof_nav_test
+"$CXX" "${CORE_FLAGS[@]}" tof_nav_test.cpp ../src/nav/tof_locator.cpp ../src/nav/encoder_assist.cpp \
+  ../src/nav/motion.cpp "${CORE_SRC[@]:1}" ../src/graph.cpp -o out/tof_nav_test
 ./out/tof_nav_test
 # Encoder assist (a missed tag taken as read), wired to NavCore and Motion.
 "$CXX" "${CORE_FLAGS[@]}" encoder_assist_test.cpp ../src/nav/encoder_assist.cpp \

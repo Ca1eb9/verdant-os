@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "config.h"
+#include "nav/encoder_assist.h"
 #include "nav/motion.h"
 #include "nav/nav_core.h"
 #include "nav/tof_locator.h"
@@ -45,6 +46,21 @@ static const float CM_S_PER_SPEED = 0.2f;  // CRUISE_SPEED 150: 30 cm/s
 static const float LEVELS[] = {260, 260, 260};
 static const float NO_LEVELS[] = {0, 0, 0};  // no length check
 static const uint32_t TOF_PERIOD_MS = 33;
+
+// Encoder counts a cm of travel, and every edge on a level measured both ways.
+static const float COUNTS_PER_CM = 100;
+static std::vector<EncoderEdge> encoder_edges() {
+  std::vector<EncoderEdge> e;
+  for (uint16_t i = 0; i < GRAPH_EDGE_COUNT; i++) {
+    const GraphEdge& g = GRAPH_EDGES[i];
+    if (GRAPH_NODES[g.from].z != GRAPH_NODES[g.to].z) continue;
+    int32_t counts = (int32_t)lround(fabs(GRAPH_NODES[g.to].x - GRAPH_NODES[g.from].x) * 50 * COUNTS_PER_CM);
+    e.push_back({GRAPH_NODES[g.from].id, GRAPH_NODES[g.to].id, counts});
+    e.push_back({GRAPH_NODES[g.to].id, GRAPH_NODES[g.from].id, counts});
+  }
+  return e;
+}
+static const std::vector<EncoderEdge> ENCODER = encoder_edges();
 
 static float pos_of(const char* id) { return (float)GRAPH_NODES[N(id)].x * CM_PER_UNIT; }
 
@@ -88,6 +104,11 @@ class Farm : public NavOutput {
   Motion motion{sink};
   NavCore core{*this};
   TofLocator tof{table.data(), table.size(), levels, 3};
+  // The encoder assist too (ENCODER_ASSIST_ENABLED), as the nav task wires it.
+  bool encoder = false;
+  EncoderAssist assist{ENCODER.data(), ENCODER.size()};
+  int guesses = 0;
+  int refusals = 0;
   uint32_t now = 1000;
   float pos = 0;
   uint8_t level = 0;
@@ -99,6 +120,8 @@ class Farm : public NavOutput {
   // Realistic readings: independent Gaussian noise on each side (this sigma,
   // cm), each measured this long before it reaches nav.
   float sigma_cm = 0;
+  bool blind = false;  // no new readings at all
+  float range_cm = INFINITY;  // a board further than this doesn't read
   uint32_t lag_ms = 0;
   uint32_t seed = 1;
   // Each arrival's distance from its node's spot (cm), the worst so far.
@@ -119,6 +142,7 @@ class Farm : public NavOutput {
   void brake() override { motion.brake(); }
   void follow_edge(NodeIndex from, NodeIndex to, EdgeDrive drive) override {
     tof.on_edge(from, to, drive);
+    assist.on_edge(from, to, drive);
     if (drive == EdgeDrive::ElevatorForward || drive == EdgeDrive::ElevatorBackward) {
       ride_to_ = (uint8_t)lround(GRAPH_NODES[to].z);
     }
@@ -126,18 +150,22 @@ class Farm : public NavOutput {
   }
   void creep() override {
     tof.on_creep();
+    assist.on_untracked_move();
     motion.creep(now);
   }
   void jog(JogDirection d) override {
     tof.on_untracked_move();
+    assist.on_untracked_move();
     motion.jog(d, now);
   }
   void drive(int16_t speed) override {
     tof.on_untracked_move();
+    assist.on_untracked_move();
     motion.drive(speed, now);
   }
   void start_docking() override {
     tof.on_untracked_move();
+    assist.on_untracked_move();
     motion.start_docking(now);
   }
   void note(const char*) override {}
@@ -157,10 +185,12 @@ class Farm : public NavOutput {
   // One nav loop: the robot moves NAV_LOOP_MS, maybe a new reading, then
   // what nav_task does after its queues.
   void loop() {
+    float before = pos;
     move(NAV_LOOP_MS);
+    if (encoder) assist.on_counts((int32_t)lround((pos - before) * COUNTS_PER_CM));
     now += NAV_LOOP_MS;
     past_.push_back({now, pos});
-    if (now - read_ms_ >= TOF_PERIOD_MS) {
+    if (!blind && now - read_ms_ >= TOF_PERIOD_MS) {
       read_ms_ = now;
       float n = (reads_++ % 2 ? noise_cm : -noise_cm);
       // Where it was lag_ms ago.
@@ -172,10 +202,13 @@ class Farm : public NavOutput {
         }
       }
       float lagged = was - pos;
-      s_.obstacle_front_cm = front() - lagged + n + gauss() * sigma_cm;
-      s_.obstacle_rear_cm = rear() + lagged + n + gauss() * sigma_cm;
-      s_.tof_front_ms = now;
-      s_.tof_rear_ms = now;
+      float f_cm = front() - lagged + n + gauss() * sigma_cm;
+      float r_cm = rear() + lagged + n + gauss() * sigma_cm;
+      // Out of range: nothing new (the sensor task then reports none).
+      s_.obstacle_front_cm = f_cm <= range_cm ? f_cm : NAN;
+      s_.obstacle_rear_cm = r_cm <= range_cm ? r_cm : NAN;
+      if (f_cm <= range_cm) s_.tof_front_ms = now;
+      if (r_cm <= range_cm) s_.tof_rear_ms = now;
     }
     if (past_.size() > 64) past_.erase(past_.begin());
     s_.obstacle_front_stop = s_.obstacle_front_cm < motion.stop_cm(false);
@@ -191,13 +224,29 @@ class Farm : public NavOutput {
     TofSample ts = {s_.obstacle_front_cm, s_.tof_front_ms, s_.obstacle_front_stop,
                     s_.obstacle_rear_cm,  s_.tof_rear_ms,  s_.obstacle_rear_stop};
     NodeIndex reached = tof.update(on_track, core.status(), core.current_node(), ts, now);
-    if (reached != NO_NODE) {
+    float progress = encoder && reached != NO_NODE ? assist.progress_to(reached) : -1;
+    bool arrived = false;
+    if (progress >= 0 && progress < TOF_NAV_ENCODER_MIN_RATIO) {
+      refusals++;
+      tof.reject();
+    } else if (reached != NO_NODE) {
+      arrived = true;
+      assist.on_tag();
       arrivals.push_back(GRAPH_NODES[reached].id);
       float miss = fabsf(pos - (float)GRAPH_NODES[reached].x * CM_PER_UNIT);
       if (GRAPH_NODES[reached].z != level) miss = INFINITY;
       if (miss > worst_miss_cm) worst_miss_cm = miss;
       tof.on_tag(reached);
       core.on_tag(reached, now);
+    }
+    NodeIndex guessed = encoder && !arrived ? assist.check(core.status()) : NO_NODE;
+    if (guessed != NO_NODE) {
+      guesses++;
+      arrivals.push_back(GRAPH_NODES[guessed].id);
+      float miss = fabsf(pos - (float)GRAPH_NODES[guessed].x * CM_PER_UNIT);
+      if (miss > worst_miss_cm) worst_miss_cm = miss;
+      tof.on_tag(guessed);
+      core.on_tag(guessed, now);
     }
     core.tick(now);
     const char* fault = motion.check(now, s_, false);
@@ -510,6 +559,7 @@ static void test_realistic_missions() {
       Farm f;
       f.sigma_cm = sigma;
       f.lag_ms = 35;
+      f.range_cm = TOF_NAV_MAX_RANGE_CM + 10;
       f.seed = seed;
       boot(f, 20);
       f.command(navigate("t1", "water-11", TargetAction::Water, 0));
@@ -534,6 +584,82 @@ static void test_realistic_missions() {
   CHECK(done == runs);
 }
 
+static void test_encoder_missions() {
+  SCENARIO("ToF and the encoder together: realistic missions");
+  int done = 0, runs = 0, guesses = 0, refusals = 0;
+  float worst = 0;
+  for (uint32_t seed = 1; seed <= 10; seed++) {
+    Farm f;
+    f.encoder = true;
+    f.sigma_cm = 2;
+    f.lag_ms = 35;
+    f.range_cm = TOF_NAV_MAX_RANGE_CM + 10;
+    f.seed = seed;
+    boot(f, 20);
+    f.command(navigate("t1", "water-11", TargetAction::Water, 0));
+    bool ok = f.run_until([&] { return f.core.status() == RobotStatus::Idle ||
+                                       f.core.status() == RobotStatus::Error; }, 120000) &&
+              f.core.current_node() == N("water-11");
+    if (ok) {
+      f.command(make(CommandType::ReturnToDock));
+      ok = f.run_until([&] { return f.core.status() == RobotStatus::Charging ||
+                                    f.core.status() == RobotStatus::Error; }, 120000) &&
+           f.core.status() == RobotStatus::Charging;
+    }
+    runs++;
+    if (ok) done++;
+    guesses += f.guesses;
+    refusals += f.refusals;
+    if (f.worst_miss_cm > worst) worst = f.worst_miss_cm;
+  }
+  printf("  with the encoder: %d/%d completed, %d guesses, %d refusals, worst arrival %.1f cm\n",
+         done, runs, guesses, refusals, worst);
+  CHECK(done == runs);
+  CHECK(refusals == 0);  // nothing in the beams: ToF is never refused
+  CHECK(worst <= TOF_NAV_MAX_STEP_CM + TOF_NAV_MAX_SPEED_CM_S * STOP_RAMP_MS / 2000.0f);
+}
+
+static void test_encoder_refuses_early() {
+  SCENARIO("a one-sided node, something in its beam early: the encoder refuses it");
+  Farm f(NO_LEVELS);
+  f.encoder = true;
+  f.range_cm = TOF_NAV_MAX_RANGE_CM;  // so no length check past 120 cm
+  boot(f, 20);
+  f.command(navigate("t1", "water-01", TargetAction::Water, 0));
+  CHECK(f.run_until([&] { return f.core.status() == RobotStatus::Idle; }, 20000));
+  // On to cp-02 (front reading only: its rear board is out of range). A box
+  // at 190: the front reads cp-02's 80 cm while the robot's at 110.
+  f.object_at = 190;
+  f.command(navigate("t2", "cp-02", TargetAction::Water, 0));
+  CHECK(f.run_until([&] { return f.pos >= 130; }, 20000));
+  CHECK(f.core.current_node() == N("water-01"));  // not taken at 110
+  CHECK(f.refusals > 0);
+  f.object_at = NAN;
+  CHECK(f.run_until([&] { return f.core.status() == RobotStatus::Idle; }, 20000));
+  CHECK(f.core.current_node() == N("cp-02"));
+  CHECK(near(f.pos, pos_of("cp-02"), 10));
+  CHECK(!f.saw(RobotEventType::Error));
+}
+
+static void test_encoder_covers_blind() {
+  SCENARIO("ToF blind across a node: the encoder takes it, ToF carries on after");
+  Farm f;
+  f.encoder = true;
+  boot(f, 20);
+  f.command(navigate("t1", "cp-02", TargetAction::Water, 0));
+  CHECK(f.run_until([&] { return f.pos >= 85; }, 20000));
+  f.blind = true;
+  CHECK(f.run_until([&] { return f.pos >= 112; }, 20000));
+  f.blind = false;
+  CHECK(f.run_until([&] { return f.core.status() == RobotStatus::Idle ||
+                                 f.core.status() == RobotStatus::Error; }, 20000));
+  CHECK(f.core.current_node() == N("cp-02"));
+  CHECK(f.guesses == 1);
+  std::vector<std::string> want = {"cp-01", "water-01", "cp-02"};
+  CHECK(f.arrivals == want);
+  CHECK(!f.saw(RobotEventType::Error));
+}
+
 int main() {
   test_boot();
   test_up_and_back();
@@ -547,6 +673,9 @@ int main() {
   test_ride_cut_short();
   test_ride_resumed();
   test_realistic_missions();
+  test_encoder_missions();
+  test_encoder_refuses_early();
+  test_encoder_covers_blind();
   if (failures) {
     printf("tof_nav_test: %d failure(s)\n", failures);
     return 1;

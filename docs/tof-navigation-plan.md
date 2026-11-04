@@ -1,6 +1,6 @@
 # ToF navigation backup: design and implementation plan
 
-Status: **Phases 1 and 2 implemented** (`firmware/esp32/src/nav/tof_locator`,
+Status: **all three phases implemented** (`firmware/esp32/src/nav/tof_locator`,
 wired in `tasks/nav_task.cpp`, off by default); see "As built" at the end for
 where the code differs from this plan. Owner: Caleb, Jameson. For the case where
 RFID tags can't be mounted on the farm in time (see the Final Build and
@@ -376,6 +376,26 @@ Known limits: a node measured on one side only can be fooled by an object
 parked in that beam (no second board to check against); the elevator
 platform's end wall is the board at that end of each level, so with the
 platform moved elsewhere edges toward it fault.
+
+## As built (Phase 3)
+
+- The `encoder-assist` branch's three commits are on this branch, rebased onto
+  it (`ENCODER_ASSIST_ENABLED` still false). Its own tests pass unchanged.
+- **Precedence** in the nav loop: real tag, then ToF, then the encoder, at most
+  one node a loop. A ToF node calls `EncoderAssist::on_tag()` (its count starts
+  there, so it can cover the next node ToF misses). An encoder guess calls
+  `TofLocator::on_tag()` but not `EncoderAssist::on_tag()`, so the encoder still
+  guesses at most once until a real tag or a ToF node.
+- **Cross-check:** `EncoderAssist::progress_to(node)` (new) gives how much of
+  the edge has been driven. A ToF node under `TOF_NAV_ENCODER_MIN_RATIO` (0.85)
+  is refused and `TofLocator::reject()` (new) watches the edge again. The plan
+  said 0.6; 0.85 because an object that stays in the beam is accepted as soon as
+  the ratio is reached, so the ratio is how early a wrong arrival can be.
+- The encoder doesn't count elevator rides or creeps, so those arrivals (and
+  localising by hand) aren't checked.
+- `tof_nav_test` runs ToF and the encoder together on noisy, lagged,
+  range-limited readings, a box in a one-sided node's beam (refused), and a
+  blind stretch (the encoder takes the node).
 
 Not done, by decision: the optional `position_source` telemetry field (no
 MQTT contract change was needed); a mid-level board.

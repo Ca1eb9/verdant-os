@@ -221,6 +221,14 @@ void TofLocator::lose_level() {
   level_known_ = false;
 }
 
+void TofLocator::reject() {
+  if (mode_ != Mode::Edge) return;
+  fired_ = false;
+  count_ = 0;
+  rejected_ = 0;
+  track_cm_ = NAN;
+}
+
 bool TofLocator::past(float cm) const {
   // Toward the board the reading falls to the node's; away from it, it rises.
   return toward_ ? cm <= target_cm_ + TOF_ARRIVE_LEAD_CM : cm >= target_cm_ - TOF_ARRIVE_LEAD_CM;
