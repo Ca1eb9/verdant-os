@@ -481,17 +481,26 @@ that node's: the moment its tag would have been read. The robot then does
 exactly what that tag would have made it do, so **nothing on the wire
 changes**: positions are still node ids, with the same events and telemetry.
 
-- Real tags still work and win; a tag for the node ToF just reached is ignored.
+- Real tags still work and win. While on a path, a tag for the node the robot
+  is already at (ToF got there first) is ignored: it would only re-plan.
 - Only while driving an edge (not onto the elevator platform or the dock,
   where the ToF approach above applies), or creeping after boot.
 - Readings it doesn't trust (stale, held, further than the robot could have
   moved, or front + rear short of the level's length) never make a node: a
   node is late rather than wrong, and the missed-tag fault applies as for a tag.
-- Recovering from `error` without a tag: the robot driven by hand onto a node
-  and still there for `TOF_STILL_MS` counts as that node's tag read. One left
-  sitting on its node doesn't keep re-reading it.
+- Recovering from `error` without a tag: drive the robot by hand (`manual`)
+  onto a node. Still there for `TOF_STILL_MS`, it counts as that node's tag
+  read, and leaving manual (`resume` or the timeout) recovers from there. In
+  `error` itself nothing is taken, so a person standing in a beam can't restart
+  it. One left sitting on its node doesn't keep re-reading it. Before the
+  first node (`initializing` with `BOOT_CREEP` off, or after the creep gave
+  up) the node it's still on is taken the same way.
 - It can't tell levels apart: the robot must be set down on `TOF_BOOT_LEVEL`,
-  and after an elevator ride it trusts the plan.
+  and it switches level when it drives off an elevator, trusting the plan. A
+  ride cut short (a stop and another command, a forced return) leaves the
+  level unknown: no node by ToF until a real tag is read or the robot restarts
+  on `TOF_BOOT_LEVEL`. It faults (`missed tag`) rather than docking on the
+  wrong level.
 
 ## TBD
 

@@ -231,6 +231,7 @@ void nav_task(void* /*param*/) {
   TofLocator tof(TOF_NODES, sizeof(TOF_NODES) / sizeof(TOF_NODES[0]), TOF_LEVEL_LENGTH_CM,
                  sizeof(TOF_LEVEL_LENGTH_CM) / sizeof(TOF_LEVEL_LENGTH_CM[0]));
   uint32_t tof_logged_ms = 0;
+  bool tof_level_known = true;
   if (TOF_NAV_ENABLED) {
     const char* problem = tof.begin();
     if (problem) {
@@ -268,11 +269,12 @@ void nav_task(void* /*param*/) {
       } else {
         known_tag_ms = now;
         if (out.tof) {
-          // ToF got there first: the same node again would only re-plan.
+          // Already there (ToF got there first): the same node again would
+          // only re-plan.
           bool on_path = core.status() == RobotStatus::EnRoute ||
                          core.status() == RobotStatus::ReturningToDock;
           if (on_path && node == core.current_node()) {
-            LOG("nav", "tag for %s: already reached by ToF", GRAPH_NODES[node].id);
+            LOG("nav", "tag for %s: already there", GRAPH_NODES[node].id);
             continue;
           }
           out.tof->on_tag(node);
@@ -298,6 +300,15 @@ void nav_task(void* /*param*/) {
         known_tag_ms = now;
         out.tof->on_tag(reached);
         core.on_tag(reached, now);
+      }
+    }
+    if (out.tof && out.tof->level_known() != tof_level_known) {
+      tof_level_known = out.tof->level_known();
+      if (tof_level_known) {
+        LOG("nav", "ToF: level known again");
+      } else {
+        LOG("nav", "ToF: elevator ride cut short, level unknown: no nodes by ToF until a tag "
+            "is read or a restart on level %u", (unsigned)TOF_BOOT_LEVEL);
       }
     }
     // For measuring TOF_NODES: both readings now and then while not driving an edge.

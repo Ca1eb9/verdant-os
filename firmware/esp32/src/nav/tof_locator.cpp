@@ -116,7 +116,12 @@ const char* TofLocator::begin() {
   return nullptr;
 }
 
-void TofLocator::on_tag(NodeIndex /*node*/) {
+void TofLocator::on_tag(NodeIndex node) {
+  if (node < GRAPH_NODE_COUNT) {
+    level_ = level_of(node);
+    level_known_ = true;
+    riding_ = false;
+  }
   mode_ = Mode::Off;
   candidate_ = NO_NODE;
   away_ = false;
@@ -134,7 +139,17 @@ void TofLocator::on_edge(NodeIndex from, NodeIndex to, EdgeDrive drive) {
   candidate_ = NO_NODE;
   away_ = false;
   off_since_ms_ = 0;
-  if (!ready_ || drive == EdgeDrive::Turn || to >= GRAPH_NODE_COUNT) return;
+  // A ride only ends with its drive-off (check_edge). Anything else first (a
+  // stop and another command, a forced return): the elevator may or may not
+  // have moved. The same ride again (resumed) carries on.
+  bool ride = drive == EdgeDrive::ElevatorForward || drive == EdgeDrive::ElevatorBackward;
+  if (riding_ && !(ride && from == ride_from_ && to == ride_to_)) lose_level();
+  if (ride && level_known_) {
+    riding_ = true;
+    ride_from_ = from;
+    ride_to_ = to;
+  }
+  if (!ready_ || !level_known_ || drive == EdgeDrive::Turn || to >= GRAPH_NODE_COUNT) return;
 
   bool backward = drive == EdgeDrive::Backward || drive == EdgeDrive::ElevatorBackward;
   bool same_level = from < GRAPH_NODE_COUNT && level_of(from) == level_of(to);
@@ -165,12 +180,18 @@ void TofLocator::on_edge(NodeIndex from, NodeIndex to, EdgeDrive drive) {
 
 void TofLocator::on_creep() {
   on_edge(NO_NODE, NO_NODE, EdgeDrive::Turn);  // clears the edge
-  if (ready_) mode_ = Mode::Creep;
+  if (ready_ && level_known_) mode_ = Mode::Creep;
 }
 
 void TofLocator::on_untracked_move() {
+  if (riding_) lose_level();
   mode_ = Mode::Off;
   candidate_ = NO_NODE;
+}
+
+void TofLocator::lose_level() {
+  riding_ = false;
+  level_known_ = false;
 }
 
 bool TofLocator::past(float cm) const {
@@ -181,19 +202,22 @@ bool TofLocator::past(float cm) const {
 NodeIndex TofLocator::update(bool on_track, RobotStatus status, NodeIndex current,
                              const TofSample& s, uint32_t now) {
   if (on_track) return check_edge(s, now);
-  if (status != RobotStatus::Error && status != RobotStatus::Manual &&
-      status != RobotStatus::Initializing) {
-    return NO_NODE;
-  }
-  // Driven or set down by hand: the node it's on.
-  uint8_t level = current < GRAPH_NODE_COUNT ? level_of(current) : TOF_BOOT_LEVEL;
-  return localize(level, current, s, now);
+  // Driven by hand (in error, that's manual), or set down before the first
+  // node: the node it's on. Not in error itself, where nothing moves it, so
+  // someone standing in a beam can't restart it.
+  if (status != RobotStatus::Manual && status != RobotStatus::Initializing) return NO_NODE;
+  return localize(level_, current, s, now);
 }
 
 NodeIndex TofLocator::check_edge(const TofSample& s, uint32_t now) {
-  if (!ready_) return NO_NODE;
+  if (!ready_ || !level_known_) return NO_NODE;
   if (mode_ == Mode::Creep) return check_creep(s, now);
   if (mode_ != Mode::Edge || fired_) return NO_NODE;
+  // Driving again after a ride: off the platform, on the new level.
+  if (riding_) {
+    riding_ = false;
+    level_ = level_of(target_);
+  }
 
   float cm = use_rear_ ? s.rear_cm : s.front_cm;
   uint32_t ms = use_rear_ ? s.rear_ms : s.front_ms;
@@ -251,6 +275,7 @@ NodeIndex TofLocator::check_creep(const TofSample& s, uint32_t now) {
   }
   if (m != candidate_) {
     candidate_ = m;
+    candidate_ms_ = now;
     count_ = 0;
   }
   if (++count_ < TOF_NAV_CONFIRM_COUNT) return NO_NODE;
@@ -260,7 +285,7 @@ NodeIndex TofLocator::check_creep(const TofSample& s, uint32_t now) {
 }
 
 NodeIndex TofLocator::localize(uint8_t level, NodeIndex current, const TofSample& s, uint32_t now) {
-  if (!ready_) return NO_NODE;
+  if (!ready_ || !level_known_) return NO_NODE;
   // Clearly off its node for TOF_STILL_MS, readings that add up: it was moved.
   // Not one passing reading (someone walking by).
   if (current < GRAPH_NODE_COUNT && length_ok(level, s, now) && clearly_off(current, s, now)) {

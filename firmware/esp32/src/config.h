@@ -254,7 +254,7 @@ constexpr uint8_t TOF_NAV_RESEED_COUNT = 3;
 // Taken as reached this much early, for the roll-on after the stop ramp and
 // the readings' age (up to a sensor loop plus half a measurement, ~35 ms).
 constexpr float TOF_ARRIVE_LEAD_CM = 0.0f;       // TBD: tune on the farm
-// Not driving an edge (idle, stopped, error, manual, initializing): the robot
+// Driven by hand (manual) or before the first node (initializing): the robot
 // is on a node when every reading that node has is within this of its own,
 // for TOF_STILL_MS, and it's the only such node on the level. It takes that
 // node as read only once it has been clearly off it (twice this away), or if

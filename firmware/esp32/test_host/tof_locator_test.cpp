@@ -544,6 +544,54 @@ static void creep_and_localize() {
     }
   }
 
+  SCENARIO("update: after driving off an elevator, the new level, even with the old node");
+  {
+    TofLocator loc = ready_locator(t);
+    Track tr;
+    loc.on_tag(N("elev-1-L0"));
+    loc.on_edge(N("elev-1-L0"), N("elev-1-L1"), EdgeDrive::ElevatorBackward);
+    TofSample s = tr.at(225);  // on the platform, starting to drive off
+    CHECK(loc.check_edge(s, tr.now) == NO_NODE);
+    loc.on_untracked_move();  // faulted, then driven by hand
+    CHECK(loc.level_known());
+    NodeIndex got = NO_NODE;
+    for (int i = 0; i < 100 && got == NO_NODE; i++) {
+      s = tr.at(150);
+      got = loc.update(false, RobotStatus::Manual, N("elev-1-L0"), s, tr.now);
+    }
+    CHECK(got == N("cp-11"));
+  }
+  SCENARIO("update: a ride cut short, the level is unknown until a real tag");
+  {
+    TofLocator loc = ready_locator(t);
+    Track tr;
+    loc.on_tag(N("elev-1-L0"));
+    loc.on_edge(N("elev-1-L0"), N("elev-1-L1"), EdgeDrive::ElevatorBackward);
+    loc.on_edge(N("elev-1-L0"), N("elev-1-L1"), EdgeDrive::ElevatorBackward);  // resumed: same ride
+    CHECK(loc.level_known());
+    loc.on_edge(N("elev-1-L0"), N("cp-02"), EdgeDrive::Backward);  // return_to_dock mid-ride
+    CHECK(!loc.level_known());
+    CHECK(isnan(drive(loc, tr, 200, 140, 1, NO_NODE)));
+    for (int i = 0; i < 100; i++) {
+      TofSample s = tr.at(150);
+      CHECK(loc.update(false, RobotStatus::Manual, N("elev-1-L0"), s, tr.now) == NO_NODE);
+    }
+    loc.on_tag(N("cp-11"));  // a real tag
+    CHECK(loc.level_known());
+  }
+  SCENARIO("update: nothing in error, idle, stopped, working or a dock trip");
+  {
+    TofLocator loc = ready_locator(t);
+    Track tr;
+    for (RobotStatus st : {RobotStatus::Error, RobotStatus::Idle, RobotStatus::Stopped,
+                           RobotStatus::Working, RobotStatus::Docking, RobotStatus::Charging}) {
+      for (int i = 0; i < 100; i++) {
+        TofSample s = tr.at(100);
+        CHECK(loc.update(false, st, N("cp-01"), s, tr.now) == NO_NODE);
+      }
+    }
+  }
+
   SCENARIO("localize: left sitting on its node, nothing");
   {
     TofLocator loc = ready_locator(t);

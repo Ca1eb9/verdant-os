@@ -2,8 +2,9 @@
 // Sensor task: RFID position, obstacle distance, battery voltage, air
 // temperature + humidity.
 //
-//   -> g_sensor_queue (SensorData) for the nav task, on every new tag and
-//      at least every SENSOR_REPORT_MS
+//   -> g_sensor_queue (SensorData) for the nav task, on every new tag (and
+//      with TOF_NAV_ENABLED every new distance) and at least every
+//      SENSOR_REPORT_MS
 //   -> g_obstacle_front_flag / g_obstacle_rear_flag, set the instant an
 //      obstacle is inside that side's stop distance (g_obstacle_*_stop_cm:
 //      OBSTACLE_STOP_CM, lowered by nav for a dock or elevator approach).

@@ -14,8 +14,9 @@
 //                 TOF_NAV_CONFIRM_COUNT fresh readings in a row. A level test,
 //                 not a crossing, so a robot resumed past the node arrives.
 //                 Creeping after boot: the first node on TOF_BOOT_LEVEL it's on.
-//   localize()    Not driving an edge (error, manual, initializing): the node
-//                 it's been still on for TOF_STILL_MS, as a tag read there.
+//   localize()    Driven by hand (manual) or before the first node
+//                 (initializing): the node it's been still on for
+//                 TOF_STILL_MS, as a tag read there.
 //
 // What it doesn't trust, so a node is late rather than wrong (the missed-tag
 // timeout then faults, as for a missed tag):
@@ -38,7 +39,8 @@
 // What it can't catch without the length check (TOF_LEVEL_LENGTH_CM): an
 // object that stays in the beam while the robot drives up to it reads like
 // the board coming closer, and can pass for the node. Measure the lengths.
-// It can't tell levels apart: after an elevator ride it trusts the plan.
+// It can't tell levels apart: after an elevator ride it trusts the plan, and
+// a ride cut short leaves the level unknown (level_known()) until a real tag.
 //
 // Pure C++ (no Arduino or FreeRTOS calls), so test_host can drive it.
 
@@ -72,6 +74,10 @@ class TofLocator {
   // why not, and every other call does nothing (tags only).
   const char* begin();
   bool ready() const { return ready_; }
+  // The level it's on: TOF_BOOT_LEVEL at boot, then every node's, switched
+  // when it drives off an elevator. Unknown after a ride cut short (the
+  // elevator may or may not have moved): no node by ToF until a real tag.
+  bool level_known() const { return level_known_; }
 
   // Any node reached (a real tag, or one of these): call before
   // NavCore::on_tag(), which may start the next edge.
@@ -84,17 +90,16 @@ class TofLocator {
 
   // Every nav loop with no tag read: the node reached, or NO_NODE.
   // `on_track`: Motion is driving an edge or creeping (driving_edge(),
-  // creeping()); then check_edge(). Otherwise, in error, manual or
-  // initializing, localize() on NavCore's node's level (TOF_BOOT_LEVEL
-  // before the first).
+  // creeping()); then check_edge(). Otherwise, in manual or initializing,
+  // localize() on the level it's on.
   NodeIndex update(bool on_track, RobotStatus status, NodeIndex current, const TofSample& s,
                    uint32_t now);
 
   // While Motion drives an edge (only then: not on the elevator platform) or
   // creeps: the node reached, once, or NO_NODE.
   NodeIndex check_edge(const TofSample& s, uint32_t now);
-  // Error, manual or initializing: the node it's on, or NO_NODE. `current`
-  // is NavCore's node (NO_NODE before the first), on `level`.
+  // Manual or initializing: the node it's on, or NO_NODE. `current` is
+  // NavCore's node (NO_NODE before the first), on `level`.
   NodeIndex localize(uint8_t level, NodeIndex current, const TofSample& s, uint32_t now);
 
  private:
@@ -109,6 +114,7 @@ class TofLocator {
   bool length_ok(uint8_t level, const TofSample& s, uint32_t now) const;
   bool past(float cm) const;
   const char* fail(const char* format, const char* id = "");
+  void lose_level();
 
   const TofNode* nodes_;
   size_t node_count_;
@@ -121,6 +127,12 @@ class TofLocator {
   float rear_[MAX_PATH_LEN] = {};
 
   Mode mode_ = Mode::Off;
+  uint8_t level_ = TOF_BOOT_LEVEL;
+  bool level_known_ = true;
+  // On an elevator ride (armed, not driven off yet): from and to.
+  bool riding_ = false;
+  NodeIndex ride_from_ = NO_NODE;
+  NodeIndex ride_to_ = NO_NODE;
   // Edge: its end, which reading and its bounds, and the last trusted reading.
   NodeIndex target_ = NO_NODE;
   bool use_rear_ = false;

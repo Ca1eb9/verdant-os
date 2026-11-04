@@ -43,6 +43,7 @@ static NodeIndex N(const char* id) {
 static const float CM_PER_UNIT = 50;
 static const float CM_S_PER_SPEED = 0.2f;  // CRUISE_SPEED 150: 30 cm/s
 static const float LEVELS[] = {260, 260, 260};
+static const float NO_LEVELS[] = {0, 0, 0};  // no length check
 static const uint32_t TOF_PERIOD_MS = 33;
 
 static float pos_of(const char* id) { return (float)GRAPH_NODES[N(id)].x * CM_PER_UNIT; }
@@ -79,20 +80,23 @@ static Command make(CommandType type, const char* task_id = "") {
 class Farm : public NavOutput {
  public:
   std::vector<TofNode> table = farm_table();
+  const float* levels;
   Sink sink;
   Motion motion{sink};
   NavCore core{*this};
-  TofLocator tof{table.data(), table.size(), LEVELS, 3};
+  TofLocator tof{table.data(), table.size(), levels, 3};
   uint32_t now = 1000;
   float pos = 0;
   uint8_t level = 0;
   // Something in the track ahead of the robot (NAN: nothing), at this pos.
   float object_at = NAN;
+  // A person in front of the robot, this far from its front sensor (NAN: none).
+  float person_cm = NAN;
   float noise_cm = 0;  // added to every reading, alternating sign
   std::vector<RobotEventType> events;
   std::vector<std::string> arrivals;  // node ids, as NavCore saw them
 
-  Farm() {
+  explicit Farm(const float* level_cm = LEVELS) : levels(level_cm) {
     const char* err = tof.begin();
     if (err) printf("  test bug: %s\n", err);
   }
@@ -133,6 +137,7 @@ class Farm : public NavOutput {
   float front() const {
     float cm = board_front();
     if (!isnan(object_at) && object_at > pos) cm = fminf(cm, object_at - pos);
+    if (!isnan(person_cm)) cm = fminf(cm, person_cm);
     return cm;
   }
   float rear() const { return pos + 30; }
@@ -378,6 +383,88 @@ static void test_hand_mid_edge() {
   CHECK(!f.saw(RobotEventType::Error));
 }
 
+// Drives it with the controller's stick until it's within 1 cm of `target`.
+static void drive_by_hand(Farm& f, float target) {
+  for (int i = 0; i < 400 && !near(f.pos, target, 1); i++) {
+    Command c = make(CommandType::Drive);
+    c.speed = f.pos > target ? -25 : 25;
+    c.source = CommandSource::Controller;
+    f.command(c);
+    f.run_until([] { return false; }, PAD_PULSE_MS + STOP_RAMP_MS);
+  }
+}
+
+static void test_person_in_front_of_error() {
+  SCENARIO("a robot in error, pushed onto a node with people walking by: stays in error");
+  Farm f(NO_LEVELS);
+  boot(f, 20);
+  f.object_at = 130;  // in the beam all edge: passes water-01 unseen, then missed tag
+  f.command(navigate("t1", "cp-02", TargetAction::Water, 0));
+  f.run_until([] { return false; }, 15000);
+  f.object_at = NAN;
+  CHECK(f.run_until([&] { return f.core.status() == RobotStatus::Error; }, 30000));
+  // Pushed by hand (no motor) onto cp-02: in error it waits for the
+  // controller or a resume, even when its readings match a node.
+  f.pos = pos_of("cp-02");
+  // Stand in front for a while, leave, and come back.
+  for (int i = 0; i < 3; i++) {
+    f.person_cm = 60;
+    f.run_until([] { return false; }, 2000);
+    f.person_cm = NAN;
+    f.run_until([] { return false; }, 2000);
+  }
+  CHECK(f.core.status() == RobotStatus::Error);
+  CHECK(!f.saw(RobotEventType::Recovery));
+}
+
+static void test_hand_after_ride() {
+  SCENARIO("driving off the elevator: on the new level");
+  Farm f;
+  boot(f, 20);
+  f.command(navigate("t1", "water-11", TargetAction::Water, 0));
+  CHECK(f.run_until([&] { return f.core.current_node() == N("elev-1-L1"); }, 120000));
+  CHECK(f.level == 1);
+  CHECK(f.tof.level_known());
+
+  SCENARIO("... stopped and driven by hand onto cp-11: cp-11 (level 1), not cp-02");
+  f.command(make(CommandType::Stop));
+  f.run_until([] { return false; }, 1000);
+  drive_by_hand(f, pos_of("cp-11"));
+  CHECK(f.run_until([&] { return f.core.current_node() != N("elev-1-L1"); }, 3000));
+  CHECK(f.core.current_node() == N("cp-11"));
+}
+
+static void test_ride_cut_short() {
+  SCENARIO("a ride cut short by return_to_dock: level unknown, never docks on the wrong level");
+  Farm f;
+  boot(f, 20);
+  f.command(navigate("t1", "water-11", TargetAction::Water, 0));
+  // On the platform, riding.
+  CHECK(f.run_until([&] { return f.level == 1; }, 120000));
+  CHECK(!f.motion.driving_edge());
+  f.command(make(CommandType::ReturnToDock));
+  CHECK(!f.tof.level_known());
+  f.run_until([] { return false; }, 30000);
+  CHECK(f.core.status() != RobotStatus::Docking && f.core.status() != RobotStatus::Charging);
+  CHECK(f.core.current_node() == N("elev-1-L0"));  // nothing taken since
+  CHECK(f.saw(RobotEventType::Error));  // missed tag: an operator's turn
+}
+
+static void test_ride_resumed() {
+  SCENARIO("stopped during a ride and resumed: same ride, level kept");
+  Farm f;
+  boot(f, 20);
+  f.command(navigate("t1", "water-11", TargetAction::Water, 0));
+  CHECK(f.run_until([&] { return f.level == 1; }, 120000));
+  f.command(make(CommandType::Stop));
+  f.run_until([] { return false; }, 1000);
+  f.command(make(CommandType::Resume));
+  CHECK(f.tof.level_known());
+  CHECK(f.run_until([&] { return f.core.status() == RobotStatus::Idle; }, 60000));
+  CHECK(f.core.current_node() == N("water-11"));
+  CHECK(!f.saw(RobotEventType::Error));
+}
+
 int main() {
   test_boot();
   test_up_and_back();
@@ -386,6 +473,10 @@ int main() {
   test_noise();
   test_object_in_track();
   test_hand_mid_edge();
+  test_person_in_front_of_error();
+  test_hand_after_ride();
+  test_ride_cut_short();
+  test_ride_resumed();
   if (failures) {
     printf("tof_nav_test: %d failure(s)\n", failures);
     return 1;

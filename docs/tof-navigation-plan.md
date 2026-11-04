@@ -338,10 +338,14 @@ Changes from the plan above, mostly from review:
   flag clears only above that, and would hold the robot short of the node for good.
 - **`begin()` also checks** each two-sided node's front + rear against its
   level's length (a typo on one side would make it unmatchable).
-- **Localising:** in `error`, `manual` and `initializing` only (not `idle` or
-  `stopped`, where nobody is moving the robot). Being "away" from the current
-  node needs `TOF_STILL_MS` of readings that add up, so someone walking past a
-  faulted robot doesn't restart it.
+- **Localising:** in `manual` and `initializing` only. Not in `error` (a
+  person standing in a beam could restart a faulted robot; drive it by hand
+  instead, and leaving manual recovers), nor `idle` or `stopped`. Being "away"
+  from the current node needs `TOF_STILL_MS` of readings that add up.
+- **Levels:** the locator tracks the level itself (switched on driving off an
+  elevator), so a robot that faults on the way off still localises on the new
+  level. A ride cut short by anything but its own resume leaves the level
+  unknown: no node by ToF until a real tag or a restart on level 0.
 - **Readings reach nav as they come** (about 30 Hz while on), not every
   `SENSOR_REPORT_MS`; the sensor task's change is gated by the flag.
 - **The per-loop decision** is `TofLocator::update()`, so the host tests drive
