@@ -218,7 +218,7 @@ lights:
 | Relay 2 (level 1) | SIG | Uno **D6** |
 | Both | + | 5V (the + rail) |
 | Both | − | GND (the − rail) |
-| Each | + and − | A 100 µF capacitor across them, stripe to − (below) |
+| Each | + and − | A 100 µF capacitor across them (below) |
 | Each | COM and NO screw terminals | That level light's two 0–10 V dim wires (usually purple and grey/pink) |
 
 The JST cable's colours are black (−), red (+) and white (SIG). Which relay
@@ -243,10 +243,12 @@ numbers there instead of the wires.
   light off), and the board has its own flyback diode. Two are fine on the
   Pi's USB port; if the Uno resets as a relay clicks, power the Pi from its
   official supply.
-- **A 100 µF capacitor at each relay**, across its + and − (electrolytic,
-  16 V or more). It holds the 5V up on the relay's long cable while the coil
-  switches, so a click doesn't dip the Uno's supply. Mind the polarity: the
-  stripe (−) goes to GND; reversed, an electrolytic can burst. Don't go bigger
+- **A 100 µF capacitor at each relay**, across its + and −, electrolytic or
+  ceramic, rated 10 V or more (16 V better). It holds the 5V up on the relay's
+  long cable while the coil switches, so a click doesn't dip the Uno's supply.
+  An electrolytic has a polarity: its stripe (−) goes to GND; reversed, it can
+  burst. A ceramic has none, and anything from 10 µF up does the job at
+  50 mA: at 5 V a ceramic holds well under its printed value. Don't go bigger
   (e.g. 470 µF): the Uno's 5V comes from the Pi's USB port, and plugging the
   Uno in charges every capacitor on that line at once, which can dip the Pi's
   other USB devices.
