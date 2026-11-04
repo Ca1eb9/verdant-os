@@ -175,9 +175,11 @@ their drawings.
   SCL and SDA each with a GND wire if the cable allows.
 - **Only plug or unplug it with the Uno off.** It's on the first sensor's bus,
   so a glitch while plugging it, or on the cable, can leave a sensor holding
-  the bus: both light readings stay `null` until the Uno is power-cycled
-  (unplug its USB for a few seconds). The node keeps reporting everything
-  else, and neither its I2C timeout nor its watchdog powers the sensors off.
+  the bus. The node clears that itself at its next report (it logs
+  `# i2c bus was stuck, cleared`) and the light readings come back a report
+  later. Only a sensor that has locked up completely needs the Uno
+  power-cycled (unplug its USB for a few seconds); the node then logs
+  `# i2c bus stuck, can't clear it`.
 
 **Check:** with the cable at its full length and the grow lights on, leave
 `pio device monitor` running for an hour. No `# bh1750 failed` or

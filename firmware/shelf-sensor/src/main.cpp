@@ -51,6 +51,58 @@ static void noteHealth(const __FlashStringHelper* name, bool ok, bool& wasOk) {
   Serial.println(ok ? F(" ok") : F(" failed"));
 }
 
+// Drives an I2C line low, or releases it to its pull-ups, like the open-drain
+// TWI hardware does. LOW is written first, so switching to OUTPUT never drives
+// it high.
+static void i2cLine(uint8_t pin, bool low) {
+  if (low) {
+    digitalWrite(pin, LOW);
+    pinMode(pin, OUTPUT);
+  } else {
+    pinMode(pin, INPUT_PULLUP);
+  }
+  delayMicroseconds(I2C_CLEAR_HALF_PERIOD_US);
+}
+
+/**
+ * A sensor left holding SDA low mid-byte (a glitch on the long cable, a board
+ * plugged in powered) blocks the bus for good: the TWI timeout only resets the
+ * Uno's side. Clocking SCL until it lets go, then a STOP, frees it without
+ * anyone unplugging the Uno. Costs two pin reads when the bus is idle.
+ * Returns true when it had to clear the bus, so the meters are configured
+ * again; logs a bus it can't clear (SCL held low) once until it can.
+ */
+static bool clearStuckBus() {
+  static bool stuckLogged = false;
+  if (digitalRead(SDA) == HIGH && digitalRead(SCL) == HIGH) {
+    stuckLogged = false;
+    return false;
+  }
+  Wire.end();
+  i2cLine(SDA, false);
+  i2cLine(SCL, false);
+  for (uint8_t i = 0; i < I2C_CLEAR_PULSES && digitalRead(SDA) == LOW && digitalRead(SCL) == HIGH; i++) {
+    i2cLine(SCL, true);
+    i2cLine(SCL, false);
+  }
+  // STOP: SDA rises while SCL is high
+  if (digitalRead(SCL) == HIGH) {
+    i2cLine(SDA, true);
+    i2cLine(SDA, false);
+  }
+  bool cleared = digitalRead(SDA) == HIGH && digitalRead(SCL) == HIGH;
+  Wire.begin();
+  Wire.setWireTimeout(I2C_TIMEOUT_US, true);
+  if (cleared) {
+    Serial.println(F("# i2c bus was stuck, cleared"));
+    stuckLogged = false;
+  } else if (!stuckLogged) {
+    Serial.println(F("# i2c bus stuck, can't clear it (power-cycle the node)"));
+    stuckLogged = true;
+  }
+  return true;
+}
+
 // begin() is given the address: left to its default, it sets the meter back to
 // 0x23, the bottom sensor's
 static bool startLight(BH1750& meter, uint8_t addr) {
@@ -181,6 +233,8 @@ static void readInput() {
 static void report() {
   float airC = dht.readTemperature();
   float rh = dht.readHumidity();
+  // After a clear, configure both again: a meter may have lost its mode
+  if (clearStuckBus()) lightReady = topLightReady = false;
   float lux = readLight(lightMeter, LIGHT_ADDR, lightReady);
   float topLux = readLight(topLightMeter, LIGHT_TOP_ADDR, topLightReady);
   float waterC = readWaterTemp();

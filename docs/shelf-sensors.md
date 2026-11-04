@@ -181,7 +181,8 @@ Restart the bridge after editing the config: `sudo systemctl restart farm-shelf-
 | Level switch unplugged | The pull-down reads it as "low" | `water_level_ok: false`, the safe direction |
 | Light sensor reset by a power glitch | Re-sends its mode every report, so at most one wrong reading | — |
 | Top light sensor unplugged or its cable loose | Logs `# bh1750 top failed`, prints `null` for it | Its level's `lux: null`; the map shows that level with no reading |
-| A light sensor or its cable holding the I2C bus low | Both light sensors share the bus: both `null` until the Uno is power-cycled (unplug its USB). The I2C timeout keeps the rest of the node reporting | Both lights `null`; the other readings unaffected |
+| A light sensor or its cable holding the I2C bus low | Both light sensors share the bus. At its next report the node clocks the bus free (logs `# i2c bus was stuck, cleared`) and configures both again: about two reports of `null` | Both lights `null` meanwhile; the other readings unaffected |
+| A light sensor locked up so it holds the clock line too | The node can't clear it: logs `# i2c bus stuck, can't clear it` once, keeps reporting the rest | Both lights `null` until the Uno is power-cycled (unplug its USB) |
 | Top sensor's ADDR wire broken or on row 11 | Both sensors answer at 0x23: the bottom reading wrong with no error | The top level's `lux: null`; check ADDR before trusting the bottom one |
 | Firmware from before the top light sensor | One `light_lux` number | Published as the first level's; the others `null` |
 | `light_levels` left out of the Pi's config | — | Only the bottom sensor is published, at the shelf's level: add `light_levels` |

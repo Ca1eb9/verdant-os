@@ -43,6 +43,10 @@ constexpr uint8_t LIGHT_OFF_RELAY_STATE = HIGH;
 
 constexpr uint32_t REPORT_INTERVAL_MS = 5000;   // one JSON line this often (DHT11 needs >= 1 s)
 constexpr uint32_t I2C_TIMEOUT_US = 25000;      // a stuck bus aborts instead of hanging
+// Clearing a bus a sensor holds: up to one byte and its ACK of clock pulses, at
+// about 100 kHz (the I2C bus clear, NXP UM10204 3.1.16)
+constexpr uint8_t I2C_CLEAR_PULSES = 9;
+constexpr uint8_t I2C_CLEAR_HALF_PERIOD_US = 5;
 // No "lights" line from the Pi this long: every light back on, as if the Uno
 // had no power. The bridge resends the state with every reading (5 s).
 constexpr uint32_t LIGHTS_TIMEOUT_MS = 30000;

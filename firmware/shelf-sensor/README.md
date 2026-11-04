@@ -37,18 +37,21 @@ set in `src/config.h`; change both together.
 - `light_lux` has one value per BH1750: the bottom level's (address 0x23),
   then the top level's (0x5C, its ADDR pin on 3.3V); their logs are `bh1750`
   and `bh1750 top`. Which level each faces is the Pi's setting
-  (`light_levels` in `shelf-bridge-config.json`), so the node never names one. A light sensor recovering from a failure reads `null` for one
-  more report, rather than the 0 lux it holds before its first measurement.
+  (`light_levels` in `shelf-bridge-config.json`), so the node never names
+  one. A light sensor recovering from a failure reads `null` for one more
+  report, rather than the 0 lux it holds before its first measurement.
 - `ph_mv` is the pH board's output in millivolts. The bridge converts it with
   per-shelf calibration, so recalibrating never needs a reflash.
 - `seq` restarts at 0 when the board reboots (the Pi opening the port also
   resets an Uno).
 - `# lights 10` is logged when the level lights change (see Input).
 - A hardware watchdog resets the board if the loop hangs for 8 s, and I2C
-  calls time out instead of hanging on a stuck bus. The watchdog needs the
-  Optiboot bootloader that genuine Uno R3s ship with; some clones have an
-  older one that reset-loops after a watchdog reset (fix: burn the Uno
-  bootloader from the Arduino IDE).
+  calls time out instead of hanging on a stuck bus. A sensor left holding the
+  bus is clocked free at the next report (`# i2c bus was stuck, cleared`);
+  `# i2c bus stuck, can't clear it` means one has locked up and the board
+  needs its power cycled. The watchdog needs the Optiboot bootloader that
+  genuine Uno R3s ship with; some clones have an older one that reset-loops
+  after a watchdog reset (fix: burn the Uno bootloader from the Arduino IDE).
 
 ## Input
 
