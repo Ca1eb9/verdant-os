@@ -109,6 +109,27 @@ To bench-test the contact and the charge flow off the dock, set `CHARGE_SENSE_AL
 - The contact closing while `idle`, `stopped` or `initializing` charges the robot where it is: `dock_connected`, then `charging`, with the usual `charge_complete` at `CHARGE_COMPLETE_PCT`, stall watch and **Charge complete** button. When the charge ends it goes back to `idle`, or `stopped` with its paused task. From `initializing` the tag search stops, and afterwards it waits halted in `initializing` (`resume` searches again), or goes `idle` if a tag was read meanwhile. Only a closing contact starts it, so a charge that ended doesn't restart until the charger is unplugged and plugged in again. A full pack ends it at once (`dock_connected`, then `charge_complete`).
 - Losing the contact while `charging` ends the charge (`charge_complete`) at any battery level, on the dock too: it never backs onto the dock, so unplugging the charger doesn't drive the motor.
 
+## ToF navigation (optional)
+
+A backup for a farm without RFID tags ([docs/tof-navigation-plan.md](../../docs/tof-navigation-plan.md)). Off unless `TOF_NAV_ENABLED` is on in `config.h`; then real tags still work, and win.
+
+Each level is one straight line and the robot never turns, so the front sensor always sees the board at one end of the level and the rear sensor the board at the other. `TOF_NODES` holds both readings with the robot stopped on each node. Driving an edge, `nav/tof_locator` takes the end node as reached once the reading on the side it drives toward has reached that node's for `TOF_NAV_CONFIRM_COUNT` readings in a row, and the nav task hands it to `NavCore::on_tag()`, exactly as a tag. Nothing else changes: the Pi sees the same node ids, events and telemetry.
+
+**What it needs on the farm:**
+
+- A flat board square to the track at sensor height at both ends of each level (the dock is one on level 0). Toward an elevator the board ahead is the platform, which isn't there while it's on another level, so elevator nodes are read from the board behind when they have that reading.
+- Nothing else in the beams: the robot's plant, rails or the floor. A reading the robot couldn't have moved to is ignored, so something in the beam makes a node late (and the edge fault `missed tag`), not wrong. The one thing it can't tell from the board is an object that stays in the beam while the robot drives up to it: `TOF_LEVEL_LENGTH_CM` catches that, so measure it.
+- Each reading above `OBSTACLE_CLEAR_CM` (else the obstacle flag holds the robot short of the node): use 0 for a side that's closer than that, or can't see its board.
+- Set the robot down on `TOF_BOOT_LEVEL` (level 0): ToF can't tell levels apart. It creeps forward to the first node, as with tags. After an elevator ride it trusts that the elevator went to the right level.
+
+**Measuring `TOF_NODES`:** turn `TOF_NAV_ENABLED` on with the table still at zeros. The robot logs `ToF navigation OFF, tags only: ...` at boot and runs as before, and every `TOF_NAV_LOG_MS` while it isn't driving an edge it logs `ToF: front 182.4 rear 79.1 cm (sum 261.5)`. With the Bluetooth controller (or dashboard jogs), drive it until it sits on each node, read the line three times and put the averages in `TOF_NODES`. The sum is the same anywhere on a level: put each level's in `TOF_LEVEL_LENGTH_CM`. Reflash: `ToF navigation ON` at boot. The table is checked then (every node listed, in order along the track, `TOF_MIN_NODE_GAP_CM` apart, front + rear matching the level), and any problem is logged and leaves it off.
+
+**Running:**
+
+- Each node reached by ToF is logged: `ToF: front 130.2 rear 129.8 cm, at water-01`. A tag for the node it just reached is ignored (`already reached by ToF`).
+- `missed tag`: the node's reading never came (something in the beam, a moved board). As with tags, drive it by hand onto a node: still on a node for `TOF_STILL_MS`, it takes that node as read, and `resume` (or the manual timeout) carries on from there. A robot left sitting on its node doesn't keep re-reading it; it has to have been off it first.
+- Tune on the farm: `TOF_ARRIVE_LEAD_CM` for where it stops at a station, `TOF_NAV_MAX_STEP_CM` and `TOF_NAV_MAX_SPEED_CM_S` for the noise and speed, and `MISSED_TAG_TIMEOUT_MS` for the longest edge.
+
 ## Motor driver
 
 An Adafruit DRV8871 drives the one motor from `PIN_MOTOR_IN1` and `PIN_MOTOR_IN2` (GPIO 5 and 6). Wiring, power and the reasons for each part are in [docs/wiring/robot.md](../../docs/wiring/robot.md).
@@ -227,6 +248,7 @@ Needs g++ or clang++ (on Windows, MSYS2's `mingw-w64-ucrt-x86_64-gcc`). `run.sh`
 - the state machine (`nav_core_test.cpp`): command and sensor sequences, with every event checked to go out before its status change;
 - the motion hooks (`motion_test.cpp`): the drive commands they send, the ToF slow zone (manual driving included) and approaches, and each fault;
 - the survival overrides (`survival_test.cpp`): each battery threshold in each status, and the obstacle events;
+- ToF navigation (`tof_locator_test.cpp`): the `TOF_NODES` checks, each edge and side, noisy readings, and everything it mustn't take as a node (a hand, a stale or held reading, readings that don't add up); and (`tof_nav_test.cpp`) the robot driving the farm with no tags at all, up a level and back to the dock, stopped and resumed, held by a hand, faulted and recovered by hand;
 - the motor rules (`motor_test.cpp`): each command, the timed Drive, the reversal ramp and the safety flags;
 - the controller rules (`pad_test.cpp`): the stick's deadzone, speed and drive repeat, the centre-first rule and the buttons.
 

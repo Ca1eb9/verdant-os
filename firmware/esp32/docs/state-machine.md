@@ -84,6 +84,12 @@ stateDiagram-v2
 
 ## Rules the diagram can't show
 
+- **ToF navigation** (`TOF_NAV_ENABLED`, optional): a node reached by ToF
+  distance is a "tag read" everywhere in these diagrams. While driving an
+  edge or creeping it's the edge's end node; in `error`, `manual` and
+  `initializing` it's the node the robot has been still on for
+  `TOF_STILL_MS` after being moved there. A tag for the node just reached is
+  ignored.
 - **Before the first tag** (`initializing`, or `stopped` / `manual` reached
   from it) the robot only accepts `stop`, `resume`, jogs (the dashboard's
   and the Bluetooth controller's) and `charge_complete` (for a bench charge,

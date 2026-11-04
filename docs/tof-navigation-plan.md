@@ -1,6 +1,8 @@
 # ToF navigation backup: design and implementation plan
 
-Status: **plan, not implemented.** Owner: Caleb, Jameson. For the case where
+Status: **Phases 1 and 2 implemented** (`firmware/esp32/src/nav/tof_locator`,
+wired in `tasks/nav_task.cpp`, off by default); see "As built" at the end for
+where the code differs from this plan. Owner: Caleb, Jameson. For the case where
 RFID tags can't be mounted on the farm in time (see the Final Build and
 Integration Plan).
 
@@ -101,52 +103,13 @@ Read these before writing anything:
 
 ---
 
-## 5. Configuration (Phase 1 adds these to `config.h`)
+## 5. Configuration
 
-```cpp
-// ---- ToF navigation (optional, docs/tof-navigation-plan.md) --------------------
-// Backup for a farm without RFID tags: a node is reached when the distance to
-// a level's end board crosses the node's measured distance (nav/tof_locator).
-// Off: tags only, exactly as before. Logged at boot when on.
-constexpr bool TOF_NAV_ENABLED = false;
-// Fresh readings past the node's distance, in a row, to take it as reached.
-constexpr uint8_t TOF_NAV_CONFIRM_COUNT = 2;
-// A reading more than this from the last one is a hand, leaf or another robot,
-// not the robot moving: it restarts the confirm count. TBD: tune.
-constexpr float TOF_NAV_MAX_STEP_CM = 8.0f;
-// A reading older than this isn't used (the sensor task holds its last good
-// distance up to TOF_HOLD_MS).
-constexpr uint32_t TOF_NAV_FRESH_MS = 100;
-// Both boards seen: front + rear + TOF_ROBOT_LENGTH_CM must be within this of
-// the level's length, or something is in the way and nothing is taken as reached.
-constexpr float TOF_NAV_LENGTH_TOL_CM = 6.0f;
-constexpr float TOF_ROBOT_LENGTH_CM = 0.0f;       // TBD: sensor face to sensor face
-// Stopped, error or manual: both readings within this of one node's, steady
-// for TOF_STILL_MS, puts the robot at that node (re-localising without a tag).
-constexpr float TOF_LOCALIZE_TOL_CM = 3.0f;
-constexpr uint32_t TOF_STILL_MS = 1000;
-// Taken as reached this much early, for the roll-on after the stop ramp.
-constexpr float TOF_ARRIVE_LEAD_CM = 0.0f;        // TBD: tune
-// The level the robot is set down on at boot (ToF can't tell levels apart).
-constexpr uint8_t TOF_BOOT_LEVEL = 0;
-// Two nodes on one level closer than this can't be told apart: config error.
-constexpr float TOF_MIN_NODE_GAP_CM = 10.0f;
-
-// Front and rear readings (cm) with the robot stopped on each node, measured
-// on the farm (procedure: docs/tof-navigation-plan.md). 0: that side can't
-// see its board from this node. Every graph node needs at least one.
-struct TofNode { const char* node; float front_cm; float rear_cm; };
-constexpr TofNode TOF_NODES[] = {
-    {"dock-1", 0, 0}, {"cp-01", 0, 0}, /* ... every node in topology.json ... */
-};
-// Each level's board-to-board length (cm), for the length check. 0: skip it.
-constexpr float TOF_LEVEL_LENGTH_CM[] = {0, 0, 0};
-```
-
-Same pattern as `ENCODER_EDGES` on the encoder branch: node ids as strings,
-resolved to `NodeIndex` once at boot.
-
----
+The block is in `firmware/esp32/src/config.h`, "ToF navigation": the flag,
+the tunables, `TOF_NODES` (front and rear readings on each node, 0 for a side
+that can't see its board) and `TOF_LEVEL_LENGTH_CM` (front + rear on each
+level). Same pattern as `ENCODER_EDGES` on the encoder branch: node ids as
+strings, resolved to `NodeIndex` once at boot.
 
 ## 6. The three phases
 
@@ -203,7 +166,7 @@ today; nothing calls the new code yet.
      previous reading resets the count and is never a crossing (hand, leaf,
      second robot).
    - **Length check:** with both fresh and the level length set,
-     `|front + rear + TOF_ROBOT_LENGTH_CM - length| > TOF_NAV_LENGTH_TOL_CM` → not trusted.
+     front + rear short of the level's length by more than `TOF_NAV_LENGTH_TOL_CM` → not trusted.
    - **Once:** after returning a node, return `NO_NODE` until the next `on_edge()`/`on_tag()`.
    - **Boot (`on_creep`):** creeping forward, the first node on
      `TOF_BOOT_LEVEL` whose front distance is crossed.
@@ -351,3 +314,39 @@ early in an edge (cross-check must reject it).
 | Elevator didn't move | Robot believes the wrong level | Known limit; log it; check on the dashboard after a ride |
 | Level longer than the reliable range | Some nodes measurable from one side only | Measure first (section 4); raise it before Phase 2 if any node is out of range from both |
 | Stop overshoot at targets | Plant a few cm off the station | `TOF_ARRIVE_LEAD_CM`, slower `APPROACH_SPEED` near boards |
+
+---
+
+## As built (Phases 1 and 2)
+
+Changes from the plan above, mostly from review:
+
+- **No `TOF_ROBOT_LENGTH_CM`.** `TOF_LEVEL_LENGTH_CM` is front + rear as read
+  on the robot (the same anywhere on a level), so it's measured directly.
+- **The length check is one-sided:** only a sum that's *short* is rejected
+  (something in a beam). A longer sum means a board is missing (the elevator
+  platform on another level), and the check is skipped.
+- **Recovering the track:** after `TOF_NAV_RESEED_COUNT` rejected readings in a
+  row the edge starts again from its bounds. Without it, 2-3 cm of sensor noise
+  or a hand that came and went could leave an edge untrusted for good.
+- **Seed window:** widened past the end node by a stop's roll-on
+  (`TOF_NAV_MAX_SPEED_CM_S` over `STOP_RAMP_MS`), so a stop just before a node
+  and a resume still arrive.
+- **Elevator nodes** are read from the board behind when they have that reading:
+  the board ahead is the platform, which may be on another level.
+- **Readings must be above `OBSTACLE_CLEAR_CM`**, not `OBSTACLE_STOP_CM`: the
+  flag clears only above that, and would hold the robot short of the node for good.
+- **`begin()` also checks** each two-sided node's front + rear against its
+  level's length (a typo on one side would make it unmatchable).
+- **Localising:** in `error`, `manual` and `initializing` only (not `idle` or
+  `stopped`, where nobody is moving the robot). Being "away" from the current
+  node needs `TOF_STILL_MS` of readings that add up, so someone walking past a
+  faulted robot doesn't restart it.
+- **Readings reach nav as they come** (about 30 Hz while on), not every
+  `SENSOR_REPORT_MS`; the sensor task's change is gated by the flag.
+- **The per-loop decision** is `TofLocator::update()`, so the host tests drive
+  the same code as the nav task (`test_host/tof_nav_test.cpp` runs the whole
+  farm with no tags).
+
+Not done, by decision: the optional `position_source` telemetry field (no
+MQTT contract change was needed); a mid-level board.

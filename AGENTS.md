@@ -41,7 +41,8 @@ When sources disagree, this order wins: **code contract > design docs > timeline
   reports; they don't predict or override its state.
 - **Services only talk over MQTT.** Never import one service from another.
   Build topic strings with the `TOPICS` helpers, never by hand.
-- **Node ids on the wire, not RFID tag ids.** Tag-to-node lookup happens on the robot.
+- **Node ids on the wire, not RFID tag ids.** Tag-to-node lookup (and, with the
+  optional ToF navigation, distance-to-node) happens on the robot.
 - **Shared types have copies.** Changing `types.ts` means updating every copy
   in the same PR: `web/src/lib/farm/types.ts`, the orchestrator's validators,
   the simulator, and the firmware's JSON code. Search the repo for the field name.

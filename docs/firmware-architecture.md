@@ -188,7 +188,8 @@ Event:
 ### Node ids, not tag ids
 
 The robot stores the full topology graph in flash, so it converts every RFID
-tag UID to its node id on board. All positions sent to the Pi (`current_node`,
+tag UID to its node id on board (and, with the optional ToF navigation, every
+end-board distance: see "ToF navigation (optional)"). All positions sent to the Pi (`current_node`,
 `node_id` on events) and all paths received from the Pi are **node ids**.
 Telemetry whose `current_node` is not a node in the topology is dropped.
 `current_node` is `null` only until the first tag has been read after boot.
@@ -385,7 +386,7 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
 - **Missed tag:** if the next tag isn't read within a timeout, stop, publish
   `error` and report `error`, keeping `task_id` and the last known node. When a
   known tag is read again, publish `recovery`, re-plan from that node and
-  continue.
+  continue. With ToF navigation, a node reached by ToF counts as a tag read.
 - **Approach not finished:** the elevator or dock end wall isn't reached
   within a timeout. The robot faults the same way.
 - **Can't charge:** at `DOCK_STOP_CM` with no charger contact after a short
@@ -468,10 +469,36 @@ receives them and ignores the robot's `timestamp` for liveness. The firmware onl
 measures elapsed time (`millis()`) for durations such as `duration_ms` and
 missed-tag timeouts. `timestamp` in payloads may be `millis()`.
 
+## ToF navigation (optional)
+
+A backup for a farm without RFID tags (`TOF_NAV_ENABLED` in `config.h`; design
+and reasoning in [tof-navigation-plan.md](tof-navigation-plan.md)). Every level
+is one straight line and the robot never turns, so the front ToF sensor always
+sees the board at one end of its level and the rear sensor the board at the
+other. With the readings measured on each node (`TOF_NODES`), a node is
+**reached** when the distance on the side the robot drives toward gets to
+that node's: the moment its tag would have been read. The robot then does
+exactly what that tag would have made it do, so **nothing on the wire
+changes**: positions are still node ids, with the same events and telemetry.
+
+- Real tags still work and win; a tag for the node ToF just reached is ignored.
+- Only while driving an edge (not onto the elevator platform or the dock,
+  where the ToF approach above applies), or creeping after boot.
+- Readings it doesn't trust (stale, held, further than the robot could have
+  moved, or front + rear short of the level's length) never make a node: a
+  node is late rather than wrong, and the missed-tag fault applies as for a tag.
+- Recovering from `error` without a tag: the robot driven by hand onto a node
+  and still there for `TOF_STILL_MS` counts as that node's tag read. One left
+  sitting on its node doesn't keep re-reading it.
+- It can't tell levels apart: the robot must be set down on `TOF_BOOT_LEVEL`,
+  and after an elevator ride it trusts the plan.
+
 ## TBD
 
 - Missed-tag and path-blocked timeout values
 - ToF approach distances and speeds, and where the elevator and dock tags go
+- ToF navigation: `TOF_NODES` and `TOF_LEVEL_LENGTH_CM` measured on the farm,
+  if it's used
 - Battery ADC calibration curve
 - Turns (single drive motor: an edge to the side faults for now)
 - `harvest` action
