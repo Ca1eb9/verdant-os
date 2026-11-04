@@ -43,6 +43,7 @@ firmware/
 │   │   ├── motion.*            # Motion hooks -> DriveCommands, missed-tag faults
 │   │   ├── survival.*          # Battery thresholds, motor cutoff, obstacle events
 │   │   ├── encoder_assist.*    # Optional: encoder counts stand in for one missed tag
+│   │   ├── tof_locator.*       # Optional: ToF distances to the end boards stand in for tags
 │   │   └── task_context.h      # Current/kept task, stop latch, paused status
 │   ├── motor/motor_core.*      # Motor rules: timed drives, reversal ramp, safety flags
 │   ├── pad/pad_core.*          # Controller rules: stick, centre-first, buttons
@@ -125,7 +126,7 @@ Each level is one straight line and the robot never turns, so the front sensor a
 - `TOF_NAV_MAX_SPEED_CM_S` well above the robot's real speed at `CRUISE_SPEED`, or real readings look like jumps and are rejected.
 - Set the robot down on `TOF_BOOT_LEVEL` (level 0): ToF can't tell levels apart. It creeps forward to the first node, as with tags (with `BOOT_CREEP` off, or after the creep gave up, it takes the node it's still on). It switches level when it drives off an elevator, trusting that the elevator went to the right level. A ride cut short (stopped and given another command, a forced return) leaves the level unknown, logged as `ToF: elevator ride cut short, level unknown`: no node by ToF until a real tag is read or it's restarted on level 0.
 
-**Measuring `TOF_NODES`:** turn `TOF_NAV_ENABLED` on with the table still at zeros. The robot logs `ToF navigation OFF, tags only: ...` at boot and runs as before, and every `TOF_NAV_LOG_MS` while it isn't driving an edge or creeping it logs `ToF: front 182.4 rear 79.1 cm (sum 261.5)`. With the Bluetooth controller (or dashboard jogs), drive it until it sits on each node, read the line three times and put the averages in `TOF_NODES`. The sum is the same anywhere on a level: put each level's in `TOF_LEVEL_LENGTH_CM`. Reflash: `ToF navigation ON` at boot. The table is checked then (every node listed, in order along the track, `TOF_MIN_NODE_GAP_CM` apart, in range, front + rear matching the level's), and any problem is logged and leaves it off.
+**Measuring `TOF_NODES`:** turn `TOF_NAV_ENABLED` on with the table still at zeros. The robot logs `ToF navigation OFF, tags only: ...` at boot and runs as before, and every `TOF_NAV_LOG_MS` while it isn't driving an edge or creeping it logs `ToF: front 182.4 rear 79.1 cm (sum 261.5)` (once the table works, only in manual or before the first node). With the Bluetooth controller (or dashboard jogs), drive it until it sits on each node's marked spot (the station's watering or light position, or where the checkpoint's tag would go), read the line three times and put the averages in `TOF_NODES`. The sum is the same anywhere on a level: put each level's in `TOF_LEVEL_LENGTH_CM`. Reflash: `ToF navigation ON` at boot. The table is checked then (every node listed, in order along the track, `TOF_MIN_NODE_GAP_CM` apart, in range, front + rear matching the level's), and any problem is logged and leaves it off. Expect some sides to be 0: a board further than `TOF_NAV_MAX_RANGE_CM` is refused, so on a long level the nodes near one end are read from that end only. Check the range on your boards (`TOF_NAV_MAX_RANGE_CM`), and the robot's real speed at `CRUISE_SPEED` (`TOF_NAV_MAX_SPEED_CM_S`).
 
 **Running:**
 

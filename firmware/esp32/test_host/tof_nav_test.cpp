@@ -112,6 +112,8 @@ class Farm : public NavOutput {
   int dropped = 0;  // guesses ToF said were short
   // The wheel spins in place: counts, no travel (a wet rail, a low snag).
   bool stalled = false;
+  // The encoder's counts are multiplied by this: 0 dead, -1 A and B swapped.
+  float encoder_gain = 1;
   // Something behind the robot (NAN: nothing), at this pos.
   float rear_object_at = NAN;
   uint32_t now = 1000;
@@ -198,7 +200,7 @@ class Farm : public NavOutput {
     move(NAV_LOOP_MS);
     float wheel = pos - before + spun_cm_;
     spun_cm_ = 0;
-    if (encoder) assist.on_counts((int32_t)lround(wheel * COUNTS_PER_CM));
+    if (encoder) assist.on_counts((int32_t)lround(wheel * COUNTS_PER_CM * encoder_gain));
     now += NAV_LOOP_MS;
     past_.push_back({now, pos});
     if (!blind && now - read_ms_ >= TOF_PERIOD_MS) {
@@ -742,6 +744,24 @@ static void test_encoder_stall() {
   CHECK(f.worst_miss_cm <= 10);
 }
 
+static void test_encoder_broken() {
+  for (float gain : {0.0f, -1.0f}) {
+    SCENARIO(gain == 0 ? "the encoder dead: ToF alone, never refused"
+                       : "the encoder's A and B swapped: ToF alone, never refused");
+    Farm f;
+    f.encoder = true;
+    f.encoder_gain = gain;
+    boot(f, 20);
+    f.command(navigate("t1", "water-11", TargetAction::Water, 0));
+    CHECK(f.run_until([&] { return f.core.status() == RobotStatus::Idle ||
+                                   f.core.status() == RobotStatus::Error; }, 120000));
+    CHECK(f.core.current_node() == N("water-11"));
+    CHECK(f.refusals == 0);
+    CHECK(f.guesses == 0);
+    CHECK(!f.saw(RobotEventType::Error));
+  }
+}
+
 int main() {
   test_boot();
   test_up_and_back();
@@ -761,6 +781,7 @@ int main() {
   test_encoder_after_guess();
   test_encoder_reversing();
   test_encoder_stall();
+  test_encoder_broken();
   if (failures) {
     printf("tof_nav_test: %d failure(s)\n", failures);
     return 1;

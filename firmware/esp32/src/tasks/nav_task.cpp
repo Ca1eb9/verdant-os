@@ -239,12 +239,14 @@ void nav_task(void* /*param*/) {
   LOG("nav", "graph '%s': %u nodes, dock %s", GRAPH_VERSION, GRAPH_NODE_COUNT,
       GRAPH_NODES[GRAPH_DOCK].id);
   // Before core.begin(): its creep is the first move ToF navigation follows.
-  TofLocator tof(TOF_NODES, sizeof(TOF_NODES) / sizeof(TOF_NODES[0]), TOF_LEVEL_LENGTH_CM,
+  // Static: about 0.5 KB, kept off the nav stack (built even when off).
+  static TofLocator tof(TOF_NODES, sizeof(TOF_NODES) / sizeof(TOF_NODES[0]), TOF_LEVEL_LENGTH_CM,
                  sizeof(TOF_LEVEL_LENGTH_CM) / sizeof(TOF_LEVEL_LENGTH_CM[0]));
   uint32_t tof_logged_ms = 0;
   bool tof_level_known = true;
   uint32_t tof_refused_ms = 0;
   NodeIndex tof_refused_node = NO_NODE;
+  uint32_t encoder_silent_ms = 0;
   if (TOF_NAV_ENABLED) {
     const char* problem = tof.begin();
     if (problem) {
@@ -254,7 +256,8 @@ void nav_task(void* /*param*/) {
       LOG("nav", "ToF navigation ON: set the robot down on level %u", (unsigned)TOF_BOOT_LEVEL);
     }
   }
-  // Off, or no PCNT: tags only. Not wired, it counts nothing: the same.
+  // Off, or no PCNT: tags only. Not wired, it counts nothing: no guesses, and
+  // ToF navigation doesn't check its nodes against it (progress_to).
   bool encoder = ENCODER_ASSIST_ENABLED && encoder_begin();
   core.set_charge_sense_always(CHARGE_SENSE_ALWAYS);
   core.begin();
@@ -342,6 +345,10 @@ void nav_task(void* /*param*/) {
           LOG("nav", "encoder: %ld counts since the last tag, at %s",
               (long)out.assist.counts_since_tag(), GRAPH_NODES[reached].id);
         }
+        if (encoder && out.assist.silent() && now - encoder_silent_ms >= NOTE_REPEAT_MS) {
+          LOG("nav", "encoder: no counts since the last node: not wired, or dead?");
+          encoder_silent_ms = now;
+        }
         out.assist.on_tof_node(progress, out.tof->overshoot_cm(), out.tof->edge_cm());
         out.tof->on_tag(reached);
         core.on_tag(reached, now);
@@ -357,8 +364,11 @@ void nav_task(void* /*param*/) {
             "is read or a restart on level %u", (unsigned)TOF_BOOT_LEVEL);
       }
     }
-    // For measuring TOF_NODES: both readings now and then while not driving an edge.
-    if (TOF_NAV_ENABLED && !on_track && now - tof_logged_ms >= TOF_NAV_LOG_MS) {
+    // For measuring TOF_NODES: both readings now and then, while the table
+    // isn't usable yet, or the robot is driven by hand or hasn't a node.
+    bool measuring = !out.tof || core.status() == RobotStatus::Manual ||
+                     core.status() == RobotStatus::Initializing;
+    if (TOF_NAV_ENABLED && measuring && !on_track && now - tof_logged_ms >= TOF_NAV_LOG_MS) {
       tof_logged_ms = now;
       LOG("nav", "ToF: front %.1f rear %.1f cm (sum %.1f), at %s", sensors.obstacle_front_cm,
           sensors.obstacle_rear_cm, sensors.obstacle_front_cm + sensors.obstacle_rear_cm,

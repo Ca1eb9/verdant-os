@@ -48,8 +48,8 @@ static_assert(TOF_NAV_FRESH_MS > TOF_TIMING_BUDGET_US / 1000 + SENSOR_PERIOD_MS 
 
 }  // namespace
 
-const char* TofLocator::fail(const char* format, const char* id) {
-  snprintf(error_, sizeof(error_), format, id);
+const char* TofLocator::fail(const char* format, const char* id, const char* other) {
+  snprintf(error_, sizeof(error_), format, id, other);
   ready_ = false;
   return error_;
 }
@@ -81,7 +81,9 @@ const char* TofLocator::begin() {
   for (NodeIndex i = 0; i < GRAPH_NODE_COUNT; i++) {
     const char* id = GRAPH_NODES[i].id;
     if (!listed[i]) return fail("TOF_NODES: no entry for %s", id);
-    if (front_[i] == 0 && rear_[i] == 0) return fail("TOF_NODES: %s has no reading yet (measure it)", id);
+    if (front_[i] == 0 && rear_[i] == 0) {
+      return fail("TOF_NODES: %s has no reading yet (measure it; out of range of both boards, it can't be used)", id);
+    }
     // Driving toward the board, the obstacle flag (set under OBSTACLE_STOP_CM,
     // cleared only above OBSTACLE_CLEAR_CM) would hold it short of the node.
     if ((front_[i] > 0 && front_[i] <= OBSTACLE_CLEAR_CM) || (rear_[i] > 0 && rear_[i] <= OBSTACLE_CLEAR_CM)) {
@@ -104,10 +106,12 @@ const char* TofLocator::begin() {
     for (NodeIndex j = 0; j < GRAPH_NODE_COUNT; j++) {
       if (j == i || level_of(j) != level || !(along(i) < along(j))) continue;
       if (front_[i] > 0 && front_[j] > 0 && front_[i] - front_[j] < TOF_MIN_NODE_GAP_CM) {
-        return fail("TOF_NODES: %s's front reading must be TOF_MIN_NODE_GAP_CM above every node's further along", id);
+        return fail("TOF_NODES: %s's front reading must be TOF_MIN_NODE_GAP_CM above %s's", id,
+                    GRAPH_NODES[j].id);
       }
       if (rear_[i] > 0 && rear_[j] > 0 && rear_[j] - rear_[i] < TOF_MIN_NODE_GAP_CM) {
-        return fail("TOF_NODES: %s's rear reading must be TOF_MIN_NODE_GAP_CM below every node's further along", id);
+        return fail("TOF_NODES: %s's rear reading must be TOF_MIN_NODE_GAP_CM below %s's", id,
+                    GRAPH_NODES[j].id);
       }
     }
     for (NodeIndex j = 0; j < GRAPH_NODE_COUNT; j++) {
@@ -225,12 +229,14 @@ void TofLocator::lose_level() {
 }
 
 float TofLocator::overshoot_cm() const {
-  if (isnan(fired_cm_)) return 0;
+  if (mode_ != Mode::Edge || isnan(fired_cm_)) return 0;
   float past_cm = toward_ ? target_cm_ - fired_cm_ : fired_cm_ - target_cm_;
   return past_cm > 0 ? past_cm : 0;
 }
 
-float TofLocator::edge_cm() const { return from_cm_ > 0 ? fabsf(from_cm_ - target_cm_) : 0; }
+float TofLocator::edge_cm() const {
+  return mode_ == Mode::Edge && from_cm_ > 0 ? fabsf(from_cm_ - target_cm_) : 0;
+}
 
 bool TofLocator::says_short_of(NodeIndex node, const TofSample& s, uint32_t now) const {
   if (!ready_ || !level_known_ || mode_ != Mode::Edge || node != target_) return false;

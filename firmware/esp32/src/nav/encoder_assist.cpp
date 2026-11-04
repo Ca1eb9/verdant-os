@@ -10,6 +10,7 @@ void EncoderAssist::on_tag() {
   placed_ = true;
   guessed_ = false;
   counts_ = 0;
+  moved_ = 0;
   // Until NavCore starts the next edge, if it does (not at a target).
   to_ = NO_NODE;
   edge_counts_ = 0;
@@ -41,9 +42,13 @@ void EncoderAssist::resync() {
   placed_ = true;
   guessed_ = false;
   counts_ = 0;
+  moved_ = 0;
 }
 
-void EncoderAssist::on_counts(int32_t counts) { counts_ += counts; }
+void EncoderAssist::on_counts(int32_t counts) {
+  counts_ += counts;
+  moved_ += (uint32_t)(counts < 0 ? -counts : counts);
+}
 
 void EncoderAssist::on_tof_node(float progress, float past_cm, float edge_cm) {
   int32_t sign = backward_ ? -1 : 1;
@@ -58,6 +63,7 @@ void EncoderAssist::on_tof_node(float progress, float past_cm, float edge_cm) {
     counts_ = 0;
     placed_ = past_cm <= TOF_NAV_MAX_STEP_CM;
   }
+  moved_ = 0;
   guessed_ = false;
   to_ = NO_NODE;
   edge_counts_ = 0;
@@ -68,9 +74,10 @@ void EncoderAssist::drop_guess() {
 }
 
 float EncoderAssist::progress_to(NodeIndex node) const {
-  if (!placed_ || edge_counts_ <= 0 || node != to_) return NAN;
+  if (!placed_ || edge_counts_ <= 0 || node != to_ || moved_ == 0) return NAN;
   int32_t along = backward_ ? -counts_ : counts_;
-  return (float)along / edge_counts_;
+  float progress = (float)along / edge_counts_;
+  return progress < -ENCODER_WRONG_WAY_RATIO ? NAN : progress;
 }
 
 NodeIndex EncoderAssist::check(RobotStatus status) {

@@ -129,7 +129,7 @@ class TofLocator {
   bool clearly_off(NodeIndex node, const TofSample& s, uint32_t now) const;
   bool length_ok(uint8_t level, const TofSample& s, uint32_t now) const;
   bool past(float cm) const;
-  const char* fail(const char* format, const char* id = "");
+  const char* fail(const char* format, const char* id = "", const char* other = "");
   void lose_level();
 
   const TofNode* nodes_;
@@ -137,7 +137,7 @@ class TofLocator {
   const float* level_cm_;
   size_t level_count_;
   bool ready_ = false;
-  char error_[96] = "";
+  char error_[128] = "";
   // By NodeIndex, from TOF_NODES. 0: no reading for that side.
   float front_[MAX_PATH_LEN] = {};
   float rear_[MAX_PATH_LEN] = {};

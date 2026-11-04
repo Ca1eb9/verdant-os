@@ -64,8 +64,9 @@ When sources disagree, this order wins: **code contract > design docs > timeline
 - The robot **never turns**: one drive motor. It always faces
   `ROBOT_HEADING` (away from the dock, so it backs onto the charger) and drives
   backward to go the other way. An edge to the side faults. Its encoder is
-  optional and only stands in for one missed tag (`ENCODER_ASSIST_ENABLED`):
-  tags still navigate.
+  optional and only stands in for one missed tag (`ENCODER_ASSIST_ENABLED`),
+  and with ToF navigation also vetoes a ToF node reached too early: tags (or
+  the ToF backup) still navigate.
 - **Elevator nodes are never navigate targets.** Robots only pass through.
 - Dashboard commands on FarmNet are **never queued for a reconnect**: with the
   broker unreachable they fail, so a stop or jog can't arrive late.

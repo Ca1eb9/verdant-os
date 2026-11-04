@@ -113,6 +113,9 @@ strings, resolved to `NodeIndex` once at boot.
 
 ## 6. The three phases
 
+This is the original plan. Where it and the "As built" sections at the end
+disagree, the As-built sections (and the code) are what's true.
+
 ### Phase 1: pure locator, sensor freshness, host tests (no behaviour change)
 
 **Goal:** all the logic exists and is tested on the host. The robot runs exactly as
@@ -382,10 +385,10 @@ platform moved elsewhere edges toward it fault.
 - The `encoder-assist` branch's three commits are on this branch, rebased onto
   it (`ENCODER_ASSIST_ENABLED` still false). Its own tests pass unchanged.
 - **Precedence** in the nav loop: real tag, then ToF, then the encoder, at most
-  one node a loop. A ToF node calls `EncoderAssist::on_tag()` (its count starts
-  there, so it can cover the next node ToF misses). An encoder guess calls
-  `TofLocator::on_tag()` but not `EncoderAssist::on_tag()`, so the encoder still
-  guesses at most once until a real tag or a ToF node.
+  one node a loop. A ToF node restarts the encoder's count
+  (`EncoderAssist::on_tof_node()`, below), so it can cover the next node ToF
+  misses. An encoder guess calls `TofLocator::on_tag()` but not the encoder's
+  own reset, so it still guesses at most once until a real tag or a ToF node.
 - **Cross-check:** `EncoderAssist::progress_to(node)` (new) gives how much of
   the edge has been driven. A ToF node under `TOF_NAV_ENCODER_MIN_RATIO` (0.85)
   is refused and `TofLocator::reject()` (new) watches the edge again. The plan
@@ -418,6 +421,9 @@ From the Phase 3 stress review (wheel slip, a spinning wheel, encoder noise,
   `TOF_NAV_ENCODER_TRUST_RATIO`, 0.95), the encoder's own idea of the node.
   Before, ToF firing a few cm late made the next edge's correct arrival look
   early (refused) and the next guess late.
+- **A dead or swapped encoder** (not one count since the last node, or half an
+  edge the wrong way: `ENCODER_WRONG_WAY_RATIO`) never refuses a ToF node; the
+  robot runs on ToF alone and logs `encoder: no counts since the last node`.
 - Left as a team decision: allowing the stop roll-on past a node only when the
   same edge is resumed. Under heavy dropouts it removes late (15-20 cm)
   arrivals but doubles faults.

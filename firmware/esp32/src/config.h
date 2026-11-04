@@ -322,6 +322,10 @@ constexpr TofNode TOF_NODES[] = {
 // Logged at boot when on.
 constexpr bool ENCODER_ASSIST_ENABLED = false;
 constexpr float ENCODER_PASS_RATIO = 1.10f;
+// This share of an edge counted the wrong way since the last node: A and B are
+// swapped (or the counts are nonsense), so ToF navigation doesn't check its
+// nodes against it. Just after reversing, a little under 0 is normal.
+constexpr float ENCODER_WRONG_WAY_RATIO = 0.5f;
 // PCNT glitch filter: pulses shorter than this many 80 MHz APB cycles are
 // ignored (max 1023). 10 us; at full speed each signal changes every ~120 us.
 constexpr uint16_t ENCODER_FILTER_CYCLES = 800;

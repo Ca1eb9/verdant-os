@@ -54,7 +54,9 @@ class EncoderAssist {
   int32_t edge_counts() const { return edge_counts_; }
   // How much of the edge to `node` it has driven since the last tag (1: all
   // of it; just after reversing it can be a little under 0), or NAN when it
-  // can't say (not that edge, no counts, or not placed). After a guess it
+  // can't say (not that edge, no counts, or not placed), or when the encoder
+  // can't be right: not one count since the last node (dead or unplugged), or
+  // half an edge the wrong way (A and B swapped). After a guess it
   // counts from the guessed node. ToF navigation checks its arrivals against it.
   float progress_to(NodeIndex node) const;
   // ToF reached the edge's end node, `past_cm` beyond it on an edge `edge_cm`
@@ -63,6 +65,9 @@ class EncoderAssist {
   // (under TOF_NAV_ENCODER_TRUST_RATIO), the encoder's own idea of the node.
   // An overshoot it can't convert and over TOF_NAV_MAX_STEP_CM: not placed.
   void on_tof_node(float progress, float past_cm, float edge_cm);
+  // Placed on a measured edge, yet not one count since the last node: the
+  // encoder looks dead. For the log.
+  bool silent() const { return placed_ && edge_counts_ > 0 && moved_ == 0; }
   // The guess check() just gave was refused (ToF says the robot isn't there:
   // a slipping wheel): count on from the last node again, and no other guess
   // until the next one.
@@ -77,6 +82,7 @@ class EncoderAssist {
   bool placed_ = false;   // counts_ is from a real tag, along known edges
   bool guessed_ = false;  // a guess since the last real tag
   int32_t counts_ = 0;
+  uint32_t moved_ = 0;    // counts either way since the last node
   // The edge being driven: its end, way and counts (0: no assist).
   NodeIndex to_ = NO_NODE;
   bool backward_ = false;

@@ -561,8 +561,8 @@ read (forward positive).
 
 - Steer, time or position anything, or change the MQTT contract: the Pi sees
   the same events and telemetry as for the real tag.
-- Guess twice in a row: after a guess it waits for a real tag, and the next
-  missed tag faults as before.
+- Guess twice in a row: after a guess it waits for a real tag (or a ToF
+  node), and the next missed tag faults as before.
 - Guess after a move it can't measure from the last tag: creeping after
   boot, a jog or the controller's drive, docking, an elevator ride, or an
   edge that isn't in `ENCODER_EDGES`. Only the next real tag allows it
@@ -571,7 +571,8 @@ read (forward positive).
 - Count the wrong way round: counts against the drive direction take
   progress off, so a swapped A and B never guesses.
 - Anything when it's off or not wired (no counts): the robot behaves exactly
-  as with tags alone.
+  as with tags alone (or ToF alone: a dead or swapped encoder never refuses a
+  ToF node).
 
 **Missed-tag timeout.** Unchanged, and still the backstop for a slipping or
 stalled wheel and an encoder that stopped counting. A guess starts the next
