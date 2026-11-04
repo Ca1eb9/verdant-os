@@ -13,6 +13,7 @@
 #include "../drivers/battery.h"
 #include "../graph.h"
 #include "../log.h"
+#include "../nav/confirm_nav.h"
 #include "../nav/motion.h"
 #include "../nav/nav_core.h"
 #include "../nav/survival.h"
@@ -56,7 +57,9 @@ class QueueOutput : public NavOutput {
     LOG("nav", "follow %s -> %s (%s)", GRAPH_NODES[from].id, GRAPH_NODES[to].id,
         drive == EdgeDrive::Backward || drive == EdgeDrive::ElevatorBackward ? "backward"
                                                                              : "forward");
-    motion.follow_edge(from, to, drive, millis());
+    uint32_t now = millis();
+    if (confirm) confirm->on_edge(to, drive, now);
+    motion.follow_edge(from, to, drive, now);
   }
   void creep() override { motion.creep(millis()); }
 
@@ -79,6 +82,8 @@ class QueueOutput : public NavOutput {
   uint32_t last_note_ms = 0;
   const char* last_logged_note = nullptr;
   uint32_t last_logged_note_ms = 0;
+  // Confirmed navigation (CONFIRM_NAV_ENABLED), else null.
+  ConfirmNav* confirm = nullptr;
 
  private:
   class MailboxSink : public DriveSink {
@@ -215,6 +220,12 @@ void nav_task(void* /*param*/) {
 
   LOG("nav", "graph '%s': %u nodes, dock %s", GRAPH_VERSION, GRAPH_NODE_COUNT,
       GRAPH_NODES[GRAPH_DOCK].id);
+  ConfirmNav confirm;
+  if (CONFIRM_NAV_ENABLED) {
+    out.confirm = &confirm;
+    LOG("nav", "confirmed navigation ON: set the robot down on %s, then tap Reached next node",
+        GRAPH_NODES[GRAPH_DOCK].id);
+  }
   core.set_charge_sense_always(CHARGE_SENSE_ALWAYS);
   core.begin();
 
@@ -241,12 +252,38 @@ void nav_task(void* /*param*/) {
         unknown_tag_ms = now;
       } else {
         known_tag_ms = now;
+        if (out.confirm) {
+          // Reached already (node_reached): the same node again would only re-plan.
+          bool on_path = core.status() == RobotStatus::EnRoute ||
+                         core.status() == RobotStatus::ReturningToDock;
+          if (on_path && node == core.current_node()) {
+            LOG("nav", "tag for %s: already reached", GRAPH_NODES[node].id);
+            continue;
+          }
+          out.confirm->on_tag();
+        }
       }
       core.on_tag(node, now);
     }
 
     Command cmd;
-    while (xQueueReceive(g_command_queue, &cmd, 0) == pdTRUE) core.on_command(cmd, now);
+    while (xQueueReceive(g_command_queue, &cmd, 0) == pdTRUE) {
+      if (cmd.type != CommandType::NodeReached) {
+        core.on_command(cmd, now);
+        continue;
+      }
+      // Confirmed navigation: the node it was driving to, as if its tag were read.
+      const char* why = "ignored: node_reached needs CONFIRM_NAV_ENABLED";
+      NodeIndex reached = out.confirm ? out.confirm->reached(core.status(), now, &why) : NO_NODE;
+      if (reached == NO_NODE) {
+        out.note(why);
+        continue;
+      }
+      LOG("nav", "node_reached: at %s", GRAPH_NODES[reached].id);
+      known_tag_ms = now;
+      out.confirm->on_tag();
+      core.on_tag(reached, now);
+    }
 
     // Docking acts on the contact's state, not its change: a robot sent to
     // dock again while still on the charger (e.g. resumed after an error) has
@@ -267,6 +304,7 @@ void nav_task(void* /*param*/) {
     core.tick(now);
     const char* fault = out.motion.check(now, sensors, g_motor_kill_flag);
     if (fault) core.fault(fault);
+    if (out.confirm) out.confirm->update(out.motion.driving_edge());
     // For the sensor task's obstacle flags: lowered while creeping in.
     g_obstacle_front_stop_cm = out.motion.stop_cm(false);
     g_obstacle_rear_stop_cm = out.motion.stop_cm(true);

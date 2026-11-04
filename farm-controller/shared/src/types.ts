@@ -123,12 +123,16 @@ export interface RobotTelemetry {
 /**
  * Published to farm/robot/{id}/command. connect_controller: the robot looks
  * for its Bluetooth controller for a few seconds (farm network only, like jog).
+ * node_reached: the node the robot is driving to is reached, as if its tag
+ * were read (the backup for a farm with no readable tags, CONFIRM_NAV_ENABLED
+ * on the robot; farm network only, like jog). It names no node.
  */
 export interface RobotCommand {
   command:
     | "navigate" | "return_to_dock" | "stop" | "resume" | "cancel" | "jog" | "connect_controller"
     /** End a dock trip (on the way, docking or charging) as if the charge completed */
-    | "charge_complete";
+    | "charge_complete"
+    | "node_reached";
   task_id?: string;
   path?: string[];
   target_node?: string;

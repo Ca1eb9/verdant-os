@@ -228,6 +228,22 @@ constexpr uint32_t DEFAULT_GROW_MS = 600000;
 constexpr uint32_t DEFAULT_HARVEST_MS = 0;       // TBD: harvest isn't specified yet
 constexpr uint32_t DEFAULT_IDLE_MS = 0;
 
+// ---- Confirmed navigation (optional, docs/confirm-navigation-plan.md) ------------------
+// Backup for a farm where no tag can be read: the operator taps "Reached next
+// node" on the FarmNet dashboard's Backup nav page (node_reached) as the robot
+// reaches each node, and it takes the node it was driving to as reached, as if
+// that node's tag were read. Off: node_reached is ignored. Logged at boot.
+// On, the robot is set down on the dock before it's turned on and waits there
+// (BOOT_CREEP off): the first node_reached puts it on the dock. Real tags
+// still work. Never on with another backup that reaches nodes by itself (ToF
+// navigation, encoder assist): both would count one node.
+constexpr bool CONFIRM_NAV_ENABLED = false;
+static_assert(!CONFIRM_NAV_ENABLED || !BOOT_CREEP,
+              "CONFIRM_NAV_ENABLED: set BOOT_CREEP false, the robot waits on the dock");
+// A node_reached sooner than this after the robot started driving to that
+// node is a double tap or a repeat, not a second node: ignored.
+constexpr uint32_t CONFIRM_NAV_MIN_MS = 1000;
+
 // ---- Survival overrides -------------------------------------------------------------
 // Each level applies at or below its value. The forced return sits below the
 // orchestrator's battery_low_pct (20), so the orchestrator handles normal

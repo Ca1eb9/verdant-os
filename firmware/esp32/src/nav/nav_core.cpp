@@ -98,6 +98,7 @@ void NavCore::on_command(const Command& cmd, uint32_t now) {
     case CommandType::ConnectController: break;  // comms hands it to the pad task
     case CommandType::Drive: drive(cmd.speed, now); break;
     case CommandType::ChargeComplete: end_charge(now); break;
+    case CommandType::NodeReached: break;  // the nav task's (nav/confirm_nav)
   }
 }
 

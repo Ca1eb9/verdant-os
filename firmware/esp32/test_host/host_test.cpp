@@ -196,6 +196,8 @@ static void test_inbound(const std::string& in_dir) {
   CHECK(c.type == CommandType::Jog && c.direction == JogDirection::Forward);
   CHECK(parse(R"({"command":"connect_controller"})", c) == CommandParseResult::Ok);
   CHECK(c.type == CommandType::ConnectController);
+  CHECK(parse(R"({"command":"node_reached"})", c) == CommandParseResult::Ok);
+  CHECK(c.type == CommandType::NodeReached);
 
   // null optional fields are treated as absent.
   CHECK(parse(R"({"command":"return_to_dock","task_id":null,"priority":"critical","source":"alert"})", c) ==
@@ -206,6 +208,7 @@ static void test_inbound(const std::string& in_dir) {
   CHECK(parse("[1,2]", c) == CommandParseResult::NotAnObject);
   CHECK(parse(R"({"path":["0x1"]})", c) == CommandParseResult::MissingCommand);
   CHECK(parse(R"({"command":"dance"})", c) == CommandParseResult::UnknownCommand);
+  CHECK(parse(R"({"command":"drive"})", c) == CommandParseResult::UnknownCommand);  // robot-only
   CHECK(parse(R"({"command":"cancel"})", c) == CommandParseResult::MissingTaskId);
   CHECK(parse(R"({"command":"jog"})", c) == CommandParseResult::BadDirection);
   CHECK(parse(R"({"command":"jog","direction":"sideways"})", c) == CommandParseResult::BadDirection);

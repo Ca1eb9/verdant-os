@@ -65,6 +65,11 @@ CORE_FLAGS=(-std=c++17 -Wall -Wextra -DARDUINOJSON_USE_LONG_LONG=1 -I../src -I"$
 ./out/motion_test
 ./out/survival_test
 
+# Confirmed navigation (optional): nodes reached by the operator's taps.
+"$CXX" "${CORE_FLAGS[@]}" confirm_nav_test.cpp ../src/nav/confirm_nav.cpp ../src/nav/motion.cpp \
+  "${CORE_SRC[@]:1}" ../src/graph.cpp -o out/confirm_nav_test
+./out/confirm_nav_test
+
 # Motor task rules (timed drives, the reversal ramp, the safety flags).
 "$CXX" -std=c++17 -Wall -Wextra -I../src motor_test.cpp ../src/motor/motor_core.cpp \
   -o out/motor_test
