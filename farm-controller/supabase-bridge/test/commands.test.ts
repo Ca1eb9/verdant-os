@@ -23,6 +23,7 @@ describe("remote command rows", () => {
   it("refuses local-only commands", () => {
     assert.match(toRemoteCommand(row({ command: "jog", direction: "forward" })) as string, /farm network/);
     assert.match(toRemoteCommand(row({ command: "connect_controller" })) as string, /farm network/);
+    assert.match(toRemoteCommand(row({ command: "node_reached" })) as string, /farm network/);
   });
 
   it("refuses rows the orchestrator would drop", () => {

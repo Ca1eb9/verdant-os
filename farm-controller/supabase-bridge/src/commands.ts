@@ -13,9 +13,10 @@ const PRIORITIES = new Set<string>(Object.values(TaskPriority));
 const SOURCES = new Set<string>(Object.values(CommandSource));
 const COMMANDS = new Set([
   "navigate", "return_to_dock", "stop", "resume", "cancel", "jog", "connect_controller", "charge_complete",
+  "node_reached",
 ]);
 /** Farm network only (AGENTS.md); the dashboard's route refuses them too */
-const LOCAL_ONLY = new Set(["jog", "connect_controller"]);
+const LOCAL_ONLY = new Set(["jog", "connect_controller", "node_reached"]);
 const DIRECTIONS = new Set(["forward", "backward"]);
 const ACTIONS = new Set(["water", "grow", "harvest", "charge", "idle"]);
 

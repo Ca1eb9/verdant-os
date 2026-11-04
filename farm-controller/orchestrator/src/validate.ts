@@ -22,6 +22,7 @@ const PRIORITIES = new Set<string>(Object.values(TaskPriority));
 const SOURCES = new Set<string>(Object.values(CommandSource));
 const COMMANDS = new Set([
   "navigate", "return_to_dock", "stop", "resume", "cancel", "jog", "connect_controller", "charge_complete",
+  "node_reached",
 ]);
 const DIRECTIONS = new Set(["forward", "backward"]);
 const ACTIONS = new Set(["water", "grow", "harvest", "charge", "idle"]);

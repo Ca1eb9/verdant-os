@@ -340,6 +340,13 @@ async function main() {
         return;
       }
 
+      // Backup navigation (CONFIRM_NAV_ENABLED on a robot): this one reads
+      // its own tags, so it has nothing to be told.
+      if (cmd.command === "node_reached") {
+        console.log(`[NAV] node_reached ignored: the simulator reads its own tags`);
+        return;
+      }
+
       if (cmd.command === "navigate" && cmd.target_node) {
         const duplicate = cmd.task_id !== undefined &&
           (cmd.task_id === robot.taskId || cmd.task_id === robot.lastCompletedTaskId);
