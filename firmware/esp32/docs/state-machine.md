@@ -14,7 +14,7 @@ changes (comms publishes queued events before telemetry). Thresholds are the pro
 stateDiagram-v2
     [*] --> initializing : boot
 
-    initializing --> idle : first known tag read
+    initializing --> idle : first known tag read<br/>(or node_reached: on the dock)
     initializing --> stopped : stop - halts the tag search
     initializing --> manual : jog or Bluetooth controller input<br/>(creeping, or after the search gave up)
     stopped --> initializing : resume - no tag read yet,<br/>search again
@@ -76,8 +76,8 @@ stateDiagram-v2
 
     OnTask --> error : missed tag or fault [error] - task kept
     DockTrip --> error : fault [error], e.g. no charge contact<br/>at the dock (can't charge)
-    error --> OnTask : known tag read [recovery] - re-plan the task
-    error --> idle : known tag read [recovery] - no task
+    error --> OnTask : known tag read or node_reached [recovery] - re-plan the task
+    error --> idle : known tag read or node_reached [recovery] - no task
     error --> OnTask : navigate [recovery]
     error --> DockTrip : return_to_dock [recovery]
 ```

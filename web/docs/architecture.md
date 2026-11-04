@@ -18,6 +18,7 @@ flowchart LR
         Hist["/history"]
         Alerts["/alerts"]
         Settings["/settings"]
+        Backup["/backup-nav<br/>(FarmNet, NEXT_PUBLIC_CONFIRM_NAV)"]
     end
 
     subgraph Hooks["Hooks (src/hooks)"]
@@ -38,6 +39,8 @@ flowchart LR
     Hist --> HistH
     Alerts --> AlertsH & Tele
     Settings --> Prefs
+    Backup --> Live
+    Backup -- "node_reached, stop, resume" --> DS
 
     Live & Tele & AlertsH & HistH & Conn --> DS
     FarmCtx -- "selectFarm()" --> DS
