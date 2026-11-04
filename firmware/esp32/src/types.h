@@ -105,6 +105,10 @@ struct SensorData {
   bool tof_rear_ok;
   float obstacle_rear_cm;
   bool obstacle_rear_stop;     // copy of g_obstacle_rear_flag
+  // millis() of each side's last trusted target: the *_cm above while it's
+  // recent (the sensor task holds a distance through gaps). 0: none yet.
+  uint32_t tof_front_ms;
+  uint32_t tof_rear_ms;
 
   // Battery
   float battery_v;             // pack voltage (smoothed), NAN until first read

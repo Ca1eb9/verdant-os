@@ -228,6 +228,66 @@ constexpr uint32_t DEFAULT_GROW_MS = 600000;
 constexpr uint32_t DEFAULT_HARVEST_MS = 0;       // TBD: harvest isn't specified yet
 constexpr uint32_t DEFAULT_IDLE_MS = 0;
 
+// ---- ToF navigation (optional, docs/tof-navigation-plan.md) -------------------------
+// Backup for a farm without RFID tags. Every level is one straight line, and
+// the robot always faces ROBOT_HEADING, so the front sensor sees the board at
+// one end of the level and the rear sensor the board at the other: driving an
+// edge, the end node is reached when that distance crosses the node's
+// measured one (nav/tof_locator). Real tags still work, and win. Off: tags
+// only, exactly as without it. Logged at boot when on.
+constexpr bool TOF_NAV_ENABLED = false;
+// Fresh readings in a row past the node's distance to take it as reached.
+constexpr uint8_t TOF_NAV_CONFIRM_COUNT = 2;
+// A reading older than this isn't used: the sensor task holds its last good
+// distance for up to TOF_HOLD_MS.
+constexpr uint32_t TOF_NAV_FRESH_MS = 150;
+// A reading further than this from the last trusted one is something in the
+// beam (a hand, a leaf), not the robot moving: it never counts as a node
+// reached. TBD: tune at CRUISE_SPEED.
+constexpr float TOF_NAV_MAX_STEP_CM = 6.0f;
+// The robot's top speed, for how far it may have moved while it had no
+// readings at all: TOF_NAV_MAX_STEP_CM grows by this much a second of that.
+constexpr float TOF_NAV_MAX_SPEED_CM_S = 60.0f;  // TBD: measure at CRUISE_SPEED
+// Taken as reached this much early, for the roll-on after the stop ramp.
+constexpr float TOF_ARRIVE_LEAD_CM = 0.0f;       // TBD: tune on the farm
+// Not driving an edge (idle, stopped, error, manual, initializing): the robot
+// is on a node when every reading that node has is within this of its own,
+// for TOF_STILL_MS, and it's the only such node on the level. It takes that
+// node as read only once it has been clearly off it (twice this away), or if
+// it's a different node: a robot left sitting on a node doesn't keep reading it.
+constexpr float TOF_LOCALIZE_TOL_CM = 3.0f;
+constexpr uint32_t TOF_STILL_MS = 1000;
+// ToF can't tell levels apart: the level the robot is set down on at boot.
+constexpr uint8_t TOF_BOOT_LEVEL = 0;
+// Two nodes' readings on one level closer than this can't be told apart.
+constexpr float TOF_MIN_NODE_GAP_CM = 10.0f;
+// With both boards in view, front + rear is the same anywhere on a level
+// (TOF_LEVEL_LENGTH_CM); further off than this, something is in one beam and
+// neither reading is trusted.
+constexpr float TOF_NAV_LENGTH_TOL_CM = 6.0f;
+// Front + rear (cm) on each level, by level (z): read anywhere on it. 0: no
+// length check on that level. TBD: measure on the farm.
+constexpr float TOF_LEVEL_LENGTH_CM[] = {0, 0, 0};
+// While on, log both readings this often while the robot isn't driving an
+// edge: for measuring TOF_NODES.
+constexpr uint32_t TOF_NAV_LOG_MS = 2000;
+
+// The front and rear readings (cm) with the robot stopped on each node.
+// 0: that side can't see its board from this node. Every node in the graph
+// needs at least one. TBD: measure on the farm (README "ToF navigation"):
+// until then the robot logs the table as incomplete and uses tags only.
+struct TofNode {
+  const char* node;
+  float front_cm;
+  float rear_cm;
+};
+constexpr TofNode TOF_NODES[] = {
+    {"dock-1", 0, 0},   {"cp-01", 0, 0},     {"water-01", 0, 0}, {"cp-02", 0, 0},
+    {"elev-1-L0", 0, 0}, {"elev-1-L1", 0, 0}, {"cp-11", 0, 0},    {"water-11", 0, 0},
+    {"cp-12", 0, 0},    {"cp-13", 0, 0},     {"elev-1-L2", 0, 0}, {"cp-21", 0, 0},
+    {"cp-22", 0, 0},
+};
+
 // ---- Survival overrides -------------------------------------------------------------
 // Each level applies at or below its value. The forced return sits below the
 // orchestrator's battery_low_pct (20), so the orchestrator handles normal

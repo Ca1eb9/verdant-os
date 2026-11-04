@@ -256,6 +256,10 @@ void sensor_task(void* /*param*/) {
   uint32_t last_reported_seq = 0;
   bool last_reported_charge_known = false;
   bool last_reported_charge = false;
+  // ToF navigation: every new distance goes to nav, not only every
+  // SENSOR_REPORT_MS, so it sees a node crossed within one reading.
+  uint32_t last_reported_front_ms = 0;
+  uint32_t last_reported_rear_ms = 0;
   TickType_t wake = xTaskGetTickCount();
 
   for (;;) {
@@ -275,7 +279,9 @@ void sensor_task(void* /*param*/) {
     bool new_tag = s_tag.seq != last_reported_seq;
     bool charge_changed = s_charge.known() != last_reported_charge_known ||
                           s_charge.closed() != last_reported_charge;
-    if (new_tag || charge_changed || now - last_report_ms >= SENSOR_REPORT_MS) {
+    bool new_distance = TOF_NAV_ENABLED && (s_front.last_target_ms != last_reported_front_ms ||
+                                            s_rear.last_target_ms != last_reported_rear_ms);
+    if (new_tag || charge_changed || new_distance || now - last_report_ms >= SENSOR_REPORT_MS) {
       SensorData d = {};
       d.uptime_ms = now;
       d.rfid_ok = s_rfid.ok();
@@ -288,6 +294,8 @@ void sensor_task(void* /*param*/) {
       d.tof_rear_ok = s_tof_rear.ok();
       d.obstacle_rear_cm = s_rear.cm;
       d.obstacle_rear_stop = g_obstacle_rear_flag;
+      d.tof_front_ms = s_front.last_target_ms;
+      d.tof_rear_ms = s_rear.last_target_ms;
       d.battery_v = s_battery.volts();
       d.battery_pct = s_battery.pct();
       d.battery_ok = s_battery.ok();
@@ -300,6 +308,8 @@ void sensor_task(void* /*param*/) {
       last_reported_seq = s_tag.seq;
       last_reported_charge_known = d.charge_sensed;
       last_reported_charge = d.charge_contact;
+      last_reported_front_ms = d.tof_front_ms;
+      last_reported_rear_ms = d.tof_rear_ms;
     }
 
     vTaskDelayUntil(&wake, pdMS_TO_TICKS(SENSOR_PERIOD_MS));
