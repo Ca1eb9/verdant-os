@@ -74,6 +74,8 @@ bool TofSensor::begin() {
   if (st == VL53L4CX_ERROR_NONE) st = dev_.VL53L4CX_StartMeasurement();
 
   ok_ = (st == VL53L4CX_ERROR_NONE);
+  have_stream_ = false;
+  same_stream_ = 0;
   if (ok_) {
     fail_logged_ = false;
     LOG("tof", "%s VL53L4CX ready (medium mode, %lu ms budget)", name_,
@@ -103,6 +105,20 @@ TofReading TofSensor::poll(float* cm_out) {
     ok_ = false;
     return TofReading::Error;
   }
+  // Every new measurement advances the count (wrapping 255 to 128). The same
+  // count again is an old result: the sensor reset and isn't measuring.
+  if (have_stream_ && data.StreamCount == last_stream_) {
+    if (++same_stream_ >= TOF_STUCK_REPEATS) {
+      LOG("tof", "%s VL53L4CX stopped measuring (stream count stuck at %u): restarting it", name_,
+          (unsigned)data.StreamCount);
+      ok_ = false;
+      return TofReading::Error;
+    }
+  } else {
+    same_stream_ = 0;
+  }
+  have_stream_ = true;
+  last_stream_ = data.StreamCount;
 
   // The sensor can report several targets. Use the nearest valid one. Also
   // valid: closer than the sensor's minimum range (clipped to it), and a
