@@ -1,0 +1,15 @@
+# Drops FarmNet stations that stopped answering, so a robot that reset can
+# join again (scripts/farmnet-stations.sh). Off unless enabled:
+# sudo systemctl enable --now farmnet-stations (docs/WIFI-SETUP.md).
+[Unit]
+Description=VerdantOS FarmNet stale station cleanup
+After=NetworkManager.service dnsmasq.service
+Wants=NetworkManager.service
+
+[Service]
+ExecStart=/bin/bash /opt/verdant-os/scripts/farmnet-stations.sh
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
