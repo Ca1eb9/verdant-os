@@ -18,10 +18,10 @@ mkdir -p "$FAKE/bin"
 cat > "$FAKE/bin/iw" <<'FAKEIW'
 #!/usr/bin/env bash
 if [[ $3 == station && $4 == dump ]]; then
-  while read -r mac; do printf 'Station %s (on wlan0)\n\tinactive time:\t10 ms\n' "$mac"; done < "$FAKE/stations"
+  while read -r mac up; do printf 'Station %s (on wlan0)\n\tinactive time:\t10 ms\n\tconnected time:\t%s seconds\n' "$mac" "${up:-600}"; done < "$FAKE/stations"
 elif [[ $3 == station && $4 == del ]]; then
   echo "$5" >> "$FAKE/deleted"
-  grep -vix "$5" "$FAKE/stations" > "$FAKE/s" ; mv "$FAKE/s" "$FAKE/stations"
+  grep -vi "^$5" "$FAKE/stations" > "$FAKE/s" ; mv "$FAKE/s" "$FAKE/stations"
 fi
 FAKEIW
 # Answers for the IPs listed in $FAKE/up
@@ -40,11 +40,11 @@ echo "stations"
 printf 'aa:aa:aa:aa:aa:01\naa:aa:aa:aa:aa:02\n' > "$FAKE/stations"; printf '192.168.4.10\n192.168.4.11\n' > "$FAKE/up"
 check "answering stations stay" "$(run 5)" ""
 printf 'aa:aa:aa:aa:aa:01\naa:aa:aa:aa:aa:02\n' > "$FAKE/stations"; printf '192.168.4.11\n' > "$FAKE/up"
-check "two misses aren't enough" "$(run 2)" ""
-printf 'aa:aa:aa:aa:aa:01\naa:aa:aa:aa:aa:02\n' > "$FAKE/stations"
-check "a silent station goes after three" "$(run 3)" "aa:aa:aa:aa:aa:01 "
+check "a silent station goes at its first miss" "$(run 1)" "aa:aa:aa:aa:aa:01 "
 printf 'aa:aa:aa:aa:aa:03\n' > "$FAKE/stations"
-check "no lease counts as silent" "$(run 3)" "aa:aa:aa:aa:aa:03 "
+check "no lease counts as silent" "$(run 1)" "aa:aa:aa:aa:aa:03 "
+printf 'aa:aa:aa:aa:aa:03 5\n' > "$FAKE/stations"
+check "one still joining is left alone" "$(run 1)" ""
 
 echo "missing tools"
 PATH="$FAKE/empty" /bin/bash "$SCRIPT" --rounds 1 >/dev/null 2>&1
