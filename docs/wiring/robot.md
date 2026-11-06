@@ -21,13 +21,14 @@ The pins come from `firmware/esp32/src/config.h`; the firmware is in
 | 3S Li-ion pack, 10.8 V 6 Ah, BMS inside | Power | 12.73 V full (measured), 9.6 V empty |
 | 3 A fuse in an inline holder | Battery protection | |
 | Power switch, rated 3 A DC or more | Turns the robot off | |
-| 5 V switch, rated 1 A DC or more | Between the converter's 5 V and the ESP32 | Off whenever USB is plugged in |
 | 100 kΩ + 22 kΩ resistors | Battery divider | |
 | Two copper tape pads + wires | Touch the dock's two pogo pins | **Docking only.** The dock charger gives 12.6 V, 2 A |
 | 1N5822 Schottky diode (3 A, 40 V) | Charging path | **Docking only.** Keeps the pads dead off the dock |
 | 100 kΩ + 22 kΩ + 10 kΩ resistors | Charge contact divider, and a pull-down on pad + | **Docking only** |
 | 2× 0.1 µF ceramic capacitors | Steady the divider readings | **Optional** |
 | 0.1 µF ceramic capacitor | Across the motor's two terminals: soaks up its electrical noise | **Optional** |
+| 10 µF ceramic capacitor, 10 V or more | Across the buck converter's 5 V output | **Optional** |
+| 100 µF electrolytic capacitor, 6.3 V or more, and a 0.1 µF ceramic | Across the 3V3 rails: steady the sensors' supply | **Optional** |
 | STEMMA QT cable | Rear VL53L4CX → AHT20 | **Optional**, with the AHT20 |
 | Jumper wires; 20–22 AWG wire for the 12 V side | | |
 
@@ -42,7 +43,7 @@ optional: it's what stops a short from overheating the pack and wiring.
 |---|---|
 | **3V3** | 3.3 V for the PN532, both VL53L4CX and the AHT20 (VCC / VIN) |
 | **GND** | Ground, shared with everything |
-| **5V** | The buck converter's 5 V output, through the 5 V switch (on the bench, USB powers it and the 5 V switch is off) |
+| **5V** | The buck converter's 5 V output (on the bench, USB powers it and the converter's plug is out) |
 | **GPIO 12 / 13 / 11 / 10** | PN532 SCK / MISO / MOSI / SS |
 | **GPIO 8 / 9** | Front VL53L4CX SDA / SCL (`Wire`) |
 | **GPIO 17 / 18** | Rear VL53L4CX SDA / SCL (`Wire1`), and the AHT20 through it |
@@ -72,12 +73,11 @@ continues on the ESP32, and every ground symbol is the same shared ground.
   near the ESP32, switch on and find the 5 V and GND pins with a multimeter;
   usually red is 5 V and black or brown is GND. Its label says "7–12 V input"
   and a full pack is 12.73 V; Adafruit recommends 6–16 V, so it's fine.
-- **5 V switch.** It sits on the converter's 5 V wire, between the converter
-  and the ESP32's 5V pin; the converter's ground stays connected. Turn it off
-  whenever USB is plugged in. Espressif's guide says to power the board from
-  USB or the 5V pin, one at a time, and with both connected, USB's 5 V can
-  also leak backwards through the converter onto the 12 V side. With the 5 V
-  switch off, the main switch can stay on: the ESP32 runs from USB with the
+- **USB or the converter, never both.** Unplug the converter's 5 V wire from
+  the ESP32 whenever USB is plugged in. Espressif's guide says to power the
+  board from USB or the 5V pin, one at a time, and with both connected, USB's
+  5 V can also leak backwards through the converter onto the 12 V side. With
+  that wire out, the main switch can stay on: the ESP32 runs from USB with the
   serial monitor open while the motor and the dividers run from the battery.
 - **DRV8871 → motor.** VM takes the battery after the switch. GPIO 5 and 6
   drive IN1 and IN2: one held high while the other is switched on and off
@@ -101,6 +101,16 @@ continues on the ESP32, and every ground symbol is the same shared ground.
   heat in the driver, warming it a few degrees more than without it; well
   within what it handles. Twisting the two motor wires together and keeping
   them away from the I2C cables helps too.
+- **Capacitors on the supplies (optional).** If the ESP32 resets or a sensor
+  stops as the motor starts, steady the supplies: a 10 µF ceramic across the
+  converter's 5 V and GND, and on the breadboard a 100 µF electrolytic plus a
+  0.1 µF ceramic across the 3V3 rails. They go across + and −, never in line
+  with a wire. The electrolytic has a polarity: its striped leg on the − rail.
+  These sizes are normal for these supplies: the converter and the DevKit's
+  3.3 V regulator charge them in well under a millisecond at power-on, and
+  they draw nothing after. Keep the 3V3 one at about 100 µF; much more makes
+  the regulator's start-up harder. Use 10 V or higher for the 10 µF ceramic:
+  a ceramic loses much of its capacitance near its rated voltage.
 - **Shared ground.** Battery −, pad −, the converter, the driver, the ESP32
   and both dividers all join. Signals only mean something relative to a
   shared ground.
@@ -213,6 +223,7 @@ drawn from row 28 to row 39. On a board with unbroken lines they're harmless.
 | Row 20, hole a → bottom + rail | 3V3: the bottom + rail is 3.3 V |
 | Row 41, hole a → bottom − rail; row 20, hole j → top − rail | GND on both − rails |
 | Row 28 → row 39 on the bottom + rail, and again on the − rail | Bridges a split rail (see above) |
+| Rows 16, 17, bottom rails (optional) | 100 µF electrolytic in row 16, striped leg on the − rail; 0.1 µF ceramic in row 17; each from the + rail to the − rail |
 | Rows 4–12, bottom half | Battery divider: BATT+ in at row 4 hole e; 100 kΩ rows 4–8 (hole b); 22 kΩ rows 8–12 (hole d); 0.1 µF rows 8–12 (hole c, optional); row 8 hole a → row 23 hole a (GPIO 4); row 12 hole a → − rail |
 | Rows 4–12, top half | Charge contact divider (docking only): pad + in at row 4 hole f; 100 kΩ rows 4–8 (hole i); 22 kΩ rows 8–12 (hole g); 0.1 µF rows 8–12 (hole h, optional); 10 kΩ from row 4 hole j, bent across to the top − rail; row 8 hole j → row 23 hole j (GPIO 1); row 12 hole j → top − rail |
 | DRV8871 | IN1 ← row 24 hole a (GPIO 5), IN2 ← row 25 (GPIO 6), GND ← − rail |
@@ -255,8 +266,8 @@ the order drawn: go by the names printed on its board.
 - **The converter's plug.** The pin going to the ESP32's 5V reads +5 V
   against the one going to GND. Reversed, it destroys the board.
 - **The PN532's switches:** SEL0 off, SEL1 on (SPI).
-- **The 5 V switch is off before USB goes in.** Espressif's guide lists USB
-  and the 5V pin as power sources to use one at a time.
+- **The converter's 5 V wire is out before USB goes in.** Espressif's guide
+  lists USB and the 5V pin as power sources to use one at a time.
 
 ## Bring it up one part at a time
 
@@ -269,7 +280,7 @@ cd firmware/esp32
 pio run -e bench -t upload && pio device monitor -e bench
 ```
 
-On the bench, USB powers the ESP32 and the 5 V switch stays off. Unplug USB
+On the bench, USB powers the ESP32 and the converter's 5 V wire stays out. Unplug USB
 (and switch the main switch off) before adding each part:
 
 | Add | Then check |
@@ -279,9 +290,9 @@ On the bench, USB powers the ESP32 and the 5 V switch stays off. Unplug USB
 | Front VL53L4CX | "front VL53L4CX ready"; a hand within 15 cm prints "obstacle flag SET", away past 20 cm "cleared" |
 | Rear VL53L4CX | The same, for "rear" |
 | AHT20 | "AHT20 ready"; telemetry carries `temperature_c` and `humidity_pct`, and breathing on it raises the humidity |
-| Battery divider (+ the power side) | 5 V switch off, USB in, main switch on. With a multimeter, GPIO 4 reads 0.18 × the pack voltage, and `battery_pct` in telemetry matches the pack. Tune `BATTERY_CAL_FACTOR` if it's off. Then USB out, 5 V switch on: the converter powers the ESP32 by itself |
+| Battery divider (+ the power side) | Converter's 5 V wire out, USB in, main switch on. With a multimeter, GPIO 4 reads 0.18 × the pack voltage, and `battery_pct` in telemetry matches the pack. Tune `BATTERY_CAL_FACTOR` if it's off. Then USB out, the converter's 5 V wire in: the converter powers the ESP32 by itself |
 | Charge contact divider | Pads on the dock: GPIO 1 reads 1.8–2.3 V; off the dock, under 0.5 V (close to 0 V with a cool diode) |
-| DRV8871 + motor | Flash the full firmware (`pio run -e esp32 -t upload`) and follow "Motor driver" in [firmware/esp32/README.md](../../firmware/esp32/README.md#motor-driver). With USB in and the 5 V switch off, switch the main switch on: the motor runs from the battery while the serial monitor stays open |
+| DRV8871 + motor | Flash the full firmware (`pio run -e esp32 -t upload`) and follow "Motor driver" in [firmware/esp32/README.md](../../firmware/esp32/README.md#motor-driver). With USB in and the converter's 5 V wire out, switch the main switch on: the motor runs from the battery while the serial monitor stays open |
 
 ## Moving to the perfboard
 
@@ -300,9 +311,10 @@ board's edge so the cable still plugs in. The dividers stand on end in rows
 | Row 9 hole a → + rail; row 30 hole a → − rail; row 9 hole j → top − rail | 3V3 and GND, as on the breadboard |
 | Rows 1–3, bottom half | Battery divider: BATT+ wire into row 1 hole e; 100 kΩ rows 1–2 (hole c); 22 kΩ and 0.1 µF (optional) rows 2–3 (holes d, e); row 2 hole a → row 12 hole a (GPIO 4); row 3 hole a → − rail |
 | Rows 1–3, top half | Charge contact divider (docking only): pad + wire into row 1 hole f; 100 kΩ rows 1–2 (hole h); 22 kΩ and 0.1 µF (optional) rows 2–3 (holes g, f); 10 kΩ on end in row 1 hole j, its bent lead in the top − rail; row 2 hole j → row 12 hole j (GPIO 1); row 3 hole j → top − rail |
+| Rows 10, 11, bottom rails (optional) | 100 µF electrolytic in row 10, striped leg on the − rail; 0.1 µF ceramic in row 11; each from the + rail to the − rail |
 | Male header pins, hole a | Row 13 (GPIO 5), 14 (GPIO 6), 18 (GPIO 17), 19 (GPIO 18), 20 (GPIO 8), 23 (GPIO 9), 24 (GPIO 10), 25 (GPIO 11), 26 (GPIO 12), 27 (GPIO 13) |
 | Male header pins on the rails | + rail rows 4–6 (3V3 for the three modules), − rail rows 4–7 (their GND and the DRV8871's) |
-| Wires in | The converter's 5 V, through the 5 V switch, into row 29 hole a (the DevKit's 5V); the shared ground onto the − rail |
+| Wires in | The converter's 5 V into row 29 hole a (the DevKit's 5V); the shared ground onto the − rail |
 
 Extra parts: the board, two 1×22 female header sockets, a strip of male
 header pins, insulated wire for the links, and female jumper wires to the
