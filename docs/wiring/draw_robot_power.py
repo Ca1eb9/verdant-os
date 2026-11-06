@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Draws robot-power.svg: the robot's 12 V side (battery, fuse, switch, buck
-converter and its 5 V switch, motor driver, charging pads) and the two voltage
+converter, motor driver, charging pads) and the two voltage
 dividers.
 
     python3 draw_robot_power.py > robot-power.svg
@@ -129,16 +129,10 @@ dot(550, BUS_Y, C["batt"])
 wire([(550, BUS_Y), (550, UY + 55), (UX, UY + 55)], C["batt"], 3)
 wire([(UX, UY + 82), (565, UY + 82)], C["gnd"], 3)
 ground(565, UY + 82)
-# 5 V switch: off whenever USB powers the ESP32, so the two never meet
-SW5 = 806
-wire([(UX + 190, UY + 55), (SW5 - 4, UY + 55)], C["5v"], 3)
-add(f'<circle cx="{SW5}" cy="{UY + 55}" r="4" fill="#fff" stroke="#444" stroke-width="1.5"/>')
-add(f'<line x1="{SW5 + 3}" y1="{UY + 53}" x2="{SW5 + 30}" y2="{UY + 40}" stroke="#444" stroke-width="2.5"/>')
-add(f'<circle cx="{SW5 + 34}" cy="{UY + 55}" r="4" fill="#fff" stroke="#444" stroke-width="1.5"/>')
-text(SW5 + 17, UY + 31, "5 V switch", 10, weight="bold")
-text(SW5 + 17, UY + 75, "off for USB", 10, fill="#555")
-wire([(SW5 + 38, UY + 55), (SW5 + 50, UY + 55)], C["5v"], 3)
-flag(SW5 + 50, UY + 55, "to ESP32 5V", C["5v"])
+# Unplugged from the ESP32 whenever USB powers it, so the two never meet
+wire([(UX + 190, UY + 55), (856, UY + 55)], C["5v"], 3)
+flag(856, UY + 55, "to ESP32 5V", C["5v"])
+text(905, UY + 38, "unplug when USB is in", 10, fill="#555")
 wire([(UX + 190, UY + 82), (790, UY + 82)], C["gnd"], 3)
 ground(790, UY + 82)
 # Optional: a ceramic capacitor across the converter's 5 V output
@@ -186,7 +180,7 @@ text(BUS_END - 14, 200, "battery voltage", 11, "end", "bold", C["sig"])
 
 # ---- ESP32: what arrives where
 EX, EY = 1000, 560
-box(EX, EY, 210, 150, "ESP32-S3 DevKitC-1", ["5V: converter, via 5 V switch", "GND: shared ground", "GPIO 5, 6: motor IN1, IN2",
+box(EX, EY, 210, 150, "ESP32-S3 DevKitC-1", ["5V: converter (out for USB)", "GND: shared ground", "GPIO 5, 6: motor IN1, IN2",
                                              "GPIO 4: battery voltage", "GPIO 1: charge contact", "sensors: breadboard diagram"],
     fill="#e3f1f3", stroke="#0f7c8c")
 

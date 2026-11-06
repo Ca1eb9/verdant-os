@@ -61,21 +61,13 @@
 <line x1="554" y1="290" x2="576" y2="290" stroke="#222222" stroke-width="2"/>
 <line x1="558" y1="294" x2="572" y2="294" stroke="#222222" stroke-width="2"/>
 <line x1="562" y1="298" x2="568" y2="298" stroke="#222222" stroke-width="2"/>
-<path d="M 770,255 L 802,255" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M 770,255 L 802,255" fill="none" stroke="#d62728" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 770,255 L 856,255" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M 770,255 L 856,255" fill="none" stroke="#d62728" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="770" cy="255" r="3.2" fill="#d62728" stroke="#fff" stroke-width="1"/>
-<circle cx="802" cy="255" r="3.2" fill="#d62728" stroke="#fff" stroke-width="1"/>
-<circle cx="806" cy="255" r="4" fill="#fff" stroke="#444" stroke-width="1.5"/>
-<line x1="809" y1="253" x2="836" y2="240" stroke="#444" stroke-width="2.5"/>
-<circle cx="840" cy="255" r="4" fill="#fff" stroke="#444" stroke-width="1.5"/>
-<text x="823" y="231" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" font-weight="bold" fill="#222">5 V switch</text>
-<text x="823" y="275" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" font-weight="normal" fill="#555">off for USB</text>
-<path d="M 844,255 L 856,255" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M 844,255 L 856,255" fill="none" stroke="#d62728" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="844" cy="255" r="3.2" fill="#d62728" stroke="#fff" stroke-width="1"/>
 <circle cx="856" cy="255" r="3.2" fill="#d62728" stroke="#fff" stroke-width="1"/>
 <path d="M 856,245 L 951,245 L 959,255 L 951,265 L 856,265 L 856,255 Z" fill="#fff" stroke="#d62728" stroke-width="1.5"/>
 <text x="903.5" y="259" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="bold" fill="#d62728">to ESP32 5V</text>
+<text x="905" y="238" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" font-weight="normal" fill="#555">unplug when USB is in</text>
 <path d="M 770,282 L 790,282" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M 770,282 L 790,282" fill="none" stroke="#222222" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="770" cy="282" r="3.2" fill="#222222" stroke="#fff" stroke-width="1"/>
@@ -199,7 +191,7 @@
 <text x="986" y="200" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="end" font-weight="bold" fill="#1f77b4">battery voltage</text>
 <rect x="1000" y="560" width="210" height="150" rx="8" fill="#e3f1f3" stroke="#0f7c8c" stroke-width="1.5"/>
 <text x="1105.0" y="582" font-family="Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle" font-weight="bold" fill="#222">ESP32-S3 DevKitC-1</text>
-<text x="1105.0" y="602" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#555">5V: converter, via 5 V switch</text>
+<text x="1105.0" y="602" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#555">5V: converter (out for USB)</text>
 <text x="1105.0" y="618" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#555">GND: shared ground</text>
 <text x="1105.0" y="634" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#555">GPIO 5, 6: motor IN1, IN2</text>
 <text x="1105.0" y="650" font-family="Helvetica, Arial, sans-serif" font-size="11" text-anchor="middle" font-weight="normal" fill="#555">GPIO 4: battery voltage</text>
