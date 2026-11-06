@@ -26,16 +26,6 @@ export interface LevelLightsConfig {
   robot_timeout_ms: number;
 }
 
-/** The level lights, switched by relays on one shelf's node (docs/shelf-sensors.md "Level lights") */
-export interface LevelLightsConfig {
-  /** The shelf whose node has the relays */
-  shelf_id: string;
-  /** Level lit by each relay channel, in channel order (the node's PIN_LIGHT_RELAY) */
-  levels: number[];
-  /** A robot with no telemetry this long no longer lights its level */
-  robot_timeout_ms: number;
-}
-
 export interface ShelfBridgeConfig {
   baud: number;
   reopen_interval_ms: number;
