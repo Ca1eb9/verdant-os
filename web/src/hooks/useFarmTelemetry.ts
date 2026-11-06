@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getFarmDataSource, onFarmDataSourceChange, type ShelfReading } from "@/lib/farm/data-source";
+import { isLights } from "@/lib/farm/validate";
 import { MOCK_DATA_ENABLED, buildLiveTelemetry } from "@/lib/mock-data";
 import { readingStorageKey } from "@/lib/stored-readings";
 import type { LiveStatus, SensorReading, TelemetrySnapshot } from "@/lib/types";
@@ -18,7 +19,7 @@ function shelfToReading({ data, receivedAt }: ShelfReading): SensorReading {
     waterTemperature: data.water_temp_c,
     ph: data.ph,
     waterLevelOk: data.water_level_ok,
-    lightLux: data.light_lux,
+    lights: data.lights,
   };
 }
 
@@ -31,11 +32,12 @@ function snapshotToReading(snapshot: TelemetrySnapshot): SensorReading {
     waterTemperature: snapshot.water.temperature,
     ph: snapshot.water.ph,
     waterLevelOk: snapshot.water.levelFloat === 1,
-    lightLux: snapshot.light.lux,
+    // the mock farm has one light sensor, at level 0
+    lights: [{ level: 0, lux: snapshot.light.lux }],
   };
 }
 
-const NUMBER_FIELDS = ["airTemperature", "humidity", "waterTemperature", "ph", "lightLux"] as const;
+const NUMBER_FIELDS = ["airTemperature", "humidity", "waterTemperature", "ph"] as const;
 
 function isReading(value: unknown): value is SensorReading {
   if (typeof value !== "object" || value === null) return false;
@@ -45,7 +47,8 @@ function isReading(value: unknown): value is SensorReading {
     !Number.isNaN(new Date(r.timestamp).getTime()) &&
     (r.device === null || typeof r.device === "string") &&
     NUMBER_FIELDS.every((key) => r[key] === null || (typeof r[key] === "number" && Number.isFinite(r[key]))) &&
-    (r.waterLevelOk === null || typeof r.waterLevelOk === "boolean")
+    (r.waterLevelOk === null || typeof r.waterLevelOk === "boolean") &&
+    isLights(r.lights)
   );
 }
 
@@ -54,7 +57,9 @@ function readStoredReading(farmId: string): SensorReading | null {
   try {
     const value = window.localStorage.getItem(readingStorageKey(farmId));
     const parsed: unknown = value ? JSON.parse(value) : null;
-    return isReading(parsed) ? parsed : null;
+    // One stored before per-level lights has none, only a lightLux
+    const reading = typeof parsed === "object" && parsed !== null ? { lights: [], ...parsed } : parsed;
+    return isReading(reading) ? reading : null;
   } catch {
     return null;
   }

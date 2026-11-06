@@ -64,7 +64,7 @@ const TELEMETRY_COLUMNS =
   "temperature_c,humidity_pct,light_lux,timestamp,created_at";
 const STATE_COLUMNS = "robot_id,status,task,expected_path,timestamp";
 const ALERT_COLUMNS = "alert_id,severity,source,source_type,message,metric,value,threshold,timestamp,resolves";
-const SENSOR_COLUMNS = "device,ts,air_temp_c,humidity_pct,water_temp_c,water_level_ok,ph,light_lux,created_at";
+const SENSOR_COLUMNS = "device,ts,air_temp_c,humidity_pct,water_temp_c,water_level_ok,ph,lights,created_at";
 
 // Reasons are for the operator: no service names, hosts or settings (those go to the console)
 const CONNECTING: FarmConnection = { state: "connecting", reason: "Connecting to the farm…" };
@@ -158,7 +158,7 @@ function shelfFrom(row: Row): ShelfReading["data"] | null {
     shelf_id: row.device,
     temperature_c: toNumOrNull(row.air_temp_c),
     humidity_pct: toNumOrNull(row.humidity_pct),
-    light_lux: toNumOrNull(row.light_lux),
+    lights: row.lights,
     water_temp_c: toNumOrNull(row.water_temp_c),
     water_level_ok: row.water_level_ok,
     ph: toNumOrNull(row.ph),
@@ -390,7 +390,11 @@ export function createRemoteSource(farmId: string): FarmDataSource {
             .eq("farm_id", farmId)
             .order("created_at", { ascending: false })
             .limit(RECENT_SHELF_ROWS),
-        ),
+        ).catch((err) => {
+          // Only the readings: a project whose SQL predates lights still shows the farm
+          warnOnce("sensors", `no shelf readings from Supabase (rerun web/supabase/sensor_events.sql?): ${err instanceof Error ? err.message : err}`);
+          return [];
+        }),
         rowsOf(client.from("farm_topology").select("topology").eq("farm_id", farmId).limit(1)),
         // Only the chart lines: a project whose SQL predates the table still shows the farm
         rowsOf(client.from("alert_thresholds").select("thresholds").eq("farm_id", farmId).limit(1)).catch((err) => {

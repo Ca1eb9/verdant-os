@@ -9,6 +9,21 @@ export interface ShelfPort {
   ph_neutral_mv: number;
   /** mV change per pH unit; about +286 for the DFRobot pH meter V1.1 (voltage rises with pH) */
   ph_mv_per_unit: number;
+  /**
+   * Level each of the node's light sensors faces, in the node's order (its
+   * light_lux values). Defaults to the shelf's own level: one sensor.
+   */
+  light_levels: number[];
+}
+
+/** The level lights, switched by relays on one shelf's node (docs/shelf-sensors.md "Level lights") */
+export interface LevelLightsConfig {
+  /** The shelf whose node has the relays */
+  shelf_id: string;
+  /** Level lit by each relay channel, in channel order (the node's PIN_LIGHT_RELAY) */
+  levels: number[];
+  /** A robot with no telemetry this long no longer lights its level */
+  robot_timeout_ms: number;
 }
 
 /** The level lights, switched by relays on one shelf's node (docs/shelf-sensors.md "Level lights") */
@@ -59,6 +74,13 @@ export function loadConfig(path: string): ShelfBridgeConfig {
   if (!Array.isArray(c.shelves) || c.shelves.length === 0) throw new Error("shelves must be a non-empty array");
   c.shelves.forEach((s: unknown, i: number) => {
     if (!isShelfPort(s)) throw new Error(`shelves[${i}] is missing or has an invalid field`);
+    // A config from before light_levels: one light sensor, at the shelf's level
+    s.light_levels ??= [s.level];
+    const levels: unknown = s.light_levels;
+    if (!Array.isArray(levels) || levels.length === 0 || !levels.every((n) => Number.isInteger(n))) {
+      throw new Error(`shelves[${i}].light_levels must be a non-empty array of levels`);
+    }
+    if (new Set(levels).size !== levels.length) throw new Error(`shelves[${i}].light_levels values must be unique`);
   });
   const ids = c.shelves.map((s: ShelfPort) => s.shelf_id);
   const ports = c.shelves.map((s: ShelfPort) => s.port);

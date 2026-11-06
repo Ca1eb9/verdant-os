@@ -30,6 +30,11 @@ const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFin
 const isLevel = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0;
 const optNum = (v: unknown) => v === undefined || isNum(v);
 const nullableNum = (v: unknown) => v === null || isNum(v);
+/** Each level's light reading, at most one per level */
+const isLights = (v: unknown) =>
+  Array.isArray(v) &&
+  v.every((l) => isObj(l) && isLevel(l.level) && nullableNum(l.lux)) &&
+  new Set(v.map((l) => l.level)).size === v.length;
 const optBool = (v: unknown) => v === undefined || typeof v === "boolean";
 
 export function isRobotTelemetry(v: unknown): v is RobotTelemetry {
@@ -58,7 +63,7 @@ export function isShelfSensorData(v: unknown): v is ShelfSensorData {
     isLevel(v.level) &&
     nullableNum(v.temperature_c) &&
     nullableNum(v.humidity_pct) &&
-    nullableNum(v.light_lux) &&
+    isLights(v.lights) &&
     nullableNum(v.water_temp_c) &&
     (v.water_level_ok === null || typeof v.water_level_ok === "boolean") &&
     nullableNum(v.ph) &&

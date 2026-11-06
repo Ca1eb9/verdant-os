@@ -18,11 +18,15 @@
 #include "config.h"
 
 static DHT dht(PIN_DHT, DHT11);
-static BH1750 lightMeter;
+// The bottom level's light and the top level's, sharing the I2C bus at their
+// own addresses: light_lux is [bottom, top]
+static BH1750 lightMeter(LIGHT_ADDR);
+static BH1750 topLightMeter(LIGHT_TOP_ADDR);
 static OneWire oneWire(PIN_WATER_TEMP);
 static DallasTemperature waterProbe(&oneWire);
 
 static bool lightReady = false;
+static bool topLightReady = false;
 static uint32_t seq = 0;
 static uint32_t lastReportMs = 0;
 
@@ -36,6 +40,7 @@ static uint32_t lastLightsMs = 0;
 // Last known health per sensor, so failures log once instead of every report
 static bool airOk = true;
 static bool lightOk = true;
+static bool topLightOk = true;
 static bool waterTempOk = true;
 
 static void noteHealth(const __FlashStringHelper* name, bool ok, bool& wasOk) {
@@ -46,18 +51,104 @@ static void noteHealth(const __FlashStringHelper* name, bool ok, bool& wasOk) {
   Serial.println(ok ? F(" ok") : F(" failed"));
 }
 
-static float readLight() {
-  if (!lightReady) lightReady = lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
-  if (!lightReady) return NAN;
-  float lux = lightMeter.readLightLevel();
+// Drives an I2C line low, or releases it to its pull-ups, like the open-drain
+// TWI hardware does. LOW is written first, so switching to OUTPUT never drives
+// it high.
+static void i2cLine(uint8_t pin, bool low) {
+  if (low) {
+    digitalWrite(pin, LOW);
+    pinMode(pin, OUTPUT);
+  } else {
+    pinMode(pin, INPUT_PULLUP);
+  }
+  delayMicroseconds(I2C_CLEAR_HALF_PERIOD_US);
+}
+
+// Low on every one of a few reads: one noisy read isn't a stuck bus
+static bool lineHeldLow(uint8_t pin) {
+  for (uint8_t i = 0; i < I2C_STUCK_SAMPLES; i++) {
+    if (digitalRead(pin) == HIGH) return false;
+    delayMicroseconds(I2C_STUCK_SAMPLE_GAP_US);
+  }
+  return true;
+}
+
+// Released, a line rises within I2C_RISE_TIMEOUT_US unless something holds it
+static bool lineRises(uint8_t pin) {
+  uint32_t start = micros();
+  while (digitalRead(pin) == LOW) {
+    if (micros() - start > I2C_RISE_TIMEOUT_US) return false;
+  }
+  return true;
+}
+
+/**
+ * A sensor left holding SDA low mid-byte (a glitch on the long cable, a board
+ * plugged in powered, the Uno reset mid-transfer) blocks the bus for good: the
+ * TWI timeout only resets the Uno's side. Clocking SCL until it lets go, then a
+ * STOP, frees it without anyone unplugging the Uno. Costs two pin reads when
+ * the bus is idle. Returns true when it had to clear the bus, so the meters are
+ * configured again; logs a bus it can't clear (SCL held low) once until it can.
+ */
+static bool clearStuckBus() {
+  static bool stuckLogged = false;
+  if (!lineHeldLow(SDA) && !lineHeldLow(SCL)) {
+    stuckLogged = false;
+    return false;
+  }
+  Wire.end();
+  i2cLine(SDA, false);
+  i2cLine(SCL, false);
+  if (lineRises(SDA) && lineRises(SCL)) {
+    // Nothing held it: the Uno's own TWI side, now reset
+    Wire.begin();
+    Wire.setWireTimeout(I2C_TIMEOUT_US, true);
+    return false;
+  }
+  for (uint8_t i = 0; i < I2C_CLEAR_PULSES && digitalRead(SDA) == LOW && lineRises(SCL); i++) {
+    i2cLine(SCL, true);
+    i2cLine(SCL, false);
+  }
+  // STOP: SDA rises while SCL is high
+  if (lineRises(SCL)) {
+    i2cLine(SDA, true);
+    i2cLine(SDA, false);
+  }
+  bool cleared = lineRises(SDA) && lineRises(SCL);
+  Wire.begin();
+  Wire.setWireTimeout(I2C_TIMEOUT_US, true);
+  if (cleared) {
+    Serial.println(F("# i2c bus was stuck, cleared"));
+    stuckLogged = false;
+  } else if (!stuckLogged) {
+    Serial.println(F("# i2c bus stuck, can't clear it (power-cycle the node)"));
+    stuckLogged = true;
+  }
+  return true;
+}
+
+// begin() is given the address: left to its default, it sets the meter back to
+// 0x23, the bottom sensor's
+static bool startLight(BH1750& meter, uint8_t addr) {
+  return meter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, addr);
+}
+
+static float readLight(BH1750& meter, uint8_t addr, bool& ready) {
+  if (!ready) {
+    // Its first measurement takes up to 180 ms, and until then it reads 0 lux,
+    // which would show a lit level as dark: read it from the next report on
+    ready = startLight(meter, addr);
+    return NAN;
+  }
+  float lux = meter.readLightLevel();
   if (lux < 0) {
     // Bus error: configure it again on the next report
-    lightReady = false;
+    ready = false;
     return NAN;
   }
   // A BH1750 that browns out restarts powered down and keeps answering with
   // a stale value; re-sending the mode each report recovers it by the next one
-  lightReady = lightMeter.configure(BH1750::CONTINUOUS_HIGH_RES_MODE);
+  ready = meter.configure(BH1750::CONTINUOUS_HIGH_RES_MODE);
   return lux;
 }
 
@@ -86,13 +177,81 @@ static uint16_t readPhMv() {
   return (uint32_t)s[PH_SAMPLES / 2] * ADC_REF_MV / ADC_MAX;
 }
 
+static void printValue(float v, uint8_t decimals) {
+  // Serial.print renders inf as "inf", which would break the JSON line
+  if (isnan(v) || isinf(v)) Serial.print(F("null"));
+  else Serial.print(v, decimals);
+}
+
 static void printField(const __FlashStringHelper* key, float v, uint8_t decimals) {
   Serial.print(F(",\""));
   Serial.print(key);
   Serial.print(F("\":"));
-  // Serial.print renders inf as "inf", which would break the JSON line
-  if (isnan(v) || isinf(v)) Serial.print(F("null"));
-  else Serial.print(v, decimals);
+  printValue(v, decimals);
+}
+
+// on[i]: channel i's light on. Logged only when it changes.
+static void setLights(const bool* on) {
+  static int8_t shown[LIGHT_CHANNELS] = {};  // 0 unknown, 1 on, -1 off
+  bool changed = false;
+  for (uint8_t i = 0; i < LIGHT_CHANNELS; i++) {
+    digitalWrite(PIN_LIGHT_RELAY[i], on[i] ? !LIGHT_OFF_RELAY_STATE : LIGHT_OFF_RELAY_STATE);
+    int8_t v = on[i] ? 1 : -1;
+    if (shown[i] != v) changed = true;
+    shown[i] = v;
+  }
+  if (!changed) return;
+  Serial.print(F("# lights "));
+  for (uint8_t i = 0; i < LIGHT_CHANNELS; i++) Serial.print(on[i] ? '1' : '0');
+  Serial.println();
+}
+
+static void allLightsOn() {
+  bool on[LIGHT_CHANNELS];
+  for (uint8_t i = 0; i < LIGHT_CHANNELS; i++) on[i] = true;
+  setLights(on);
+}
+
+// "lights 10": one '1' (on) or '0' (off) per channel, from channel 0. Channels
+// past the end of the line are turned on. Anything else is logged and ignored.
+static void onInputLine(const char* line) {
+  static const char PREFIX[] = "lights ";
+  const uint8_t prefixLen = sizeof(PREFIX) - 1;
+  uint8_t len = strlen(line);
+  bool ok = strncmp(line, PREFIX, prefixLen) == 0 && len > prefixLen &&
+            len - prefixLen <= LIGHT_CHANNELS;
+  bool on[LIGHT_CHANNELS];
+  for (uint8_t i = 0; ok && i < LIGHT_CHANNELS; i++) {
+    char c = prefixLen + i < len ? line[prefixLen + i] : '1';
+    ok = c == '0' || c == '1';
+    on[i] = c == '1';
+  }
+  if (!ok) {
+    Serial.print(F("# bad input: "));
+    Serial.println(line);
+    return;
+  }
+  setLights(on);
+  lightsFromPi = true;
+  lastLightsMs = millis();
+}
+
+// Never blocks: takes what has arrived and acts on each complete line
+static void readInput() {
+  while (Serial.available() > 0) {
+    char c = Serial.read();
+    if (c == '\r') continue;
+    if (c != '\n') {
+      if (inputLen < MAX_INPUT_LINE) inputLine[inputLen++] = c;
+      else inputTooLong = true;
+      continue;
+    }
+    inputLine[inputLen] = '\0';
+    if (inputTooLong) Serial.println(F("# bad input: line too long"));
+    else if (inputLen > 0) onInputLine(inputLine);
+    inputLen = 0;
+    inputTooLong = false;
+  }
 }
 
 // on[i]: channel i's light on. Logged only when it changes.
@@ -162,13 +321,17 @@ static void readInput() {
 static void report() {
   float airC = dht.readTemperature();
   float rh = dht.readHumidity();
-  float lux = readLight();
+  // After a clear, configure both again: a meter may have lost its mode
+  if (clearStuckBus()) lightReady = topLightReady = false;
+  float lux = readLight(lightMeter, LIGHT_ADDR, lightReady);
+  float topLux = readLight(topLightMeter, LIGHT_TOP_ADDR, topLightReady);
   float waterC = readWaterTemp();
   bool levelOk = digitalRead(PIN_WATER_LEVEL) == WATER_LEVEL_OK_STATE;
   uint16_t phMv = readPhMv();
 
   noteHealth(F("dht11"), !isnan(airC) && !isnan(rh), airOk);
   noteHealth(F("bh1750"), !isnan(lux), lightOk);
+  noteHealth(F("bh1750 top"), !isnan(topLux), topLightOk);
   noteHealth(F("ds18b20"), !isnan(waterC), waterTempOk);
 
   // Field names match ShelfSensorData in @farm/shared where they overlap
@@ -176,7 +339,12 @@ static void report() {
   Serial.print(seq++);
   printField(F("temperature_c"), airC, 1);
   printField(F("humidity_pct"), rh, 0);
-  printField(F("light_lux"), lux, 0);
+  // One per light sensor, bottom then top; the Pi's config gives each its level
+  Serial.print(F(",\"light_lux\":["));
+  printValue(lux, 0);
+  Serial.print(',');
+  printValue(topLux, 0);
+  Serial.print(']');
   printField(F("water_temp_c"), waterC, 2);
   Serial.print(F(",\"water_level_ok\":"));
   Serial.print(levelOk ? F("true") : F("false"));
@@ -202,6 +370,12 @@ void setup() {
   dht.begin();
   Wire.begin();
   Wire.setWireTimeout(I2C_TIMEOUT_US, true);
+  // A reset can land mid-transfer (the Pi opening the port resets the Uno),
+  // leaving a sensor holding the bus
+  clearStuckBus();
+  // Measuring by the first report, so it has both light readings
+  lightReady = startLight(lightMeter, LIGHT_ADDR);
+  topLightReady = startLight(topLightMeter, LIGHT_TOP_ADDR);
   waterProbe.begin();
   waterProbe.setWaitForConversion(false);
   waterProbe.requestTemperatures();

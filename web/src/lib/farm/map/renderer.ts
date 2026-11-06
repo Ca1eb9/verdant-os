@@ -95,6 +95,16 @@ export const PAL_LIGHT: typeof PAL_DARK = {
   badgeFill: "#FFFFFF",
 };
 
+// ---- level lights: drawn as bright as each level's light sensor reads ----
+// At or above this a level's beams are at full strength. Lux under grow LEDs
+// depends on the fixture and its distance: set it from a reading under the
+// farm's lights at full brightness.
+const FULL_GLOW_LUX = 5000;
+// A level whose light reads 0, or has no reading, keeps its fixture this
+// visible, so it reads as off rather than missing. No reading never draws
+// brighter than off: losing the feed mustn't look like the light coming on.
+const OFF_FIXTURE_OPACITY = 0.35;
+
 // plant colours
 const PLANT = { stem: "#3A6B18", leaf: "#5E9224", mid: "#8CBB4E", tip: "#B7D68C" };
 
@@ -154,6 +164,19 @@ interface RobotAnim {
 
 type Attrs = Record<string, string | number>;
 
+/** "L1 light: 412 lux", by the map's level label: for the fixture's title and the map's label */
+export function levelLightText(levelId: number, lux: number | null) {
+  return `L${levelId} light: ${lux === null ? "no reading" : `${Math.round(lux)} lux`}`;
+}
+
+/** A level's light fixture, updated from its reading without redrawing the farm */
+interface LightEls {
+  levelId: number;
+  beams: SVGGElement | null;
+  fixture: SVGGElement;
+  title: SVGTitleElement;
+}
+
 export class FarmRenderer {
   private svg: SVGSVGElement;
   private opts: RendererOptions;
@@ -165,6 +188,9 @@ export class FarmRenderer {
   private trailLayer: SVGGElement | null = null;
   private robotLayer: SVGGElement | null = null;
   private labelLayer: SVGGElement | null = null;
+  /** Each level's light in lux, by z; null or missing: no current reading */
+  private lights = new Map<number, number | null>();
+  private lightEls = new Map<number, LightEls>();
   private destroyed = false;
   private PAL = PAL_DARK;
 
@@ -233,6 +259,28 @@ export class FarmRenderer {
     this.drawSlots();
     this.drawRoute();
     this.drawRobots();
+  }
+
+  /** Each level's light in lux by z, null where there's no current reading */
+  setLights(lights: Map<number, number | null>) {
+    this.lights = lights;
+    if (!this.destroyed) this.applyLights();
+  }
+
+  /**
+   * Lit as bright as the level's light reads. With no reading it's drawn as
+   * off, and its title says so: the map never shows a light it doesn't know
+   * is on.
+   */
+  private applyLights() {
+    for (const [z, els] of this.lightEls) {
+      const lux = this.lights.get(z) ?? null;
+      const glow = lux === null ? 0 : Math.min(1, Math.max(0, lux / FULL_GLOW_LUX));
+      const beamOpacity = this.opts.beamOpacity == null ? 0.32 : this.opts.beamOpacity;
+      els.beams?.setAttribute("opacity", String(beamOpacity * glow));
+      els.fixture.setAttribute("opacity", String(OFF_FIXTURE_OPACITY + (1 - OFF_FIXTURE_OPACITY) * glow));
+      els.title.textContent = levelLightText(els.levelId, lux);
+    }
   }
 
   // ---------- position helpers ----------
@@ -362,7 +410,7 @@ export class FarmRenderer {
       "@keyframes fwTrail{from{opacity:.5}to{opacity:0}}" +
       ".fw-hidden{opacity:0}" +
       ".fw-slot:hover .fw-outline{opacity:1;stroke:" + this.accent() + ";fill:" + this.accent() + ";fill-opacity:.06}" +
-      "@media (prefers-reduced-motion:reduce){[style*=animation]{animation:none!important}}";
+      "@media (prefers-reduced-motion:reduce){[style*=animation]{animation:none!important}[style*=transition]{transition:none!important}}";
     const wg = this.mk("linearGradient", { id: "fw-water", x1: 0, y1: 0, x2: 0, y2: 1 }, d);
     this.mk("stop", { offset: "0%", "stop-color": P.waterTop, "stop-opacity": 0.45 }, wg);
     this.mk("stop", { offset: "55%", "stop-color": P.waterTop, "stop-opacity": 0.62 }, wg);
@@ -546,23 +594,29 @@ export class FarmRenderer {
   }
 
   // ---------- drawLights: bar + soft fanning beams ----------
-  private drawLights(p: Element, lightY: number, shelfY: number) {
+  private drawLights(p: Element, lv: Level) {
+    const { lightY, shelfY } = lv;
     const P = this.PAL;
     const x0 = FX + 6;
     const x1 = EX - 6;
     const g = this.mk("g", {}, p);
+    const title = this.mk("title", {}, g);
     const span = shelfY - (lightY + 5);
+    // dims and brightens as the reading changes (applyLights)
+    const fade = "transition:opacity .8s ease";
+    let bg: SVGGElement | null = null;
     if (this.opts.showBeams !== false) {
-      const op = this.opts.beamOpacity == null ? 0.32 : this.opts.beamOpacity;
-      const bg = this.mk("g", { opacity: op }, g);
+      bg = this.mk("g", { style: fade }, g);
       for (let bx = x0 + 24; bx < x1 - 10; bx += 48) {
         const spread = span * 0.46;
         this.mk("path", { d: "M" + (bx - 5) + " " + (lightY + 5) + " L" + (bx - spread) + " " + shelfY + " L" + (bx + spread) + " " + shelfY + " L" + (bx + 5) + " " + (lightY + 5) + " Z", fill: "url(#fw-beam)" }, bg);
       }
     }
-    this.mk("rect", { x: x0, y: lightY, width: x1 - x0, height: 5, fill: P.light, rx: 2 }, g);
-    this.mk("rect", { x: x0, y: lightY, width: x1 - x0, height: 1.2, fill: "#A79CE4", rx: 1 }, g);
-    for (let lx = x0 + 10; lx < x1 - 6; lx += 23) this.mk("rect", { x: lx, y: lightY + 5, width: 9, height: 1.6, fill: P.lightWarm, opacity: 0.7, rx: 0.8 }, g);
+    const fixture = this.mk("g", { style: fade }, g);
+    this.mk("rect", { x: x0, y: lightY, width: x1 - x0, height: 5, fill: P.light, rx: 2 }, fixture);
+    this.mk("rect", { x: x0, y: lightY, width: x1 - x0, height: 1.2, fill: "#A79CE4", rx: 1 }, fixture);
+    for (let lx = x0 + 10; lx < x1 - 6; lx += 23) this.mk("rect", { x: lx, y: lightY + 5, width: 9, height: 1.6, fill: P.lightWarm, opacity: 0.7, rx: 0.8 }, fixture);
+    this.lightEls.set(lv.z, { levelId: lv.id, beams: bg, fixture, title });
   }
 
   // ---------- drawRobot: 4-wheel rover — 3/4 soil tray, 1/4 electronics box ----------
@@ -684,12 +738,15 @@ export class FarmRenderer {
 
     this.mk("rect", { x: FX, y: TOP, width: EX - FX, height: gnd - TOP, fill: P.backdrop }, svg);
 
+    this.lightEls.clear();
     this.levels.forEach((lv, li) => {
-      this.drawLights(svg, lv.lightY, lv.shelfY);
+      this.drawLights(svg, lv);
       this.drawWater(svg, lv);
       this.drawWaterSurface(svg, lv, li, (lv.shelfY * 0.7) % 30); // wave lines sit behind the shelf structure
       this.drawShelf(svg, lv);
     });
+
+    this.applyLights();
 
     this.slotLayer = this.mk("g", {}, svg);
     this.routeLayer = this.mk("g", { "pointer-events": "none" }, svg);

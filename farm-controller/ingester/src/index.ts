@@ -65,6 +65,10 @@ if (migrateShelf) {
   `);
 }
 
+// Shelf tables from before per-level lights have their one light_lux moved into
+// lights, at the shelf's level (a rebuilt one above is created with it)
+const migrateLights = !migrateShelf && shelfCols.length > 0 && !shelfCols.some((c) => c.name === "lights");
+
 // Alert tables from before `resolves` only need the column added
 const alertCols = db.prepare(`PRAGMA table_info(alerts)`).all() as { name: string }[];
 const addResolves = alertCols.length > 0 && !alertCols.some((c) => c.name === "resolves");
@@ -93,7 +97,8 @@ db.exec(`
     level INTEGER NOT NULL,
     temperature_c REAL,
     humidity_pct REAL,
-    light_lux REAL,
+    -- LightReading[] as JSON: each level's light
+    lights TEXT NOT NULL DEFAULT '[]',
     water_temp_c REAL,
     water_level_ok INTEGER,
     ph REAL,
@@ -153,6 +158,17 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_shelf_received_all ON shelf_sensors(received_at);
 `);
 
+if (migrateLights) {
+  db.transaction(() => {
+    db.exec(`
+      ALTER TABLE shelf_sensors ADD COLUMN lights TEXT NOT NULL DEFAULT '[]';
+      UPDATE shelf_sensors SET lights = json_array(json_object('level', level, 'lux', light_lux));
+      ALTER TABLE shelf_sensors DROP COLUMN light_lux;
+    `);
+  })();
+  console.log("Moved shelf_sensors light_lux into lights");
+}
+
 if (addResolves) {
   db.exec(`ALTER TABLE alerts ADD COLUMN resolves TEXT`);
 }
@@ -173,8 +189,8 @@ if (migrateRobot) {
 
 if (migrateShelf) {
   db.exec(`
-    INSERT INTO shelf_sensors (shelf_id, level, temperature_c, humidity_pct, light_lux, ph, timestamp, received_at)
-      SELECT shelf_id, level, temperature_c, humidity_pct, light_lux, ph, timestamp, received_at
+    INSERT INTO shelf_sensors (shelf_id, level, temperature_c, humidity_pct, lights, ph, timestamp, received_at)
+      SELECT shelf_id, level, temperature_c, humidity_pct, json_array(json_object('level', level, 'lux', light_lux)), ph, timestamp, received_at
       FROM shelf_sensors_old;
     DROP TABLE shelf_sensors_old;
   `);
@@ -188,7 +204,7 @@ const insertRobot = db.prepare(`
 `);
 
 const insertShelf = db.prepare(`
-  INSERT INTO shelf_sensors (shelf_id, level, temperature_c, humidity_pct, light_lux, water_temp_c, water_level_ok, ph, timestamp)
+  INSERT INTO shelf_sensors (shelf_id, level, temperature_c, humidity_pct, lights, water_temp_c, water_level_ok, ph, timestamp)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
@@ -292,7 +308,7 @@ async function main() {
       msg.level,
       msg.temperature_c ?? null,
       msg.humidity_pct ?? null,
-      msg.light_lux ?? null,
+      JSON.stringify(msg.lights),
       msg.water_temp_c ?? null,
       levelOk,
       msg.ph ?? null,

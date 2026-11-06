@@ -169,6 +169,13 @@ export interface ElevatorCommand {
   requested_by: string;
 }
 
+/** A light sensor's reading of one level's grow light */
+export interface LightReading {
+  level: number;
+  /** Null when the sensor failed to read */
+  lux: number | null;
+}
+
 /** Published by shelf sensor nodes to farm/shelf/{id}/sensors */
 export interface ShelfSensorData {
   shelf_id: string;
@@ -176,7 +183,8 @@ export interface ShelfSensorData {
   /** Each reading is null when its sensor failed to read */
   temperature_c: number | null;
   humidity_pct: number | null;
-  light_lux: number | null;
+  /** Each level's grow light, one per light sensor on the node */
+  lights: LightReading[];
   /** Hydroponic reservoir water temperature */
   water_temp_c: number | null;
   /** False when the reservoir is below the level sensor */

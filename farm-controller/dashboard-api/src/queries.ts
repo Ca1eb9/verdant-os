@@ -6,7 +6,7 @@
 // clock sync).
 // ============================================================
 
-import type { AlertSeverity, FarmAlert, RobotCommand, RobotTelemetry, ShelfSensorData } from "@farm/shared";
+import type { AlertSeverity, FarmAlert, LightReading, RobotCommand, RobotTelemetry, ShelfSensorData } from "@farm/shared";
 import { LIMITS } from "./config.js";
 
 /** The part of a SQLite connection the queries use (better-sqlite3, or node:sqlite in tests) */
@@ -105,23 +105,54 @@ function history(db: Db, table: string, idColumn: string, q: HistoryQuery): Row[
  * One row per shelf per `bucketMs` of received_at, in [from, to], oldest first
  * (the newest `limit` buckets if there are more): each reading's mean over the
  * bucket, null when it never read there. water_level_ok is false if any
- * reading in the bucket was low. received_at is the bucket's first reading;
- * shelves sharing one sort by shelf_id.
+ * reading in the bucket was low, and lights holds each level's mean.
+ * received_at is the bucket's first reading; shelves sharing one sort by
+ * shelf_id.
  */
 function shelfBuckets(db: Db, q: HistoryQuery, bucketMs: number): Row[] {
   const { where, params } = historyWhere("shelf_id", q);
   const rows = db
     .prepare(
       `SELECT shelf_id, MIN(level) AS level, AVG(temperature_c) AS temperature_c,
-         AVG(humidity_pct) AS humidity_pct, AVG(light_lux) AS light_lux,
+         AVG(humidity_pct) AS humidity_pct,
          AVG(water_temp_c) AS water_temp_c, MIN(water_level_ok) AS water_level_ok, AVG(ph) AS ph,
-         MAX(timestamp) AS timestamp, MIN(received_at) AS received_at
+         MAX(timestamp) AS timestamp, MIN(received_at) AS received_at,
+         received_at / CAST(? AS INTEGER) AS bucket
        FROM shelf_sensors WHERE ${where}
-       GROUP BY shelf_id, received_at / CAST(? AS INTEGER)
+       GROUP BY shelf_id, bucket
        ORDER BY received_at DESC, shelf_id DESC LIMIT ?`,
     )
-    .all(...params, bucketMs, q.limit) as Row[];
-  return rows.reverse();
+    .all(bucketMs, ...params, q.limit) as Row[];
+  if (rows.length === 0) return rows;
+  // Each level's mean per bucket, for the buckets above only
+  const lights = db
+    .prepare(
+      `SELECT shelf_id, received_at / CAST(? AS INTEGER) AS bucket,
+         json_extract(l.value, '$.level') AS light_level, AVG(json_extract(l.value, '$.lux')) AS lux
+       FROM shelf_sensors, json_each(shelf_sensors.lights) AS l
+       WHERE ${where} AND received_at >= ?
+       GROUP BY shelf_id, bucket, light_level ORDER BY light_level`,
+    )
+    .all(bucketMs, ...params, rows.at(-1)!.received_at as number) as Row[];
+  const byBucket = new Map<string, LightReading[]>();
+  for (const l of lights) {
+    const key = `${l.shelf_id}|${l.bucket}`;
+    const list = byBucket.get(key) ?? [];
+    list.push({ level: l.light_level as number, lux: (l.lux as number | null) ?? null });
+    byBucket.set(key, list);
+  }
+  return rows.reverse().map((r) => ({ ...r, lights: byBucket.get(`${r.shelf_id}|${r.bucket}`) ?? [] }));
+}
+
+/** A stored row's lights: JSON from the ingester, an empty list if unreadable */
+function lightsOf(raw: unknown): LightReading[] {
+  if (Array.isArray(raw)) return raw as LightReading[];
+  try {
+    const parsed: unknown = JSON.parse(String(raw));
+    return Array.isArray(parsed) ? (parsed as LightReading[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 export function telemetryHistory(db: Db, q: HistoryQuery): RobotTelemetryRecord[] {
@@ -136,7 +167,7 @@ export function shelfHistory(db: Db, q: HistoryQuery, bucketMs?: number): ShelfR
     level: r.level as number,
     temperature_c: (r.temperature_c as number | null) ?? null,
     humidity_pct: (r.humidity_pct as number | null) ?? null,
-    light_lux: (r.light_lux as number | null) ?? null,
+    lights: lightsOf(r.lights),
     water_temp_c: (r.water_temp_c as number | null) ?? null,
     // Stored as 0/1: SQLite has no boolean
     water_level_ok: r.water_level_ok == null ? null : r.water_level_ok === 1,

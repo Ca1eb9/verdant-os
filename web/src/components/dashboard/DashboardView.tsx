@@ -10,12 +10,22 @@ import { NoFarmNotice } from "@/components/farms/NoFarmNotice";
 import { alertKey, currentSeverityByReading, useFarmAlerts } from "@/hooks/useFarmAlerts";
 import { useFarmTelemetry } from "@/hooks/useFarmTelemetry";
 import { usePreferences } from "@/components/preferences/PreferencesProvider";
-import { formatMetric } from "@/lib/format";
-import type { AlertSeverity } from "@/lib/farm/types";
+import { formatMetric, levelName } from "@/lib/format";
+import type { AlertSeverity, LightReading } from "@/lib/farm/types";
 import styles from "@/components/dashboard/DashboardView.module.css";
 
 function formatOptionalMetric(value: number | null, unit: string, precision = 1) {
   return value === null ? "No reading" : formatMetric(value, unit, precision);
+}
+
+/** The Light card's values, one per level the shelf node reports */
+function lightTiles(lights: LightReading[] | null) {
+  const [first, ...rest] = [...(lights ?? [])].sort((a, b) => a.level - b.level);
+  return {
+    heroLabel: first ? levelName(first.level) : "Light",
+    heroValue: formatOptionalMetric(first?.lux ?? null, "lux", 0),
+    metrics: rest.map((light) => ({ label: levelName(light.level), value: formatOptionalMetric(light.lux, "lux", 0) })),
+  };
 }
 
 /**
@@ -51,7 +61,7 @@ export function DashboardView() {
   const humidity = reading?.humidity ?? null;
   const waterTemperature = reading?.waterTemperature ?? null;
   const waterPh = reading?.ph ?? null;
-  const lightLux = reading?.lightLux ?? null;
+  const lights = reading?.lights ?? null;
   const waterLevelOk = reading?.waterLevelOk ?? null;
 
   const sensorCards = useMemo(
@@ -95,9 +105,8 @@ export function DashboardView() {
         title: "Light",
         icon: "light" as const,
         accent: "lime" as const,
-        heroLabel: "Light",
-        heroValue: formatOptionalMetric(lightLux, "lux", 0),
-        metrics: [],
+        // the lowest level big, the others below it
+        ...lightTiles(lights),
       },
     ],
     [
@@ -106,7 +115,7 @@ export function DashboardView() {
       device,
       fmt,
       humidity,
-      lightLux,
+      lights,
       waterLevelOk,
       waterPh,
       waterTemperature,

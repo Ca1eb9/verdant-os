@@ -6,6 +6,7 @@ import type {
   AlertSeverity,
   FarmAlert,
   FarmTopology,
+  LightReading,
   RemoteCommand,
   RobotStateUpdate,
   RobotStatus,
@@ -79,11 +80,18 @@ export function isThresholdLimits(v: unknown): v is ThresholdLimits {
     v.critical_min <= v.warning_min && v.warning_min < v.warning_max && v.warning_max <= v.critical_max;
 }
 
+/** Each level's light reading, at most one per level */
+export function isLights(v: unknown): v is LightReading[] {
+  return Array.isArray(v) &&
+    v.every((l) => isRecord(l) && Number.isInteger(l.level) && isNumOrNull(l.lux)) &&
+    new Set(v.map((l) => l.level)).size === v.length;
+}
+
 /** A shelf's readings without its level, which Supabase's sensor_events doesn't keep */
 export function isShelfValues(v: unknown): v is Omit<ShelfSensorData, "level"> {
   return isRecord(v) && typeof v.shelf_id === "string" && v.shelf_id.length > 0 &&
     isNumOrNull(v.temperature_c) && isNumOrNull(v.humidity_pct) &&
-    isNumOrNull(v.light_lux) && isNumOrNull(v.water_temp_c) &&
+    isLights(v.lights) && isNumOrNull(v.water_temp_c) &&
     (v.water_level_ok === null || typeof v.water_level_ok === "boolean") && isNumOrNull(v.ph) &&
     isNum(v.timestamp);
 }

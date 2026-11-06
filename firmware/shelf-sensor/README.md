@@ -24,9 +24,9 @@ set in `src/config.h`; change both together.
 
 ```
 # shelf-sensor boot
-{"seq":0,"temperature_c":22.0,"humidity_pct":48,"light_lux":412,"water_temp_c":20.81,"water_level_ok":true,"ph_mv":2012}
+{"seq":0,"temperature_c":22.0,"humidity_pct":48,"light_lux":[412,385],"water_temp_c":20.81,"water_level_ok":true,"ph_mv":2012}
 # ds18b20 failed
-{"seq":1,"temperature_c":22.0,"humidity_pct":48,"light_lux":410,"water_temp_c":null,"water_level_ok":true,"ph_mv":2015}
+{"seq":1,"temperature_c":22.0,"humidity_pct":48,"light_lux":[410,387],"water_temp_c":null,"water_level_ok":true,"ph_mv":2015}
 ```
 
 - Lines starting with `#` are logs. A sensor's failure and recovery are each
@@ -34,16 +34,24 @@ set in `src/config.h`; change both together.
   lines while that sensor is missing; the bridge treats every line that isn't
   a JSON object as a log.
 - A sensor that fails to read prints `null`; the rest still report.
+- `light_lux` has one value per BH1750: the bottom level's (address 0x23),
+  then the top level's (0x5C, its ADDR pin on 3.3V); their logs are `bh1750`
+  and `bh1750 top`. Which level each faces is the Pi's setting
+  (`light_levels` in `shelf-bridge-config.json`), so the node never names
+  one. A light sensor recovering from a failure reads `null` for one more
+  report, rather than the 0 lux it holds before its first measurement.
 - `ph_mv` is the pH board's output in millivolts. The bridge converts it with
   per-shelf calibration, so recalibrating never needs a reflash.
 - `seq` restarts at 0 when the board reboots (the Pi opening the port also
   resets an Uno).
 - `# lights 10` is logged when the level lights change (see Input).
 - A hardware watchdog resets the board if the loop hangs for 8 s, and I2C
-  calls time out instead of hanging on a stuck bus. The watchdog needs the
-  Optiboot bootloader that genuine Uno R3s ship with; some clones have an
-  older one that reset-loops after a watchdog reset (fix: burn the Uno
-  bootloader from the Arduino IDE).
+  calls time out instead of hanging on a stuck bus. A sensor left holding the
+  bus is clocked free at the next report (`# i2c bus was stuck, cleared`);
+  `# i2c bus stuck, can't clear it` means one has locked up and the board
+  needs its power cycled. The watchdog needs the Optiboot bootloader that
+  genuine Uno R3s ship with; some clones have an older one that reset-loops
+  after a watchdog reset (fix: burn the Uno bootloader from the Arduino IDE).
 
 ## Input
 
@@ -55,7 +63,7 @@ lights 10
 ```
 
 One `1` (light on) or `0` (light off) per channel, from channel 0. A channel
-missing from the end of the line stays on. Anything else is logged as
+missing from the end of the line is turned on. Anything else is logged as
 `# bad input: ...` and changes nothing.
 
 - **Lights start on.** At boot, and whenever the board resets, the relays are

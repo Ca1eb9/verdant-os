@@ -131,7 +131,8 @@ plug back in, and check it before adding the next:
 |---|---|
 | The two Uno power wires to the rails | Nothing changes |
 | DHT11 | `temperature_c` and `humidity_pct` have values. Breathe on it: humidity rises |
-| BH1750 | `light_lux` has a value. Cover it: it falls near 0 |
+| BH1750 | `light_lux`'s first value is a number. Cover it: it falls near 0 |
+| Top level BH1750 ([below](#top-level-light-sensor)) | `light_lux`'s second value is a number. Cover it: it falls near 0, and the first doesn't change |
 | DS18B20 + 4.7 kΩ | `water_temp_c` has a value. Hold the probe: it rises |
 | Level sensor + 100 kΩ | `water_level_ok` is `false`. Hold the white disc flat against a plastic bottle of water: on the next line it's `true` |
 | pH board | With the probe unplugged, touch the BNC socket's centre pin to its outer shell with a paperclip: `ph_mv` settles at about 2000, what the board outputs at pH 7 |
@@ -142,6 +143,48 @@ that goes `null` logs `# <name> failed` once, and `# <name> ok` when it
 recovers, so you can wiggle wires while watching the monitor.
 
 Then calibrate pH: [shelf-sensors.md](../shelf-sensors.md#ph-calibration).
+
+## Top level light sensor
+
+A second BH1750 (GY-302 board) watches the top level's grow light. It shares
+the first one's I2C bus: same SCL and SDA rows, its own address. On the
+breadboard and the perfboard it joins the rows already there; it isn't on
+their drawings.
+
+| Top BH1750 pin | Goes to | |
+|---|---|---|
+| VCC | + rail (5V) | Its board makes its own 3.3V, like the first |
+| GND | − rail | |
+| SCL | Row 9, a free hole (b–d) | Shared with the first BH1750's SCL, which goes on to Uno **A5** |
+| SDA | Row 10, a free hole (b–d) | Shared with the first BH1750's SDA, which goes on to Uno **A4** |
+| ADDR | Uno **3.3V** pin, its own wire | Sets address 0x5C. **Never row 11 and never 5V** (below) |
+
+- **ADDR is never shared.** It isn't a signal to the Uno: it picks the address.
+  Row 11 holds the first sensor's ADDR, unconnected for 0x23. Joined to it, or
+  with its wire broken in the cable, both sensors answer at 0x23 and their
+  replies merge: the bottom reading (`light_lux`'s first value) is believable
+  but **wrong** with no error, and only the top one goes `null`. So a `null`
+  top reading means check the ADDR wire, and don't trust the bottom one until
+  the top one reads.
+- **3.3V, not 5V, on ADDR.** It goes straight to the BH1750 chip, which runs on
+  3.3V and is rated to 4.5V at most.
+- **On the perfboard,** each row's a–e strip is separate from its f–j strip:
+  solder the cable into b–d of rows 9 and 10, not f–j.
+- **The cable** carries all five wires (VCC, GND, SCL, SDA, ADDR), up to about
+  800 mm. Keep it away from the lights' drivers and mains wiring, and twist
+  SCL and SDA each with a GND wire if the cable allows.
+- **Only plug or unplug it with the Uno off.** It's on the first sensor's bus,
+  so a glitch while plugging it, or on the cable, can leave a sensor holding
+  the bus. The node clears that itself at its next report (it logs
+  `# i2c bus was stuck, cleared`) and the light readings come back a report
+  later. Only a sensor that has locked up completely needs the Uno
+  power-cycled (unplug its USB for a few seconds); the node then logs
+  `# i2c bus stuck, can't clear it`.
+
+**Check:** with the cable at its full length and the grow lights on, leave
+`pio device monitor` running for an hour. No `# bh1750 failed` or
+`# bh1750 top failed` lines should appear. Covering one sensor lowers only its
+own reading.
 
 ## Level light relays
 
@@ -175,6 +218,7 @@ lights:
 | Relay 2 (level 1) | SIG | Uno **D6** |
 | Both | + | 5V (the + rail) |
 | Both | − | GND (the − rail) |
+| Each | + and − | A 100 µF capacitor across them (below) |
 | Each | COM and NO screw terminals | That level light's two 0–10 V dim wires (usually purple and grey/pink) |
 
 The JST cable's colours are black (−), red (+) and white (SIG). Which relay
@@ -195,9 +239,19 @@ numbers there instead of the wires.
   unreliable at currents that small over time. If a light only partly dims
   when its relay is on, clean or replace the relay, or switch to a signal
   relay.
-- A relay's coil draws current from the Uno's 5V only while it's on (its
-  light off). Two are fine on the Pi's USB port; if the Uno resets as a relay
-  clicks, power the Pi from its official supply.
+- A relay's coil draws about 50 mA from the Uno's 5V only while it's on (its
+  light off), and the board has its own flyback diode. Two are fine on the
+  Pi's USB port; if the Uno resets as a relay clicks, power the Pi from its
+  official supply.
+- **A 100 µF capacitor at each relay**, across its + and −, electrolytic or
+  ceramic, rated 10 V or more (16 V better). It holds the 5V up on the relay's
+  long cable while the coil switches, so a click doesn't dip the Uno's supply.
+  An electrolytic has a polarity: its stripe (−) goes to GND; reversed, it can
+  burst. A ceramic has none, and anything from 10 µF up does the job at
+  50 mA: at 5 V a ceramic holds well under its printed value. Don't go bigger
+  (e.g. 470 µF): the Uno's 5V comes from the Pi's USB port, and plugging the
+  Uno in charges every capacitor on that line at once, which can dip the Pi's
+  other USB devices.
 
 **Check:** flash the node, stop the bridge (`sudo systemctl stop
 farm-shelf-bridge` on the Pi), open `pio device monitor` and type

@@ -17,6 +17,14 @@ function mean(readings: ShelfReading[], read: (r: ShelfReading) => number | null
   return values.length ? values.reduce((sum, v) => sum + v, 0) / values.length : null;
 }
 
+/** Each level's mean light over the readings */
+function lightMeans(readings: ShelfReading[]): Record<number, number | null> {
+  const levels = new Set(readings.flatMap((r) => r.data.lights.map((l) => l.level)));
+  return Object.fromEntries(
+    [...levels].map((level) => [level, mean(readings, (r) => r.data.lights.find((l) => l.level === level)?.lux ?? null)]),
+  );
+}
+
 /**
  * Averages the readings in each time bucket of the window. Buckets are sized to
  * the readings there are, not to the whole window, so a few minutes since the
@@ -41,7 +49,7 @@ function toPoints(readings: ShelfReading[], timeWindow: TimeWindow, now: number)
     timestamp: new Date(start).toISOString(),
     air: { temperature: mean(inBucket, (r) => r.data.temperature_c), humidity: mean(inBucket, (r) => r.data.humidity_pct) },
     water: { temperature: mean(inBucket, (r) => r.data.water_temp_c), ph: mean(inBucket, (r) => r.data.ph) },
-    light: { lux: mean(inBucket, (r) => r.data.light_lux) },
+    light: lightMeans(inBucket),
   }));
 }
 

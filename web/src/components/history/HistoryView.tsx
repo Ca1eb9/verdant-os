@@ -12,6 +12,7 @@ import {
   MOCK_DATA_ENABLED,
   buildHistoricalSeries,
 } from "@/lib/mock-data";
+import { levelName } from "@/lib/format";
 import { TIME_WINDOWS } from "@/lib/time-windows";
 import styles from "@/components/history/HistoryView.module.css";
 
@@ -49,6 +50,12 @@ export function HistoryView() {
       water: { ...point.water, temperature: toUnit(point.water.temperature) },
     }));
   }, [activeFarmId, fmt, livePoints, prefs.temperatureUnit, timeWindow]);
+
+  // Every level the readings in the window have a light for, lowest first
+  const lightLevels = useMemo(
+    () => [...new Set(data.flatMap((point) => Object.keys(point.light).map(Number)))].sort((a, b) => a - b),
+    [data],
+  );
 
   // The alert engine's limits, in the chart's unit (temperature limits are °C)
   const thresholds = useAlertThresholds();
@@ -110,14 +117,15 @@ export function HistoryView() {
       minSpan: 0.5,
       showAverage: true,
     },
-    // no average: the grow lights switch on and off, so a mean of the two says nothing
-    {
-      key: "light.lux",
-      title: "Light",
+    // one per level with light readings; no average: the grow lights switch
+    // on and off, so a mean of the two says nothing
+    ...lightLevels.map((level) => ({
+      key: `light.${level}`,
+      title: `${levelName(level)} light`,
       color: color.amber,
       unit: "lux",
       precision: 0,
-    },
+    })),
   ];
 
   if (!farm) return <NoFarmNotice title="Historical analytics" />;

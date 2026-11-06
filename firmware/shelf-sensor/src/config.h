@@ -13,7 +13,7 @@
 constexpr uint32_t SERIAL_BAUD = 115200;
 
 // ---- Pins (Uno R3) ----------------------------------------------------------------
-// BH1750 uses the hardware I2C pins: SDA = A4, SCL = A5.
+// Both BH1750s use the hardware I2C pins: SDA = A4, SCL = A5.
 
 constexpr uint8_t PIN_DHT = 2;          // DHT11 module "S" pin
 constexpr uint8_t PIN_WATER_TEMP = 3;   // DS18B20 data, 4.7k pull-up to 5V
@@ -25,6 +25,11 @@ constexpr uint8_t PIN_PH = A0;          // pH board output (blue wire)
 // channel lights is the Pi's config (shelf-bridge lights.levels).
 constexpr uint8_t PIN_LIGHT_RELAY[] = {5, 6};
 constexpr uint8_t LIGHT_CHANNELS = sizeof(PIN_LIGHT_RELAY) / sizeof(PIN_LIGHT_RELAY[0]);
+
+// BH1750 I2C addresses, set by each board's ADDR pin: unconnected is 0x23 (the
+// bottom level's sensor), tied to 3.3V is 0x5C (the top level's)
+constexpr uint8_t LIGHT_ADDR = 0x23;
+constexpr uint8_t LIGHT_TOP_ADDR = 0x5C;
 
 // XKC-Y25-V drives its output HIGH when it senses water through the wall
 constexpr uint8_t WATER_LEVEL_OK_STATE = HIGH;
@@ -38,6 +43,16 @@ constexpr uint8_t LIGHT_OFF_RELAY_STATE = HIGH;
 
 constexpr uint32_t REPORT_INTERVAL_MS = 5000;   // one JSON line this often (DHT11 needs >= 1 s)
 constexpr uint32_t I2C_TIMEOUT_US = 25000;      // a stuck bus aborts instead of hanging
+// Clearing a bus a sensor holds: up to one byte and its ACK of clock pulses, at
+// about 100 kHz (the I2C bus clear, NXP UM10204 3.1.16)
+constexpr uint8_t I2C_CLEAR_PULSES = 9;
+constexpr uint8_t I2C_CLEAR_HALF_PERIOD_US = 5;
+// A line counts as held low only on this many reads in a row this far apart: a
+// noise spike on the long cable isn't a stuck bus
+constexpr uint8_t I2C_STUCK_SAMPLES = 5;
+constexpr uint8_t I2C_STUCK_SAMPLE_GAP_US = 10;
+// A released line rising slowly through the cable isn't one a sensor holds
+constexpr uint16_t I2C_RISE_TIMEOUT_US = 100;
 // No "lights" line from the Pi this long: every light back on, as if the Uno
 // had no power. The bridge resends the state with every reading (5 s).
 constexpr uint32_t LIGHTS_TIMEOUT_MS = 30000;

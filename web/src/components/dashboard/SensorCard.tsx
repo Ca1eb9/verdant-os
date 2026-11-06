@@ -29,7 +29,8 @@ function ToneDot({ tone }: { tone: MetricTone }) {
 interface SensorCardMetric {
   label: string;
   value: string;
-  tone: MetricTone;
+  /** Omitted for readings with no alert range (light) */
+  tone?: MetricTone;
 }
 
 interface SensorCardProps {
@@ -86,7 +87,7 @@ export function SensorCard({
           <div key={metric.label} className={styles.metricTile}>
             <div className={styles.metricLabelRow}>
               <span className={styles.metricLabel}>{metric.label}</span>
-              <ToneDot tone={metric.tone} />
+              {metric.tone ? <ToneDot tone={metric.tone} /> : null}
             </div>
             <strong className={styles.metricValue} suppressHydrationWarning>
               <MetricValue value={metric.value} />
