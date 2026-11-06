@@ -141,6 +141,12 @@ wire([(SW5 + 38, UY + 55), (SW5 + 50, UY + 55)], C["5v"], 3)
 flag(SW5 + 50, UY + 55, "to ESP32 5V", C["5v"])
 wire([(UX + 190, UY + 82), (790, UY + 82)], C["gnd"], 3)
 ground(790, UY + 82)
+# Optional: a ceramic capacitor across the converter's 5 V output
+CAP5 = 778
+dot(CAP5, UY + 55, C["5v"])
+dot(CAP5, UY + 82, C["gnd"])
+v_capacitor(CAP5, UY + 55, UY + 82, "")
+text(CAP5, UY + 112, "10 µF ceramic across 5V and GND (optional)", 10, fill="#555")
 
 # ---- motor driver and motor
 MX, MY = 580, 360

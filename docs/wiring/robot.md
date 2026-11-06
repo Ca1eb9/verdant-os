@@ -28,6 +28,8 @@ The pins come from `firmware/esp32/src/config.h`; the firmware is in
 | 100 kΩ + 22 kΩ + 10 kΩ resistors | Charge contact divider, and a pull-down on pad + | **Docking only** |
 | 2× 0.1 µF ceramic capacitors | Steady the divider readings | **Optional** |
 | 0.1 µF ceramic capacitor | Across the motor's two terminals: soaks up its electrical noise | **Optional** |
+| 10 µF ceramic capacitor, 10 V or more | Across the buck converter's 5 V output | **Optional** |
+| 100 µF electrolytic capacitor, 6.3 V or more, and a 0.1 µF ceramic | Across the 3V3 rails: steady the sensors' supply | **Optional** |
 | STEMMA QT cable | Rear VL53L4CX → AHT20 | **Optional**, with the AHT20 |
 | Jumper wires; 20–22 AWG wire for the 12 V side | | |
 
@@ -101,6 +103,16 @@ continues on the ESP32, and every ground symbol is the same shared ground.
   heat in the driver, warming it a few degrees more than without it; well
   within what it handles. Twisting the two motor wires together and keeping
   them away from the I2C cables helps too.
+- **Capacitors on the supplies (optional).** If the ESP32 resets or a sensor
+  stops as the motor starts, steady the supplies: a 10 µF ceramic across the
+  converter's 5 V and GND, and on the breadboard a 100 µF electrolytic plus a
+  0.1 µF ceramic across the 3V3 rails. They go across + and −, never in line
+  with a wire. The electrolytic has a polarity: its striped leg on the − rail.
+  These sizes are normal for these supplies: the converter and the DevKit's
+  3.3 V regulator charge them in well under a millisecond at power-on, and
+  they draw nothing after. Keep the 3V3 one at about 100 µF; much more makes
+  the regulator's start-up harder. Use 10 V or higher for the 10 µF ceramic:
+  a ceramic loses much of its capacitance near its rated voltage.
 - **Shared ground.** Battery −, pad −, the converter, the driver, the ESP32
   and both dividers all join. Signals only mean something relative to a
   shared ground.
@@ -213,6 +225,7 @@ drawn from row 28 to row 39. On a board with unbroken lines they're harmless.
 | Row 20, hole a → bottom + rail | 3V3: the bottom + rail is 3.3 V |
 | Row 41, hole a → bottom − rail; row 20, hole j → top − rail | GND on both − rails |
 | Row 28 → row 39 on the bottom + rail, and again on the − rail | Bridges a split rail (see above) |
+| Rows 16, 17, bottom rails (optional) | 100 µF electrolytic in row 16, striped leg on the − rail; 0.1 µF ceramic in row 17; each from the + rail to the − rail |
 | Rows 4–12, bottom half | Battery divider: BATT+ in at row 4 hole e; 100 kΩ rows 4–8 (hole b); 22 kΩ rows 8–12 (hole d); 0.1 µF rows 8–12 (hole c, optional); row 8 hole a → row 23 hole a (GPIO 4); row 12 hole a → − rail |
 | Rows 4–12, top half | Charge contact divider (docking only): pad + in at row 4 hole f; 100 kΩ rows 4–8 (hole i); 22 kΩ rows 8–12 (hole g); 0.1 µF rows 8–12 (hole h, optional); 10 kΩ from row 4 hole j, bent across to the top − rail; row 8 hole j → row 23 hole j (GPIO 1); row 12 hole j → top − rail |
 | DRV8871 | IN1 ← row 24 hole a (GPIO 5), IN2 ← row 25 (GPIO 6), GND ← − rail |
@@ -300,6 +313,7 @@ board's edge so the cable still plugs in. The dividers stand on end in rows
 | Row 9 hole a → + rail; row 30 hole a → − rail; row 9 hole j → top − rail | 3V3 and GND, as on the breadboard |
 | Rows 1–3, bottom half | Battery divider: BATT+ wire into row 1 hole e; 100 kΩ rows 1–2 (hole c); 22 kΩ and 0.1 µF (optional) rows 2–3 (holes d, e); row 2 hole a → row 12 hole a (GPIO 4); row 3 hole a → − rail |
 | Rows 1–3, top half | Charge contact divider (docking only): pad + wire into row 1 hole f; 100 kΩ rows 1–2 (hole h); 22 kΩ and 0.1 µF (optional) rows 2–3 (holes g, f); 10 kΩ on end in row 1 hole j, its bent lead in the top − rail; row 2 hole j → row 12 hole j (GPIO 1); row 3 hole j → top − rail |
+| Rows 10, 11, bottom rails (optional) | 100 µF electrolytic in row 10, striped leg on the − rail; 0.1 µF ceramic in row 11; each from the + rail to the − rail |
 | Male header pins, hole a | Row 13 (GPIO 5), 14 (GPIO 6), 18 (GPIO 17), 19 (GPIO 18), 20 (GPIO 8), 23 (GPIO 9), 24 (GPIO 10), 25 (GPIO 11), 26 (GPIO 12), 27 (GPIO 13) |
 | Male header pins on the rails | + rail rows 4–6 (3V3 for the three modules), − rail rows 4–7 (their GND and the DRV8871's) |
 | Wires in | The converter's 5 V, through the 5 V switch, into row 29 hole a (the DevKit's 5V); the shared ground onto the − rail |

@@ -137,6 +137,27 @@ text(rx(5), LABEL_Y + 14, "front VIN, PN532 VCC", 11, weight="bold", fill=C["3v3
 text(rx(5), LABEL_Y + 34, "GND pins: rear, front,", 11, weight="bold", fill=C["gnd"])
 text(rx(5), LABEL_Y + 48, "PN532, DRV8871 GND", 11, weight="bold", fill=C["gnd"])
 
+# Optional: across the 3V3 rails, a 100 uF electrolytic (stripe, its - leg,
+# on the - rail) and a 0.1 uF ceramic
+def rail_capacitor(r, electrolytic):
+    x, y1, y2 = rx(r), RAIL["+"], RAIL["-"]
+    mid = (y1 + y2) / 2
+    add(f'<line x1="{x}" y1="{y1}" x2="{x}" y2="{y2}" stroke="#888" stroke-width="2"/>')
+    if electrolytic:
+        add(f'<rect x="{x - 7}" y="{mid - 8}" width="14" height="16" rx="3" fill="#2f4f8f" stroke="#1b2f57"/>')
+        add(f'<rect x="{x - 7}" y="{mid + 3}" width="14" height="5" fill="#c9d3e6"/>')  # stripe: - leg
+    else:
+        add(f'<rect x="{x - 6}" y="{mid - 6}" width="12" height="12" rx="5" fill="#e8a33c" stroke="#9a6416"/>')
+    for py in (y1, y2):
+        add(f'<circle cx="{x}" cy="{py}" r="3" fill="#888"/>')
+
+
+rail_capacitor(10, True)
+rail_capacitor(11, False)
+text(BX - 12, RAIL["+"] + 2, "3V3 rails (optional):", 10, "end", fill="#444")
+text(BX - 12, RAIL["+"] + 16, "100 µF electrolytic, row 10", 10, "end", fill="#444")
+text(BX - 12, RAIL["+"] + 30, "0.1 µF ceramic, row 11", 10, "end", fill="#444")
+
 # 5 V from the converter into the DevKit's 5V row; shared ground onto the − rail
 x5, y5 = hole(j1("5V"), "a")
 wire([(x5, y5), (x5, LABEL_Y - 15)], C["5v"], 3)

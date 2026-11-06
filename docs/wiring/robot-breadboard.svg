@@ -1091,6 +1091,18 @@
 <text x="906" y="227" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="bold" fill="#fff" transform="rotate(90 906 227)">GND</text>
 <rect x="916" y="214" width="8" height="8" fill="#d9b44a"/>
 <text x="923" y="227" font-family="Helvetica, Arial, sans-serif" font-size="9" text-anchor="start" font-weight="bold" fill="#fff" transform="rotate(90 923 227)">GND</text>
+<line x1="495" y1="410" x2="495" y2="430" stroke="#888" stroke-width="2"/>
+<rect x="488" y="412.0" width="14" height="16" rx="3" fill="#2f4f8f" stroke="#1b2f57"/>
+<rect x="488" y="423.0" width="14" height="5" fill="#c9d3e6"/>
+<circle cx="495" cy="410" r="3" fill="#888"/>
+<circle cx="495" cy="430" r="3" fill="#888"/>
+<line x1="512" y1="410" x2="512" y2="430" stroke="#888" stroke-width="2"/>
+<rect x="506" y="414.0" width="12" height="12" rx="5" fill="#e8a33c" stroke="#9a6416"/>
+<circle cx="512" cy="410" r="3" fill="#888"/>
+<circle cx="512" cy="430" r="3" fill="#888"/>
+<text x="198" y="412" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#444">3V3 rails (optional): 100 µF electrolytic,</text>
+<text x="198" y="426" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#444">6.3 V or more, stripe on − rail: row 16;</text>
+<text x="198" y="440" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="end" font-weight="normal" fill="#444">0.1 µF ceramic: row 17</text>
 <path d="M 563,380 Q 563.0,395.0 563,410" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
 <path d="M 563,380 Q 563.0,395.0 563,410" fill="none" stroke="#d62728" stroke-width="3" stroke-linecap="round"/>
 <circle cx="563" cy="380" r="3" fill="#d62728" stroke="#fff" stroke-width="1"/>

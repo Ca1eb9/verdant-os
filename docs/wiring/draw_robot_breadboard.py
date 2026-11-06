@@ -158,6 +158,27 @@ for i, name in enumerate(J3):
     add(f'<rect x="{rx(r) - 4}" y="{HOLE["i"] - 4}" width="8" height="8" fill="#d9b44a"/>')
     text(rx(r) + 3, HOLE["i"] + 9, name, 9, "start", "bold", "#fff", rot=90)
 
+# Optional: across the 3V3 rails near the sensors, a 100 uF electrolytic
+# (stripe, its - leg, on the - rail) and a 0.1 uF ceramic
+def rail_capacitor(r, electrolytic):
+    x, y1, y2 = rx(r), RAIL["+"], RAIL["-"]
+    mid = (y1 + y2) / 2
+    add(f'<line x1="{x}" y1="{y1}" x2="{x}" y2="{y2}" stroke="#888" stroke-width="2"/>')
+    if electrolytic:
+        add(f'<rect x="{x - 7}" y="{mid - 8}" width="14" height="16" rx="3" fill="#2f4f8f" stroke="#1b2f57"/>')
+        add(f'<rect x="{x - 7}" y="{mid + 3}" width="14" height="5" fill="#c9d3e6"/>')  # stripe: - leg
+    else:
+        add(f'<rect x="{x - 6}" y="{mid - 6}" width="12" height="12" rx="5" fill="#e8a33c" stroke="#9a6416"/>')
+    for py in (y1, y2):
+        add(f'<circle cx="{x}" cy="{py}" r="3" fill="#888"/>')
+
+
+rail_capacitor(16, True)
+rail_capacitor(17, False)
+for i, line in enumerate(["3V3 rails (optional): 100 µF electrolytic,", "6.3 V or more, stripe on − rail: row 16;",
+                          "0.1 µF ceramic: row 17"]):
+    text(BX - 12, RAIL["+"] + 2 + i * 14, line, 10, "end", fill="#444")
+
 # ---- power rails from the ESP32, divider links
 jumper(hole(j1("3V3"), "a"), rail(j1("3V3"), "+"), C["3v3"], 0)
 jumper(hole(j1("GND"), "a"), rail(j1("GND"), "-"), C["gnd"], 0)
