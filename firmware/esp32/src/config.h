@@ -121,6 +121,12 @@ constexpr uint32_t I2C_FRONT_HZ = 100000;
 constexpr uint32_t I2C_REAR_HZ = 400000;
 constexpr uint32_t TOF_TIMEOUT_MS = 500;        // no data this long = sensor fault
 constexpr uint32_t TOF_REINIT_MS = 5000;
+// A sensor that resets on its own (a dip in its supply) forgets its setup and
+// stops measuring, but still answers, with empty results that read as a
+// clear path. A real measurement always advances its stream count, so a
+// count repeated this many times in a row is a fault: restart it. 2 rather
+// than 1 rides out one odd repeat; it's still under 0.1 s at 33 ms a result.
+constexpr uint8_t TOF_STUCK_REPEATS = 2;
 // If the ToF sensor stops responding, hold the obstacle flag (motors stay
 // stopped). Safer for the real robot; set false to bench-test without one:
 // then a dead sensor's flag clears. Either way it's retried every
@@ -147,6 +153,11 @@ constexpr uint32_t BATTERY_PERIOD_MS = 500;
 // protections and charge logic pause until a real reading is back; telemetry
 // keeps the last good one.
 constexpr float BATTERY_UNPLUGGED_V = 6.0f;
+// Telemetry's battery_pct is a whole number that moves only once the smoothed
+// reading is this far past half-way to the next one (0.5: a full point from
+// the reported value), so the Pi doesn't see it flip 95, 96, 95. The robot's
+// own battery thresholds use the smoothed reading.
+constexpr float BATTERY_PCT_HYSTERESIS = 0.5f;
 
 // ---- Charge contact (PIN_CHARGE_SENSE, docs/wiring/robot.md) ----------------------
 // Only read while docking or charging (g_charge_sense_on), or always with

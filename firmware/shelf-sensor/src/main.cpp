@@ -254,6 +254,70 @@ static void readInput() {
   }
 }
 
+// on[i]: channel i's light on. Logged only when it changes.
+static void setLights(const bool* on) {
+  static int8_t shown[LIGHT_CHANNELS] = {};  // 0 unknown, 1 on, -1 off
+  bool changed = false;
+  for (uint8_t i = 0; i < LIGHT_CHANNELS; i++) {
+    digitalWrite(PIN_LIGHT_RELAY[i], on[i] ? !LIGHT_OFF_RELAY_STATE : LIGHT_OFF_RELAY_STATE);
+    int8_t v = on[i] ? 1 : -1;
+    if (shown[i] != v) changed = true;
+    shown[i] = v;
+  }
+  if (!changed) return;
+  Serial.print(F("# lights "));
+  for (uint8_t i = 0; i < LIGHT_CHANNELS; i++) Serial.print(on[i] ? '1' : '0');
+  Serial.println();
+}
+
+static void allLightsOn() {
+  bool on[LIGHT_CHANNELS];
+  for (uint8_t i = 0; i < LIGHT_CHANNELS; i++) on[i] = true;
+  setLights(on);
+}
+
+// "lights 10": one '1' (on) or '0' (off) per channel, from channel 0. Channels
+// past the end of the line stay on. Anything else is logged and ignored.
+static void onInputLine(const char* line) {
+  static const char PREFIX[] = "lights ";
+  const uint8_t prefixLen = sizeof(PREFIX) - 1;
+  uint8_t len = strlen(line);
+  bool ok = strncmp(line, PREFIX, prefixLen) == 0 && len > prefixLen &&
+            len - prefixLen <= LIGHT_CHANNELS;
+  bool on[LIGHT_CHANNELS];
+  for (uint8_t i = 0; ok && i < LIGHT_CHANNELS; i++) {
+    char c = prefixLen + i < len ? line[prefixLen + i] : '1';
+    ok = c == '0' || c == '1';
+    on[i] = c == '1';
+  }
+  if (!ok) {
+    Serial.print(F("# bad input: "));
+    Serial.println(line);
+    return;
+  }
+  setLights(on);
+  lightsFromPi = true;
+  lastLightsMs = millis();
+}
+
+// Never blocks: takes what has arrived and acts on each complete line
+static void readInput() {
+  while (Serial.available() > 0) {
+    char c = Serial.read();
+    if (c == '\r') continue;
+    if (c != '\n') {
+      if (inputLen < MAX_INPUT_LINE) inputLine[inputLen++] = c;
+      else inputTooLong = true;
+      continue;
+    }
+    inputLine[inputLen] = '\0';
+    if (inputTooLong) Serial.println(F("# bad input: line too long"));
+    else if (inputLen > 0) onInputLine(inputLine);
+    inputLen = 0;
+    inputTooLong = false;
+  }
+}
+
 static void report() {
   float airC = dht.readTemperature();
   float rh = dht.readHumidity();

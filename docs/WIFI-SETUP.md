@@ -229,6 +229,20 @@ journalctl -u farmnet-channel -b          # what it heard and chose, e.g. "score
 
 To stop it and pin a channel (e.g. for a demo): `sudo systemctl disable farmnet-channel`, then pin by hand as above. FarmNet keeps the last channel the script chose until you change it. `bash scripts/farmnet-channel-test.sh` tests the script without a Pi.
 
+## Stale stations
+
+A robot that resets, browns out or is reflashed leaves FarmNet without telling the Pi, and the Pi's WiFi chip keeps it listed as connected. Its next joins then go unanswered: the robot logs `WiFi attempt failed: reason 2 (AUTH_EXPIRE)` every try, while `iw dev wlan0 station dump` on the Pi lists it with an inactive time that keeps going back to 0 (each join attempt counts as activity, so the entry never expires). `sudo iw dev wlan0 station del <its MAC>` lets it straight back in.
+
+`farmnet-stations.service` does that automatically: every 10 s it asks each listed station's IP (from dnsmasq's leases) over ARP, two tries, and drops a station that doesn't answer or has no lease, so a stuck robot is back within about 20 s. A station that joined less than 15 s ago is left alone, since it may not have its lease yet. A device that's really there answers ARP; a phone asleep that misses it just rejoins on its own. It needs `iw` and `arping`; the deploy script installs the unit, and it's off until you enable it:
+
+```bash
+sudo apt install iw iputils-arping
+sudo systemctl enable --now farmnet-stations
+journalctl -u farmnet-stations -f      # "dropped aa:bb:...: no answer"
+```
+
+`bash scripts/farmnet-stations-test.sh` tests the script without a Pi.
+
 ## Notes
 
 - **Change the password** in the `FarmNet` connection and every robot's `secrets.h` before Showcase.

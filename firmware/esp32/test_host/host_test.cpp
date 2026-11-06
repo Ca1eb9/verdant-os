@@ -253,6 +253,25 @@ static void test_tags_and_battery() {
     CHECK(p >= prev);
     prev = p;
   }
+  // Reported percentage: noise around 95.5 never flips it, a real drop does
+  const float H = 0.5f;
+  CHECK(isnan(battery_pct_steady(NAN, NAN, H)));
+  CHECK(battery_pct_steady(95.6f, NAN, H) == 96.0f);
+  float shown = 96.0f;
+  for (float p : {95.4f, 95.6f, 95.2f, 95.8f, 95.1f, 96.4f}) {
+    shown = battery_pct_steady(p, shown, H);
+    CHECK(shown == 96.0f);
+  }
+  shown = battery_pct_steady(94.9f, shown, H);
+  CHECK(shown == 95.0f);
+  for (float p : {95.6f, 95.9f, 94.2f}) {
+    shown = battery_pct_steady(p, shown, H);
+    CHECK(shown == 95.0f);
+  }
+  CHECK(battery_pct_steady(96.0f, 95.0f, H) == 96.0f);    // charging: a full point up
+  CHECK(battery_pct_steady(40.0f, 95.0f, H) == 40.0f);    // a jump moves at once
+  CHECK(battery_pct_steady(NAN, 95.0f, H) == 95.0f);      // no reading: keep it
+  CHECK(battery_pct_steady(100.0f, 99.0f, H) == 100.0f);  // full shows 100
   printf("  battery (full %.2fV): 12.73V=%.0f%%  12.6V=%.0f%%  12.3V=%.0f%%  12.2V=%.0f%%  11.4V=%.0f%%  10.5V=%.0f%%  9.6V=%.0f%%\n",
          FULL, pct(12.73f), pct(12.6f), pct(12.3f), pct(12.2f), pct(11.4f), pct(10.5f), pct(9.6f));
 }

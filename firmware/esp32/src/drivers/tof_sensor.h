@@ -11,7 +11,7 @@ enum class TofReading {
   Pending,   // no new measurement yet (normal; ~33 ms per measurement)
   Target,    // valid distance in *cm_out
   Clear,     // measurement finished, nothing valid in range
-  Error,     // I2C / driver error
+  Error,     // I2C / driver error, or the sensor stopped measuring
 };
 
 class TofSensor {
@@ -44,4 +44,8 @@ class TofSensor {
   bool fail_logged_ = false;  // log a missing sensor once, not every retry
   uint8_t rejected_status_ = VL53L4CX_RANGESTATUS_NONE;
   int16_t rejected_mm_ = 0;
+  // The last result's stream count, and how many times in a row it repeated
+  bool have_stream_ = false;
+  uint8_t last_stream_ = 0;
+  uint8_t same_stream_ = 0;
 };
