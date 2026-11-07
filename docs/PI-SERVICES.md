@@ -219,9 +219,7 @@ Back-UPS BW650U1; any UPS with a USB data port works the same way.
 
 - The Pi's official supply goes in an outlet marked **Battery Backup**, not a
   surge-only one.
-- Leave the grow lights and the robot dock off it: the lights would drain it
-  in minutes, and a charging robot (about 30 W) in under an hour. Robots have
-  their own batteries and wait on the dock until the power is back.
+- Leave the grow lights off it: they would drain it in minutes.
 - The UPS's USB data cable goes to one of the Pi's USB ports, next to the Uno.
 - Expect roughly 1.5–2.5 hours on battery. Time it once (below) for the real
   figure.
@@ -292,26 +290,6 @@ If the power comes back before the battery runs low, nothing shuts down.
   is all running.
 - `journalctl -u nut-monitor` shows each change (`on battery`, `on line
   power`, `battery is low`).
-
-**A PC on the same UPS** (optional). The UPS has one USB port, so it stays on
-the Pi and the Pi shares the UPS's status with the PC over FarmNet:
-
-- In `nut.conf`, set `MODE=netserver`.
-- In `/etc/nut/upsd.conf`, add `LISTEN 192.168.4.1 3493` (the Pi's FarmNet
-  address).
-- In `upsd.users`, add a second user for the PC:
-
-  ```
-  [pc]
-    password = another-password
-    upsmon secondary
-  ```
-
-- Run `sudo systemctl restart nut-server nut-monitor`. The firewall (step 7)
-  already allows FarmNet.
-- On the PC, a NUT client (WinNUT on Windows) watches `apc@192.168.4.1` as user
-  `pc` and shuts it down when the UPS runs low. The Pi waits for it before
-  shutting down itself.
 
 **Troubleshooting**
 
