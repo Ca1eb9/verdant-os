@@ -201,12 +201,126 @@ sudo -u farm -H bash -c 'cd /opt/verdant-os/farm-controller/orchestrator && set 
 
 SD cards fail from sudden power loss during a write and from wear. With this setup:
 
-- **Always shut down with `sudo poweroff`** before unplugging. This matters more than anything else here.
+- **Always shut down with `sudo poweroff`** before unplugging. This matters more than anything else here. A UPS does this for you in a power cut ([UPS and safe shutdown](#ups-and-safe-shutdown)).
 - Logs are capped (step 5). The ingester's database is the main writer, about one row per robot per second, flushed to the card in batches (SQLite's `synchronous = NORMAL`: a power cut can lose the last moments of rows, never the file); it keeps 7 days (`RETENTION_DAYS` in `ingester.env`) and deletes older rows daily, so it stops growing after a week. Every service logs a recurring problem (bad messages, a broker that's down) once until it clears.
 - Use a quality A2-rated card from a known brand.
 - Back up now and then:
   - the data: `sudo tar czf ~/verdant-backup-$(date +%F).tgz /var/lib/verdant /etc/verdant`, then copy it off the Pi
   - the whole card: Raspberry Pi OS's **SD Card Copier** onto a spare card, so a dead card is a two-minute swap
+
+## UPS and safe shutdown
+
+A UPS keeps the Pi, and the Uno and WiFi adapter it powers over USB, running
+through a power cut, and tells the Pi when its battery runs low so it shuts
+down cleanly instead of losing power mid-write. These steps are for the APC
+Back-UPS BW650U1; any UPS with a USB data port works the same way.
+
+**Plugging it in**
+
+- The Pi's official supply goes in an outlet marked **Battery Backup**, not a
+  surge-only one.
+- Leave the grow lights and the robot dock off it: the lights would drain it
+  in minutes, and a charging robot (about 30 W) in under an hour. Robots have
+  their own batteries and wait on the dock until the power is back.
+- The UPS's USB data cable goes to one of the Pi's USB ports, next to the Uno.
+- Expect roughly 1.5–2.5 hours on battery. Time it once (below) for the real
+  figure.
+
+**Setting up NUT** (Network UPS Tools, which reads the UPS over USB):
+
+```bash
+sudo apt install -y nut
+lsusb | grep -i "american power"   # the UPS should be listed
+```
+
+Then edit these four files under `/etc/nut/` (`sudo nano ...`). Pick your own
+password for the monitor; it only works on the Pi itself.
+
+`nut.conf`:
+
+```
+MODE=standalone
+```
+
+`ups.conf`: add at the end
+
+```
+[apc]
+  driver = usbhid-ups
+  port = auto
+  desc = "APC BW650U1"
+```
+
+`upsd.users`: add at the end
+
+```
+[upsmon]
+  password = choose-a-password
+  upsmon primary
+```
+
+`upsmon.conf`: add at the end
+
+```
+MONITOR apc@localhost 1 upsmon choose-a-password primary
+```
+
+Then start it and check it reads the UPS:
+
+```bash
+sudo systemctl restart nut-server nut-monitor
+upsc apc@localhost ups.status        # OL: on mains. OB: on battery. LB: battery low
+upsc apc@localhost battery.charge    # percent
+```
+
+**What happens in a power cut**
+
+1. The UPS switches to battery (`OB`) and the farm carries on.
+2. When the UPS reports its battery low (`LB`), NUT shuts the Pi down
+   cleanly, then tells the UPS to switch its outlets off.
+3. When mains returns, the UPS switches its outlets back on, the Pi boots,
+   and systemd starts every farm service again, with nobody there.
+
+If the power comes back before the battery runs low, nothing shuts down.
+
+**Testing it** (with the UPS fully charged, not mid-demo):
+
+- **Runtime and shutdown:** with the Pi running, unplug the UPS from the
+  wall. `upsc apc@localhost ups.status` turns `OB`. Leave it: the Pi should
+  shut itself down before the battery is empty. Note how long it lasted, then
+  plug the UPS back in and check the Pi boots and `systemctl status 'farm-*'`
+  is all running.
+- `journalctl -u nut-monitor` shows each change (`on battery`, `on line
+  power`, `battery is low`).
+
+**A PC on the same UPS** (optional). The UPS has one USB port, so it stays on
+the Pi and the Pi shares the UPS's status with the PC over FarmNet:
+
+- In `nut.conf`, set `MODE=netserver`.
+- In `/etc/nut/upsd.conf`, add `LISTEN 192.168.4.1 3493` (the Pi's FarmNet
+  address).
+- In `upsd.users`, add a second user for the PC:
+
+  ```
+  [pc]
+    password = another-password
+    upsmon secondary
+  ```
+
+- Run `sudo systemctl restart nut-server nut-monitor`. The firewall (step 7)
+  already allows FarmNet.
+- On the PC, a NUT client (WinNUT on Windows) watches `apc@192.168.4.1` as user
+  `pc` and shuts it down when the UPS runs low. The Pi waits for it before
+  shutting down itself.
+
+**Troubleshooting**
+
+- `upsc` says `Driver not connected`: check `lsusb` lists the UPS, then
+  `sudo systemctl restart nut-driver-enumerator nut-server` and look at
+  `journalctl -u 'nut-*'`.
+- The Pi stays off after the power returns: the UPS didn't switch its outlets
+  off after the shutdown (it had power left, or the power came back while the
+  Pi was shutting down). Switch the UPS off and on to boot the Pi.
 
 ## Running lighter (optional)
 
