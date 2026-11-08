@@ -27,27 +27,39 @@ random crashes and corrupted files; `vcgencmd get_throttled` shows it
 (`throttled=0x0` is good). The Uno and the WiFi adapter are powered from the
 Pi's USB, so they're covered by whatever powers the Pi.
 
-### A UPS with safe shutdown
+### A UPS
 
 A UPS keeps the Pi, and the Uno and WiFi adapter it powers over USB, running
-through a power cut, and tells the Pi when its battery runs low so it shuts
-down cleanly instead of losing power mid-write. These steps are for the APC
-Back-UPS BW650U1; any UPS with a USB data port works the same way.
+through a power cut. The farm's APC Back-UPS BW650U1 does only that: it has
+**no data connection** (its USB port only charges phones), so the Pi can't
+tell it's on battery. If the battery runs out, the Pi loses power as if
+unplugged. In a long outage with someone there, shut it down by hand
+(`sudo poweroff`) before then. If the battery ran out, the Pi boots by itself
+when mains returns, as after any power cut. After a `poweroff` it stays off
+until its power is cycled: unplug its supply and plug it back in.
+
+A UPS with a USB **data** port can also tell the Pi when its battery runs low,
+so it shuts down cleanly by itself: see "Safe shutdown" below. Look for "USB
+data port", "PowerChute" or "HID" in a model's datasheet.
 
 **Plugging it in**
 
 - The Pi's official supply goes in an outlet marked **Battery Backup**, not a
   surge-only one.
 - Leave the grow lights off it: they would drain it in minutes.
-- The UPS's USB data cable goes to one of the Pi's USB ports, next to the Uno.
-- Expect roughly 1.5–2.5 hours on battery. Time it once (below) for the real
-  figure.
+- Expect roughly 1.5–2.5 hours on battery. Time it once for the real figure:
+  with it fully charged and the Pi running, unplug the UPS from the wall and
+  note how long the Pi stays up.
+
+#### Safe shutdown (only with a UPS that has a USB data port)
+
+Connect the UPS's USB data cable to one of the Pi's USB ports, next to the Uno.
 
 **Setting up NUT** (Network UPS Tools, which reads the UPS over USB):
 
 ```bash
 sudo apt install -y nut
-lsusb | grep -i "american power"   # the UPS should be listed
+lsusb                              # the UPS should be listed, e.g. "American Power Conversion"
 ```
 
 Then edit these four files under `/etc/nut/` (`sudo nano ...`). Pick your own
@@ -65,7 +77,7 @@ MODE=standalone
 [apc]
   driver = usbhid-ups
   port = auto
-  desc = "APC BW650U1"
+  desc = "Farm UPS"
 ```
 
 `upsd.users`: add at the end
@@ -90,7 +102,7 @@ upsc apc@localhost ups.status        # OL: on mains. OB: on battery. LB: battery
 upsc apc@localhost battery.charge    # percent
 ```
 
-**What happens in a power cut**
+**What happens in a power cut** (with NUT)
 
 1. The UPS switches to battery (`OB`) and the farm carries on.
 2. When the UPS reports its battery low (`LB`), NUT shuts the Pi down
@@ -125,7 +137,7 @@ If the power comes back before the battery runs low, nothing shuts down.
 
 SD cards fail from sudden power loss during a write and from wear. With this setup:
 
-- **Always shut down with `sudo poweroff`** before unplugging. This matters more than anything else here. The UPS (above) does this for you in a power cut.
+- **Always shut down with `sudo poweroff`** before unplugging. This matters more than anything else here. A UPS with a data port does this for you in a power cut (above); the BW650U1 can't.
 - Logs are capped ([PI-SERVICES.md step 5](PI-SERVICES.md#5-watchdog-and-logs)). The ingester's database is the main writer, about one row per robot per second, flushed to the card in batches (SQLite's `synchronous = NORMAL`: a power cut can lose the last moments of rows, never the file); it keeps 7 days (`RETENTION_DAYS` in `ingester.env`) and deletes older rows daily, so it stops growing after a week. Every service logs a recurring problem (bad messages, a broker that's down) once until it clears.
 - Use a quality A2-rated card from a known brand, ideally a high-endurance one (below).
 - Back up now and then:
