@@ -21,7 +21,7 @@ function load(config: object) {
   return loadConfig(path);
 }
 
-const lights = { shelf_id: "shelf-1", levels: [0, 1], robot_timeout_ms: 10000 };
+const lights = { shelf_id: "shelf-1", channels: ["Grow lights"] };
 
 describe("shelf bridge config", () => {
   it("takes the repo's config", () => {
@@ -36,10 +36,13 @@ describe("shelf bridge config", () => {
     assert.throws(() => load({ ...base, lights: { ...lights, shelf_id: "shelf-2" } }), /shelf_id/);
   });
 
-  it("refuses missing, repeated or fractional levels", () => {
-    assert.throws(() => load({ ...base, lights: { ...lights, levels: [] } }), /levels/);
-    assert.throws(() => load({ ...base, lights: { ...lights, levels: [1, 1] } }), /unique/);
-    assert.throws(() => load({ ...base, lights: { ...lights, levels: [0.5] } }), /levels/);
+  it("refuses missing or unnamed channels", () => {
+    assert.throws(() => load({ ...base, lights: { ...lights, channels: [] } }), /channels/);
+    assert.throws(() => load({ ...base, lights: { ...lights, channels: ["Grow lights", ""] } }), /channels/);
+  });
+
+  it("says what replaced a config's lights.levels", () => {
+    assert.throws(() => load({ ...base, lights: { shelf_id: "shelf-1", levels: [0, 1] } }), /replaced by lights.channels/);
   });
 
   it("gives a shelf without light_levels one light sensor at its level", () => {
@@ -51,9 +54,5 @@ describe("shelf bridge config", () => {
     assert.throws(() => load({ ...base, shelves: [{ ...shelf, light_levels: [] }] }), /light_levels/);
     assert.throws(() => load({ ...base, shelves: [{ ...shelf, light_levels: [0, 0] }] }), /unique/);
     assert.throws(() => load({ ...base, shelves: [{ ...shelf, light_levels: [0.5] }] }), /light_levels/);
-  });
-
-  it("refuses a missing robot timeout", () => {
-    assert.throws(() => load({ ...base, lights: { ...lights, robot_timeout_ms: 0 } }), /robot_timeout_ms/);
   });
 });

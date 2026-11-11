@@ -58,6 +58,14 @@ export const TOPICS = {
   /** Clear every alert: stored ones, open ones and the dashboards' lists (npm run clear-alerts) */
   alertsClear: "farm/alerts/clear" as const,
 
+  /** The grow lights, switched by relays on a shelf node (docs/shelf-sensors.md "Grow lights") */
+  lights: {
+    /** The operator switching one light (LightSwitch), from the dashboard on FarmNet only */
+    set: "farm/lights/set" as const,
+    /** Each light's switch and relay (LightsState, retained), from the shelf bridge */
+    state: "farm/lights/state" as const,
+  },
+
   /** System-level topics */
   system: {
     /** Services publish heartbeats here */

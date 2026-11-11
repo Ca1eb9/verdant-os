@@ -11,7 +11,7 @@
 import { createLocalSource } from "@/lib/farm/local-source";
 import { createRemoteSource } from "@/lib/farm/remote-source";
 import type { RobotView } from "@/lib/farm/robots";
-import type { FarmAlert, FarmTopology, RobotCommand, ShelfSensorData, ThresholdLimits } from "@/lib/farm/types";
+import type { FarmAlert, FarmTopology, LightsState, RobotCommand, ShelfSensorData, ThresholdLimits } from "@/lib/farm/types";
 
 export type CommandStatus = "pending" | "sent" | "failed";
 
@@ -86,6 +86,14 @@ export interface FarmDataSource {
    * until they're known, or when this source has none. Returns unsubscribe.
    */
   subscribeThresholds(onThresholds: (thresholds: ThresholdLimits[] | null) => void): () => void;
+  /**
+   * Streams the grow lights and their switches, as the shelf bridge last
+   * published them; null when this source can't switch them (remotely: like
+   * jog, they're FarmNet only) or hasn't heard yet. Returns unsubscribe.
+   */
+  subscribeLights(onLights: (lights: LightsState | null) => void): () => void;
+  /** The operator switches one grow light. FarmNet only, and never queued for a reconnect. */
+  setLight(light: number, on: boolean): Promise<void>;
 }
 
 export class CommandError extends Error {
@@ -153,6 +161,13 @@ function noFarmSource(connection: FarmConnection): FarmDataSource {
     subscribeThresholds(onThresholds) {
       onThresholds(null);
       return () => undefined;
+    },
+    subscribeLights(onLights) {
+      onLights(null);
+      return () => undefined;
+    },
+    async setLight() {
+      throw new CommandError("No farm selected.", 400);
     },
   };
 }

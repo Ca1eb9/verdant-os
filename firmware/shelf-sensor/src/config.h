@@ -20,9 +20,9 @@ constexpr uint8_t PIN_WATER_TEMP = 3;   // DS18B20 data, 4.7k pull-up to 5V
 constexpr uint8_t PIN_WATER_LEVEL = 4;  // level adapter output (green wire); 100k pull-down so unplugged reads LOW
 constexpr uint8_t PIN_PH = A0;          // pH board output (blue wire)
 
-// Level light relays (Adafruit STEMMA mini relay #4409), one per channel. The
-// Pi's "lights" line sets channel i on PIN_LIGHT_RELAY[i]; which level each
-// channel lights is the Pi's config (shelf-bridge lights.levels).
+// Grow light relays (Adafruit STEMMA mini relay #4409), one per channel. The
+// Pi's "lights" line sets channel i on PIN_LIGHT_RELAY[i]; which light each
+// channel switches is the Pi's config (shelf-bridge lights.channels).
 constexpr uint8_t PIN_LIGHT_RELAY[] = {5, 6};
 constexpr uint8_t LIGHT_CHANNELS = sizeof(PIN_LIGHT_RELAY) / sizeof(PIN_LIGHT_RELAY[0]);
 

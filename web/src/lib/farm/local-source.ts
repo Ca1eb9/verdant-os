@@ -35,9 +35,10 @@ import {
 } from "@/lib/farm/data-source";
 import { toRobotView, type RobotEntry, type RobotView } from "@/lib/farm/robots";
 import { TOPICS, extractIdFromTopic } from "@/lib/farm/topics";
-import type { FarmAlert, FarmTopology, RemoteCommand, ShelfSensorData, ThresholdLimits } from "@/lib/farm/types";
+import type { FarmAlert, FarmTopology, LightSwitch, LightsState, RemoteCommand, ShelfSensorData, ThresholdLimits } from "@/lib/farm/types";
 import {
-  isAlert, isCommand, isNum, isRecord, isShelfData, isStateUpdate, isTelemetry, isThresholdLimits, isTopology,
+  isAlert, isCommand, isLightsState, isNum, isRecord, isShelfData, isStateUpdate, isTelemetry, isThresholdLimits,
+  isTopology,
 } from "@/lib/farm/validate";
 
 const RECONNECT_MS = 2_000;
@@ -87,6 +88,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
   const shelfListeners = new Set<(shelves: ShelfReading[]) => void>();
   const historyListeners = new Set<(readings: ShelfReading[]) => void>();
   const thresholdListeners = new Set<(thresholds: ThresholdLimits[] | null) => void>();
+  const lightListeners = new Set<(lights: LightsState | null) => void>();
   const host = (() => {
     try {
       return new URL(url).host;
@@ -108,6 +110,8 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
   let topology: FarmTopology | null = null;
   /** Null until the alert engine's retained message arrives (none when it isn't running) */
   let thresholds: ThresholdLimits[] | null = null;
+  /** Null until the shelf bridge's retained message arrives (none when it has no lights) */
+  let lights: LightsState | null = null;
   const warned = new Set<string>();
   /** Newest received first: issued_at comes from other clocks */
   let commands: CommandRecord[] = [];
@@ -219,6 +223,12 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       thresholdListeners.forEach((listener) => listener(thresholds));
       return;
     }
+    if (topic === TOPICS.lights.state) {
+      if (!isLightsState(msg)) return ignore(topic);
+      lights = msg;
+      lightListeners.forEach((listener) => listener(lights));
+      return;
+    }
     if (topic === TOPICS.alertsClear) {
       if (!isRecord(msg) || !isNum(msg.timestamp)) return ignore(topic);
       alerts = [];
@@ -265,10 +275,11 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
   };
 
   // Connected while anything needs it: the robot list, a pending layout, the
-  // connection status, the alerts, the shelf readings, their history or the alert limits
+  // connection status, the alerts, the shelf readings, their history, the alert limits or the lights
   const updateConnection = () => {
     const needed = listeners.size > 0 || topologyWaiters.size > 0 || connectionListeners.size > 0 ||
-      alertListeners.size > 0 || shelfListeners.size > 0 || historyListeners.size > 0 || thresholdListeners.size > 0;
+      alertListeners.size > 0 || shelfListeners.size > 0 || historyListeners.size > 0 || thresholdListeners.size > 0 ||
+      lightListeners.size > 0;
     if (needed && !client) {
       connection = CONNECTING;
       client = mqtt.connect(url, { reconnectPeriod: RECONNECT_MS, connectTimeout: RECONNECT_MS * 2 });
@@ -282,7 +293,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       client.on("error", (err) => console.warn(`[local-source] ${err.message}`));
       client.subscribe([
         TOPICS.robot.telemetryAll, TOPICS.robot.stateAll, TOPICS.system.topology, TOPICS.commands.all, TOPICS.alerts,
-        TOPICS.alertsClear, TOPICS.shelf.sensorsAll, TOPICS.system.alertThresholds,
+        TOPICS.alertsClear, TOPICS.shelf.sensorsAll, TOPICS.system.alertThresholds, TOPICS.lights.state,
       ]);
     } else if (!needed && client) {
       client.end(true);
@@ -408,6 +419,30 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
         thresholdListeners.delete(onThresholds);
         updateConnection();
       };
+    },
+
+    subscribeLights(onLights) {
+      lightListeners.add(onLights);
+      updateConnection();
+      onLights(lights);
+      return () => {
+        lightListeners.delete(onLights);
+        updateConnection();
+      };
+    },
+
+    setLight(light, on) {
+      // Never queued for a reconnect, like a command: a switch arriving late surprises
+      if (!client?.connected) {
+        return Promise.reject(new CommandError("Not connected to the farm's MQTT broker.", 503));
+      }
+      const message: LightSwitch = { light, on, issued_by: "dashboard", timestamp: Date.now() };
+      return new Promise<void>((resolve, reject) => {
+        client!.publish(TOPICS.lights.set, JSON.stringify(message), { qos: 0 }, (err) => {
+          if (err) reject(new CommandError(`Could not switch the light: ${err.message}`, 502));
+          else resolve();
+        });
+      });
     },
   };
 }

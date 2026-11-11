@@ -668,5 +668,14 @@ export function createRemoteSource(farmId: string): FarmDataSource {
       onThresholds(thresholds);
       return () => release(thresholdListeners, onThresholds);
     },
+
+    // The grow lights are switched on FarmNet only, like jog
+    subscribeLights(onLights) {
+      onLights(null);
+      return () => undefined;
+    },
+    async setLight() {
+      throw new CommandError("The grow lights can only be switched on the farm's Wi-Fi.", 403);
+    },
   };
 }

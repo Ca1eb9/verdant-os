@@ -34,6 +34,12 @@ export const TOPICS = {
   alerts: "farm/alerts",
   /** Every alert cleared (npm run clear-alerts on the Pi); not retained */
   alertsClear: "farm/alerts/clear",
+  lights: {
+    /** The operator switching one grow light; FarmNet only */
+    set: "farm/lights/set",
+    /** Each grow light's switch and relay (retained, from the shelf bridge) */
+    state: "farm/lights/state",
+  },
 } as const;
 
 /** "farm/robot/robot-1/telemetry" → "robot-1" */

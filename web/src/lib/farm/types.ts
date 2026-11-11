@@ -172,6 +172,35 @@ export interface ShelfSensorData {
   timestamp: number;
 }
 
+/**
+ * Published to farm/lights/set by the dashboard, on FarmNet only: the operator
+ * switches one grow light
+ */
+export interface LightSwitch {
+  /** Index into LightsState.lights */
+  light: number;
+  on: boolean;
+  issued_by: string;
+  timestamp: number;
+}
+
+/** One grow light (one relay channel on the shelf node) */
+export interface LightState {
+  name: string;
+  /** The operator's switch: false keeps it off */
+  operator_on: boolean;
+  /** Whether it's lit: switched on by the operator and the robots aren't all docked */
+  on: boolean;
+}
+
+/** Published (retained) to farm/lights/state by the shelf bridge whenever a light changes */
+export interface LightsState {
+  lights: LightState[];
+  /** Every robot is parked on the dock, which turns every light off */
+  robots_docked: boolean;
+  timestamp: number;
+}
+
 /** One metric's alert limits, as the alert engine applies them */
 export interface ThresholdLimits {
   metric: string;

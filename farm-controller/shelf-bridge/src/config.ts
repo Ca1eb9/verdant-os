@@ -16,14 +16,12 @@ export interface ShelfPort {
   light_levels: number[];
 }
 
-/** The level lights, switched by relays on one shelf's node (docs/shelf-sensors.md "Level lights") */
-export interface LevelLightsConfig {
+/** The grow lights, switched by relays on one shelf's node (docs/shelf-sensors.md "Grow lights") */
+export interface GrowLightsConfig {
   /** The shelf whose node has the relays */
   shelf_id: string;
-  /** Level lit by each relay channel, in channel order (the node's PIN_LIGHT_RELAY) */
-  levels: number[];
-  /** A robot with no telemetry this long no longer lights its level */
-  robot_timeout_ms: number;
+  /** A name per relay channel, in channel order (the node's PIN_LIGHT_RELAY), for the dashboard */
+  channels: string[];
 }
 
 export interface ShelfBridgeConfig {
@@ -35,8 +33,8 @@ export interface ShelfBridgeConfig {
   /** Longer lines are dropped (noise, or a node not running shelf firmware) */
   max_line_length: number;
   shelves: ShelfPort[];
-  /** Omitted: no level lights */
-  lights?: LevelLightsConfig;
+  /** Omitted: no grow light control */
+  lights?: GrowLightsConfig;
 }
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -86,9 +84,10 @@ function checkLights(v: unknown, shelfIds: string[]) {
   if (!isStr(l.shelf_id) || !shelfIds.includes(l.shelf_id)) {
     throw new Error("lights.shelf_id must be one of the shelves");
   }
-  if (!Array.isArray(l.levels) || l.levels.length === 0 || !l.levels.every((n) => Number.isInteger(n))) {
-    throw new Error("lights.levels must be a non-empty array of levels");
+  if (l.channels === undefined && l.levels !== undefined) {
+    throw new Error("lights.levels was replaced by lights.channels, a name per relay (docs/shelf-sensors.md)");
   }
-  if (new Set(l.levels).size !== l.levels.length) throw new Error("lights.levels values must be unique");
-  if (!isPos(l.robot_timeout_ms)) throw new Error("lights.robot_timeout_ms must be a positive number");
+  if (!Array.isArray(l.channels) || l.channels.length === 0 || !l.channels.every(isStr)) {
+    throw new Error("lights.channels must be a non-empty array of names");
+  }
 }

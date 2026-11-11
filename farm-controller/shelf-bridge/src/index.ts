@@ -4,8 +4,9 @@
 // Reads each shelf sensor node's JSON lines over USB serial and
 // publishes them as ShelfSensorData. Reopens a port that drops
 // and alerts once when a shelf goes quiet. With "lights" in its
-// config, it also switches each level's lights from where the
-// robots are (lights.ts) through that shelf node's relays.
+// config, it also switches the grow lights through that shelf
+// node's relays: off while every robot is docked, or when the
+// operator switches one off on the dashboard (lights.ts).
 //
 // Run:  npx tsx src/index.ts
 // ============================================================
@@ -17,6 +18,7 @@ import { SerialPort } from "serialport";
 import {
   type AlertsCleared,
   type FarmAlert,
+  type LightsState,
   AlertSeverity,
   TOPICS,
   createMqttClient,
@@ -29,7 +31,7 @@ import {
 
 import { loadConfig, type ShelfBridgeConfig, type ShelfPort } from "./config.js";
 import { parseLine } from "./parse.js";
-import { LevelLights } from "./lights.js";
+import { GrowLights, isLightSwitch } from "./lights.js";
 
 // --- Config --------------------------------------------------
 
@@ -89,18 +91,34 @@ const logs = new LogOnce();
 
 const tag = (link: ShelfLink) => `[${link.shelf.shelf_id}]`;
 
-// --- Level lights --------------------------------------------
+// --- Grow lights ---------------------------------------------
 
-const lights = config.lights ? new LevelLights(config.lights) : null;
+const lights = config.lights ? new GrowLights(config.lights) : null;
 const lightsLink = config.lights ? links.find((l) => l.shelf.shelf_id === config.lights!.shelf_id)! : null;
 /** The line last written to the node; null resends the next one */
 let lightsSent: string | null = null;
 /**
- * Off while the broker is unreachable: robots can't be heard, so rather than
- * time them out and switch their levels off, it stops sending and the node
- * turns every light on after its LIGHTS_TIMEOUT_MS
+ * Off while the broker is unreachable: robots and the operator can't be
+ * heard, so it stops sending and the node turns every light on after its
+ * LIGHTS_TIMEOUT_MS
  */
 let brokerConnected = true;
+
+/** The last state published, less its timestamp: republished only when a light changes */
+let lightsPublished = "";
+
+/**
+ * The lights' state for the dashboard (retained). Without "lights" in the
+ * config it's an empty list, so a dashboard doesn't offer switches for an
+ * earlier config's lights that nothing would act on.
+ */
+function publishLights() {
+  const state: LightsState = lights?.state(Date.now()) ?? { lights: [], robots_docked: false, timestamp: Date.now() };
+  const key = JSON.stringify({ ...state, timestamp: 0 });
+  if (key === lightsPublished) return;
+  lightsPublished = key;
+  mqtt.publish(TOPICS.lights.state, state, true);
+}
 
 /**
  * Sends the lights line when it changed, or always with `refresh`: each
@@ -109,13 +127,11 @@ let brokerConnected = true;
  */
 function sendLights(refresh = false) {
   if (!lights || !lightsLink || !brokerConnected) return;
-  const command = lights.command(performance.now());
-  // No topology yet: the node keeps every light on
-  if (!command || (!refresh && command.line === lightsSent)) return;
-  const { line, on } = command;
+  const line = lights.line();
+  if (!refresh && line === lightsSent) return;
   const port = lightsLink.port;
   if (!port?.isOpen || !lightsLink.nodeReady) return;
-  if (line !== lightsSent) console.log(`[LIGHTS] ${on.length ? `level ${on.join(", ")} on` : "all off"} (${line})`);
+  if (line !== lightsSent) console.log(`[LIGHTS] ${line}${lights.robotsDocked() ? " (robots docked)" : ""}`);
   lightsSent = line;
   port.write(`${line}\n`, (err) => {
     if (err) {
@@ -319,7 +335,6 @@ async function main() {
     brokerUrl: BROKER_URL,
     onConnect: () => {
       brokerConnected = true;
-      lights?.refreshRobots(performance.now());
     },
     onDisconnect: () => {
       brokerConnected = false;
@@ -345,35 +360,37 @@ async function main() {
   });
   setInterval(checkSilence, config.watchdog_interval_ms);
 
+  publishLights();
   if (lights && config.lights) {
-    console.log(`[LIGHTS]  levels ${config.lights.levels.join(", ")} by ${config.lights.shelf_id}'s relays`);
+    console.log(`[LIGHTS]  ${config.lights.channels.join(", ")} by ${config.lights.shelf_id}'s relays`);
     mqtt.subscribe<unknown>(TOPICS.system.topology, (msg) => {
       if (!lights.setTopology(msg)) {
         logs.warn("lights topology", "[LIGHTS] ignored an invalid topology; lights keep the last one");
         return;
       }
       logs.ok("lights topology");
-      console.log("[LIGHTS] topology loaded");
-      sendLights();
     });
     mqtt.subscribe<unknown>(TOPICS.robot.telemetryAll, (msg, topic) => {
       const robotId = extractIdFromTopic(topic);
       if (!robotId) return;
-      if (!lights.onTelemetry(robotId, msg, performance.now())) {
+      if (!lights.onTelemetry(robotId, msg)) {
         logs.warn(`lights telemetry ${robotId}`, `[LIGHTS] ignoring invalid telemetry from ${robotId}`);
         return;
       }
       logs.ok(`lights telemetry ${robotId}`);
+      publishLights();
       sendLights();
     });
-    mqtt.subscribe<unknown>(TOPICS.robot.stateAll, (msg, topic) => {
-      const robotId = extractIdFromTopic(topic);
-      if (!robotId) return;
-      lights.onState(robotId, msg);
+    mqtt.subscribe<unknown>(TOPICS.lights.set, (msg) => {
+      if (!isLightSwitch(msg) || !lights.setOperator(msg.light, msg.on)) {
+        logs.warn("lights set", `[LIGHTS] ignoring an invalid light switch: ${JSON.stringify(msg)}`);
+        return;
+      }
+      logs.ok("lights set");
+      console.log(`[LIGHTS] ${config.lights!.channels[msg.light]} switched ${msg.on ? "on" : "off"} by ${msg.issued_by}`);
+      publishLights();
       sendLights();
     });
-    // A robot that goes silent stops lighting its level
-    setInterval(() => sendLights(), config.watchdog_interval_ms);
   }
 
   const shutdown = async () => {
