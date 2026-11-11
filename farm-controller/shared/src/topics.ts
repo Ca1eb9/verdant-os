@@ -60,9 +60,9 @@ export const TOPICS = {
 
   /** The grow lights, switched by relays on a shelf node (docs/shelf-sensors.md "Grow lights") */
   lights: {
-    /** The operator switching one light (LightSwitch), from the dashboard on FarmNet only */
+    /** The operator switching one level's lights (LightSwitch), from the dashboard on FarmNet only */
     set: "farm/lights/set" as const,
-    /** Each light's switch and relay (LightsState, retained), from the shelf bridge */
+    /** Each level's light switch and relay (LightsState, retained), from the shelf bridge */
     state: "farm/lights/state" as const,
   },
 

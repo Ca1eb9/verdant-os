@@ -431,12 +431,12 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       };
     },
 
-    setLight(light, on) {
+    setLight(level, on) {
       // Never queued for a reconnect, like a command: a switch arriving late surprises
       if (!client?.connected) {
         return Promise.reject(new CommandError("Not connected to the farm's MQTT broker.", 503));
       }
-      const message: LightSwitch = { light, on, issued_by: "dashboard", timestamp: Date.now() };
+      const message: LightSwitch = { level, on, issued_by: "dashboard", timestamp: Date.now() };
       return new Promise<void>((resolve, reject) => {
         client!.publish(TOPICS.lights.set, JSON.stringify(message), { qos: 0 }, (err) => {
           if (err) reject(new CommandError(`Could not switch the light: ${err.message}`, 502));

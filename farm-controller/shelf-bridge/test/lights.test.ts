@@ -6,8 +6,8 @@ import { GrowLights, isLightSwitch } from "../src/lights.js";
 // The repo's farm, with its dock at dock-1
 const topology = JSON.parse(readFileSync(new URL("../../topology.json", import.meta.url), "utf-8"));
 
-function growLights(channels = ["Grow lights"]) {
-  const l = new GrowLights({ shelf_id: "shelf-1", channels });
+function growLights(levels = [0]) {
+  const l = new GrowLights({ shelf_id: "shelf-1", levels });
   assert.ok(l.setTopology(topology));
   return l;
 }
@@ -17,7 +17,7 @@ const at = (node: string | null, status = "en_route") => ({ current_node: node, 
 describe("grow lights", () => {
   it("are on with no robot heard from, and before the topology", () => {
     assert.equal(growLights().line(), "lights 1");
-    const l = new GrowLights({ shelf_id: "shelf-1", channels: ["Grow lights"] });
+    const l = new GrowLights({ shelf_id: "shelf-1", levels: [0] });
     l.onTelemetry("robot-1", at("dock-1", "charging"));
     assert.equal(l.line(), "lights 1");
     assert.equal(l.setTopology({ nodes: [] }), false);
@@ -59,13 +59,13 @@ describe("grow lights", () => {
     assert.equal(l.line(), "lights 1");
   });
 
-  it("follow the operator's switch per light, docked or not", () => {
-    const l = growLights(["Level 1", "Level 2"]);
+  it("follow the operator's switch per level, docked or not", () => {
+    const l = growLights([0, 1]);
     l.onTelemetry("robot-1", at("cp-01"));
     assert.ok(l.setOperator(1, false));
     assert.equal(l.line(), "lights 10");
     assert.deepEqual(l.state(7), {
-      lights: [{ name: "Level 1", operator_on: true, on: true }, { name: "Level 2", operator_on: false, on: false }],
+      lights: [{ level: 0, operator_on: true, on: true }, { level: 1, operator_on: false, on: false }],
       robots_docked: false,
       timestamp: 7,
     });
@@ -76,10 +76,9 @@ describe("grow lights", () => {
     assert.equal(l.line(), "lights 11");
   });
 
-  it("refuse a switch for a light they don't have", () => {
+  it("refuse a switch for a level no relay switches", () => {
     const l = growLights();
     assert.equal(l.setOperator(1, false), false);
-    assert.equal(l.setOperator(-1, false), false);
     assert.equal(l.setOperator(0.5, false), false);
     assert.equal(l.line(), "lights 1");
   });
@@ -92,11 +91,11 @@ describe("grow lights", () => {
 });
 
 describe("isLightSwitch", () => {
-  const ok = { light: 0, on: false, issued_by: "dashboard", timestamp: 1 };
+  const ok = { level: 0, on: false, issued_by: "dashboard", timestamp: 1 };
   it("takes a switch from the dashboard", () => assert.equal(isLightSwitch(ok), true));
   it("refuses malformed ones", () => {
     assert.equal(isLightSwitch({ ...ok, on: "false" }), false);
-    assert.equal(isLightSwitch({ ...ok, light: "0" }), false);
+    assert.equal(isLightSwitch({ ...ok, level: "0" }), false);
     assert.equal(isLightSwitch({ ...ok, issued_by: "" }), false);
     assert.equal(isLightSwitch({ ...ok, timestamp: null }), false);
   });

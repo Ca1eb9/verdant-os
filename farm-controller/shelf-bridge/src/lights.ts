@@ -1,9 +1,9 @@
 // ============================================================
 // Grow lights
 //
-// Which of the grow lights (relay channels on one shelf node)
-// should be on. Each is on unless the operator switched it off
-// from the dashboard, or every robot is parked on the dock: a
+// Which levels' grow lights (one relay channel each on a shelf
+// node) should be on. Each is on unless the operator switched it
+// off on the dashboard, or every robot is parked on the dock: a
 // robot reaching the dock turns them off, and one leaving it
 // turns them back on.
 // ============================================================
@@ -16,9 +16,9 @@ type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 const isStr = (v: unknown): v is string => typeof v === "string" && v.length > 0;
 
-/** A light switch from the dashboard; the light's index is checked against the config by setOperator */
+/** A light switch from the dashboard; its level is checked against the config by setOperator */
 export function isLightSwitch(v: unknown): v is LightSwitch {
-  return isObj(v) && Number.isInteger(v.light) && typeof v.on === "boolean" &&
+  return isObj(v) && Number.isInteger(v.level) && typeof v.on === "boolean" &&
     isStr(v.issued_by) && typeof v.timestamp === "number" && Number.isFinite(v.timestamp);
 }
 
@@ -27,11 +27,11 @@ export class GrowLights {
   private docks: Set<string> | null = null;
   /** Each robot's last report: whether it was parked on a dock */
   private parked = new Map<string, boolean>();
-  /** The operator's switch per light, on until switched off (in memory: a restart turns them on) */
+  /** The operator's switch per configured level, on until switched off (in memory: a restart turns them on) */
   private operatorOn: boolean[];
 
   constructor(private config: GrowLightsConfig) {
-    this.operatorOn = config.channels.map(() => true);
+    this.operatorOn = config.levels.map(() => true);
   }
 
   /** The orchestrator's retained topology, for its dock nodes. False if it isn't a usable one. */
@@ -59,10 +59,11 @@ export class GrowLights {
     return true;
   }
 
-  /** The operator's switch for one light. False if there's no such light. */
-  setOperator(light: number, on: boolean): boolean {
-    if (!Number.isInteger(light) || light < 0 || light >= this.operatorOn.length) return false;
-    this.operatorOn[light] = on;
+  /** The operator's switch for one level's lights. False if no relay switches that level. */
+  setOperator(level: number, on: boolean): boolean {
+    const channel = this.config.levels.indexOf(level);
+    if (channel < 0) return false;
+    this.operatorOn[channel] = on;
     return true;
   }
 
@@ -75,18 +76,18 @@ export class GrowLights {
     return this.parked.size > 0 && [...this.parked.values()].every(Boolean);
   }
 
-  /** Each light's switch and whether it's lit, for the dashboard */
+  /** Each level's switch and whether its lights are lit, for the dashboard */
   state(timestamp: number): LightsState {
     const docked = this.robotsDocked();
-    const lights: LightState[] = this.config.channels.map((name, i) => ({
-      name,
+    const lights: LightState[] = this.config.levels.map((level, i) => ({
+      level,
       operator_on: this.operatorOn[i],
       on: this.operatorOn[i] && !docked,
     }));
     return { lights, robots_docked: docked, timestamp };
   }
 
-  /** The line for the node: "lights " and one 1 (on) or 0 per light, in channel order */
+  /** The line for the node: "lights " and one 1 (on) or 0 per relay channel */
   line(): string {
     return `lights ${this.state(0).lights.map((l) => (l.on ? "1" : "0")).join("")}`;
   }

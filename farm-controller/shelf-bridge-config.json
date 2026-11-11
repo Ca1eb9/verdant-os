@@ -16,6 +16,6 @@
   ],
   "lights": {
     "shelf_id": "shelf-1",
-    "channels": ["Grow lights"]
+    "levels": [0, 1]
   }
 }

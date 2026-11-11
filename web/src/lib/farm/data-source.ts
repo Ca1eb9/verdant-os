@@ -92,8 +92,8 @@ export interface FarmDataSource {
    * jog, they're FarmNet only) or hasn't heard yet. Returns unsubscribe.
    */
   subscribeLights(onLights: (lights: LightsState | null) => void): () => void;
-  /** The operator switches one grow light. FarmNet only, and never queued for a reconnect. */
-  setLight(light: number, on: boolean): Promise<void>;
+  /** The operator switches one level's grow lights. FarmNet only, and never queued for a reconnect. */
+  setLight(level: number, on: boolean): Promise<void>;
 }
 
 export class CommandError extends Error {

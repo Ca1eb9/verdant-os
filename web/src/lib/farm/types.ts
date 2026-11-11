@@ -174,19 +174,19 @@ export interface ShelfSensorData {
 
 /**
  * Published to farm/lights/set by the dashboard, on FarmNet only: the operator
- * switches one grow light
+ * switches one level's grow lights
  */
 export interface LightSwitch {
-  /** Index into LightsState.lights */
-  light: number;
+  /** The level whose lights it switches */
+  level: number;
   on: boolean;
   issued_by: string;
   timestamp: number;
 }
 
-/** One grow light (one relay channel on the shelf node) */
+/** One level's grow lights (one relay channel on the shelf node) */
 export interface LightState {
-  name: string;
+  level: number;
   /** The operator's switch: false keeps it off */
   operator_on: boolean;
   /** Whether it's lit: switched on by the operator and the robots aren't all docked */

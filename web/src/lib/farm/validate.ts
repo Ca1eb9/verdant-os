@@ -101,9 +101,9 @@ export function isShelfData(v: unknown): v is ShelfSensorData {
   return isShelfValues(v) && Number.isInteger((v as Record<string, unknown>).level);
 }
 
-/** The shelf bridge's grow lights: each with a name, the operator's switch and whether it's lit */
+/** The shelf bridge's grow lights: each level's operator switch and whether it's lit */
 export function isLightsState(v: unknown): v is LightsState {
   return isRecord(v) && Array.isArray(v.lights) && typeof v.robots_docked === "boolean" && isNum(v.timestamp) &&
-    v.lights.every((l) => isRecord(l) && typeof l.name === "string" && typeof l.operator_on === "boolean" &&
+    v.lights.every((l) => isRecord(l) && Number.isInteger(l.level) && typeof l.operator_on === "boolean" &&
       typeof l.on === "boolean");
 }

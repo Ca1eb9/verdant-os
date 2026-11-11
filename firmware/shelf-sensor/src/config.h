@@ -21,8 +21,8 @@ constexpr uint8_t PIN_WATER_LEVEL = 4;  // level adapter output (green wire); 10
 constexpr uint8_t PIN_PH = A0;          // pH board output (blue wire)
 
 // Grow light relays (Adafruit STEMMA mini relay #4409), one per channel. The
-// Pi's "lights" line sets channel i on PIN_LIGHT_RELAY[i]; which light each
-// channel switches is the Pi's config (shelf-bridge lights.channels).
+// Pi's "lights" line sets channel i on PIN_LIGHT_RELAY[i]; which level each
+// channel switches is the Pi's config (shelf-bridge lights.levels).
 constexpr uint8_t PIN_LIGHT_RELAY[] = {5, 6};
 constexpr uint8_t LIGHT_CHANNELS = sizeof(PIN_LIGHT_RELAY) / sizeof(PIN_LIGHT_RELAY[0]);
 

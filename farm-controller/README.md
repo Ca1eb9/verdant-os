@@ -217,8 +217,8 @@ npm run shelf
 - With `lights` in its config it also switches the grow lights, through
   relays on one shelf's node: off while every robot is parked on the dock
   (robot telemetry and the orchestrator's retained topology), or when the
-  operator switches one off on the FarmNet dashboard (`farm/lights/set`). It
-  publishes each light's state, retained, on `farm/lights/state`; see
+  operator switches a level off on the FarmNet dashboard (`farm/lights/set`).
+  It publishes each level's state, retained, on `farm/lights/state`; see
   "Grow lights" in [docs/shelf-sensors.md](../docs/shelf-sensors.md#grow-lights).
 - Environment overrides: `BROKER_URL`, `CONFIG_PATH`, `STATE_PATH`. On the Pi
   it runs as the `farm-shelf-bridge` service with its config in `/etc/verdant/`

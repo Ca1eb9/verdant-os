@@ -189,9 +189,10 @@ own reading.
 ## Grow light relays
 
 Adafruit STEMMA Non-Latching Mini Relays (#4409) switch the grow lights, one
-relay per light supply. The farm has one supply for both levels, so it needs
-only **relay 1 on D5**; D6 takes a second relay if a second supply is added
-(and a second name in `lights.channels`). A relay's contacts short the
+relay per level (`lights.levels` in `shelf-bridge-config.json`: D5 is level 0,
+D6 level 1). The farm has one light supply for both levels for now, so only
+**relay 1 on D5** is wired, and it switches every light; the D6 relay takes a
+second supply when there is one. A relay's contacts short the
 supply's 0–10 V dim wires, which turns its lights off; released, they're at
 full brightness. The supply puts about 10 V on those wires itself, so nothing
 here makes 10 V. What the node does with them: "Grow lights" in
@@ -202,12 +203,12 @@ Uno with its STEMMA JST cable (or three jumpers), no soldering, and sits next
 to the light supply:
 
 ```
-  Uno                 Relay 1 ("Grow lights")    Light supply
+  Uno                 Relay 1 (level 0)          Light supply
   D5  ───────────────  SIG
   5V  ──┬────────────  +  (3-5V)                 dim wire + ──┐
   GND ──┼─┬──────────  −  (GND)          COM ─────────────────┘
         │ │                              NO  ───── dim wire −
-        │ │           Relay 2 (only with a second supply)
+        │ │           Relay 2 (level 1, only with a second supply)
   D6  ──┼─┼──────────  SIG
         └─┼──────────  +
           └──────────  −
@@ -223,8 +224,9 @@ to the light supply:
 | Each | COM and NO screw terminals | Its light supply's two 0–10 V dim wires (usually purple and grey/pink) |
 
 The JST cable's colours are black (−), red (+) and white (SIG). The relays
-are in the order of `lights.channels` in `shelf-bridge-config.json`: the first
-name is D5, the second D6.
+are in the order of `lights.levels` in `shelf-bridge-config.json`: the first
+level is D5, the second D6. If they come out swapped, swap the numbers there
+instead of the wires.
 
 - **Use COM and NO, never NC.** On NO, a relay with no power (Uno off,
   resetting or unplugged) leaves the light on, which is what the plants need.

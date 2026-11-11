@@ -20,8 +20,8 @@ export interface ShelfPort {
 export interface GrowLightsConfig {
   /** The shelf whose node has the relays */
   shelf_id: string;
-  /** A name per relay channel, in channel order (the node's PIN_LIGHT_RELAY), for the dashboard */
-  channels: string[];
+  /** The level each relay channel switches, in channel order (the node's PIN_LIGHT_RELAY) */
+  levels: number[];
 }
 
 export interface ShelfBridgeConfig {
@@ -84,10 +84,8 @@ function checkLights(v: unknown, shelfIds: string[]) {
   if (!isStr(l.shelf_id) || !shelfIds.includes(l.shelf_id)) {
     throw new Error("lights.shelf_id must be one of the shelves");
   }
-  if (l.channels === undefined && l.levels !== undefined) {
-    throw new Error("lights.levels was replaced by lights.channels, a name per relay (docs/shelf-sensors.md)");
+  if (!Array.isArray(l.levels) || l.levels.length === 0 || !l.levels.every((n) => Number.isInteger(n))) {
+    throw new Error("lights.levels must be a non-empty array of levels");
   }
-  if (!Array.isArray(l.channels) || l.channels.length === 0 || !l.channels.every(isStr)) {
-    throw new Error("lights.channels must be a non-empty array of names");
-  }
+  if (new Set(l.levels).size !== l.levels.length) throw new Error("lights.levels values must be unique");
 }

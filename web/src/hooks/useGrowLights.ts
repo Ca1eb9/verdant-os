@@ -16,5 +16,5 @@ export function useGrowLights() {
   useEffect(() => onFarmDataSourceChange(() => setSource(getFarmDataSource())), []);
   useEffect(() => source.subscribeLights(setLights), [source]);
 
-  return { lights, setLight: (light: number, on: boolean) => source.setLight(light, on) };
+  return { lights, setLight: (level: number, on: boolean) => source.setLight(level, on) };
 }

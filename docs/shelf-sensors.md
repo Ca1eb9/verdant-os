@@ -78,7 +78,7 @@ needs to be in the `dialout` group to open serial ports).
 | `reopen_interval_ms` | Retry delay for a missing or dropped port |
 | `baud`, `max_line_length`, `watchdog_interval_ms` | Serial and timing settings |
 | `lights.shelf_id` | The shelf whose node has the light relays. Leave `lights` out for no grow light control |
-| `lights.channels` | A name per relay channel, in order, shown on the dashboard: `["Grow lights"]` is D5. Add a name per relay used |
+| `lights.levels` | The level each relay channel switches, in order: `[0, 1]` is D5 for level 0, D6 for level 1. The dashboard shows a switch per level |
 
 ## Grow lights
 
@@ -86,9 +86,11 @@ The grow lights are on unless the robots are all parked on the dock, or the
 operator has switched them off on the dashboard. The node switches them
 through relays (Adafruit #4409) on D5 and D6, wired across the lights' 0–10 V
 dim wires ([wiring](wiring/shelf-sensor.md#grow-light-relays)); the bridge
-decides. The farm has one light supply for both levels, so one relay (D5)
-switches every light, and the config names one light, "Grow lights". Each
-relay channel added to `lights.channels` is another light with its own switch.
+decides. Each relay is given a level in `lights.levels` and the dashboard
+shows a switch per level. The farm has one light supply for both levels for
+now, so only the relay on D5 (level 0, "Level 1" on the dashboard) is wired:
+it switches every light, and the "Level 2" switch changes nothing until a
+second supply is wired to the D6 relay.
 
 **Setting it up**
 
@@ -98,14 +100,12 @@ relay channel added to `lights.channels` is another light with its own switch.
    firmware from before the lights ignores the bridge's lines.
 3. Copy the `lights` block from the repo's `shelf-bridge-config.json` into
    `/etc/verdant/shelf-bridge-config.json` (a deploy never changes that
-   file), set its `shelf_id` and a name per relay in `channels`, and
-   `sudo systemctl restart farm-shelf-bridge`. A config from before still
-   has `lights.levels` and `robot_timeout_ms`: replace them with `channels`,
-   or the bridge stops at start with `lights.levels was replaced by
-   lights.channels`.
+   file), set its `shelf_id` and `levels`, and
+   `sudo systemctl restart farm-shelf-bridge`. A config from before the
+   operator switch works as it is; its `robot_timeout_ms` is no longer used.
 4. Check `journalctl -u farm-shelf-bridge -n 20` shows
-   `[LIGHTS]  Grow lights by shelf-1's relays`, then drive a robot onto and off
-   the dock.
+   `[LIGHTS]  levels 0, 1 by shelf-1's relays`, then drive a robot onto and
+   off the dock.
 
 **When they're on**
 
@@ -115,8 +115,8 @@ relay channel added to `lights.channels` is another light with its own switch.
   `en_route` counts as leaving. The robot is the source of truth: it's where
   its last tag says.
 - **The operator's switch.** On FarmNet the dashboard's **Lights** card
-  has an On/Off switch per light. Off keeps that light off whatever the
-  robots do; On lets it follow the robots again. The remote dashboard has no
+  has an On/Off switch per level. Off keeps that level's lights off whatever
+  the robots do; On lets them follow the robots again. The remote dashboard has no
   switch, like jog. Switches live in the bridge's memory: a bridge restart or
   Pi reboot switches every light back on.
 - A robot that goes **silent** stays where it last was: only reaching the dock
@@ -124,12 +124,12 @@ relay channel added to `lights.channels` is another light with its own switch.
 - With **no robot heard from** yet (the bridge just started), or before the
   orchestrator's topology says where the dock is, the lights stay on.
 
-The bridge sends the node `lights 1` (one `1` on or `0` off per light) when
+The bridge sends the node `lights 10` (one `1` on or `0` off per relay) when
 that changes, and again with every reading, so a lost line or a node that
 reset is put right within one report (5 s). It also publishes each light's
-switch and state, retained, on `farm/lights/state` for the dashboard. It logs
+switch and state per level, retained, on `farm/lights/state` for the dashboard. It logs
 each change: `[LIGHTS] lights 0 (robots docked)`, and each switch:
-`[LIGHTS] Grow lights switched off by dashboard`.
+`[LIGHTS] level 1 switched off by dashboard`.
 
 **Failures leave the lights on**, never off: the plants keep their light.
 
