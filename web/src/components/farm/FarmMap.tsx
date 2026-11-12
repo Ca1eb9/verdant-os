@@ -123,7 +123,6 @@ export function FarmMap({
   const selected = robots.find((robot) => robot.id === selectedRobotId);
   const selectedDraw = draws.find((robot) => robot.id === selectedRobotId);
   const selectedNode = selected ? resolveNode(graph, selected.currentNode) : undefined;
-  const selectedLevel = selectedNode ? scene.levels.findIndex((lv) => lv.z === selectedNode.z) + 1 : 0;
   const selectedAisle = selectedNode ? scene.aisles.find((a) => a.y === selectedNode.y)?.name : undefined;
 
   return (
@@ -180,7 +179,7 @@ export function FarmMap({
               <strong>{selected.id}</strong>
               <span>
                 {selectedNode
-                  ? `${selectedNode.id} (${selectedAisle ? `Aisle ${selectedAisle}, ` : ""}L${selectedLevel})`
+                  ? `${selectedNode.id} (${selectedAisle ? `Aisle ${selectedAisle}, ` : ""}L${selectedNode.z})`
                   : "Position unknown"}
               </span>
               <span>{selectedDraw?.action}</span>

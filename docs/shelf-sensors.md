@@ -88,8 +88,8 @@ through relays (Adafruit #4409) on D5 and D6, wired across the lights' 0–10 V
 dim wires ([wiring](wiring/shelf-sensor.md#grow-light-relays)); the bridge
 decides. Each relay is given a level in `lights.levels` and the dashboard
 shows a switch per level. The farm has one light supply for both levels for
-now, so only the relay on D5 (level 0, "Level 1" on the dashboard) is wired:
-it switches every light, and the "Level 2" switch changes nothing until a
+now, so only the relay on D5 ("Level 0" on the dashboard) is wired: it
+switches every light, and the "Level 1" switch changes nothing until a
 second supply is wired to the D6 relay.
 
 **Setting it up**

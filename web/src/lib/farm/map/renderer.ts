@@ -164,7 +164,7 @@ interface RobotAnim {
 
 type Attrs = Record<string, string | number>;
 
-/** "L1 light: 412 lux", by the map's level label: for the fixture's title and the map's label */
+/** "L0 light: 412 lux", by the map's level label: for the fixture's title and the map's label */
 export function levelLightText(levelId: number, lux: number | null) {
   return `L${levelId} light: ${lux === null ? "no reading" : `${Math.round(lux)} lux`}`;
 }
