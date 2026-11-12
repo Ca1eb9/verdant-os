@@ -13,6 +13,12 @@ import type { LevelLight } from "@/lib/farm/map/renderer";
  * at build time. Remotely there are no switches, so the sensors still draw.
  */
 const FROM_SWITCHES = process.env.NEXT_PUBLIC_MAP_LIGHTS_FROM_SWITCHES === "true";
+/**
+ * Draw each level's light fully on or off from its sensor (on at ON_OFF_LUX in
+ * the renderer) instead of in proportion to its reading. FROM_SWITCHES, when
+ * it applies, draws on or off anyway. Fixed at build time.
+ */
+const ON_OFF = process.env.NEXT_PUBLIC_MAP_LIGHTS_ON_OFF === "true";
 
 /**
  * Each level's grow light, by its z, for the farm map: the light reading for
@@ -37,7 +43,7 @@ export function useLevelLights(levels: Level[]): Map<number, LevelLight> {
     const lights = liveStatus === "live" ? (reading?.lights ?? []) : [];
     return new Map(levels.map((level) => {
       const lux = lights.find((light) => light.level === level.z)?.lux ?? null;
-      return [level.z, lux === null ? null : { lux }];
+      return [level.z, lux === null ? null : { lux, onOff: ON_OFF }];
     }));
   }, [levels, liveStatus, reading, switches]);
 }

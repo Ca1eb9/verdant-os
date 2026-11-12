@@ -206,7 +206,10 @@ Set it to what a sensor reads under its light at full brightness. With
 `NEXT_PUBLIC_MAP_LIGHTS_FROM_SWITCHES=true` in `dashboard.env` the map draws
 the lights from the Lights card's switches instead (full on or off), for a
 day the sensors aren't working; a level without its own switch follows
-whether any light is on, and the remote dashboard still uses the sensors. A level with no current reading
+whether any light is on, and the remote dashboard still uses the sensors.
+`NEXT_PUBLIC_MAP_LIGHTS_ON_OFF=true` draws each level simply on (its sensor at
+`ON_OFF_LUX`, 2000 lux, or more) or off instead of in proportion; the
+switches option overrides it where it applies. A level with no current reading
 (none in the last 10 s, the sensor `null`, or no sensor faces it) is drawn as
 off, never as lit; its tooltip says "no reading".
 This assumes one shelf node, as on this farm: with several, the card and map

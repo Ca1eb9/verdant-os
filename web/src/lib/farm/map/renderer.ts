@@ -100,6 +100,9 @@ export const PAL_LIGHT: typeof PAL_DARK = {
 // depends on the fixture and its distance: set it from a reading under the
 // farm's lights at full brightness.
 const FULL_GLOW_LUX = 5000;
+// With NEXT_PUBLIC_MAP_LIGHTS_ON_OFF a level is drawn fully on at or above
+// this reading and off below it, instead of in proportion
+const ON_OFF_LUX = 2000;
 // A level whose light reads 0, or has no reading, keeps its fixture this
 // visible, so it reads as off rather than missing. No reading never draws
 // brighter than off: losing the feed mustn't look like the light coming on.
@@ -165,10 +168,11 @@ interface RobotAnim {
 type Attrs = Record<string, string | number>;
 
 /**
- * A level's light on the map: its sensor's reading, or its switch (with
- * NEXT_PUBLIC_MAP_LIGHTS_FROM_SWITCHES), or null with neither
+ * A level's light on the map: its sensor's reading (`onOff`: drawn on or off
+ * at ON_OFF_LUX), or its switch (with NEXT_PUBLIC_MAP_LIGHTS_FROM_SWITCHES),
+ * or null with neither
  */
-export type LevelLight = { lux: number } | { switchedOn: boolean } | null;
+export type LevelLight = { lux: number; onOff?: boolean } | { switchedOn: boolean } | null;
 
 /** "L0 light: 412 lux", by the map's level label: for the fixture's title and the map's label */
 export function levelLightText(levelId: number, light: LevelLight) {
@@ -284,7 +288,10 @@ export class FarmRenderer {
     for (const [z, els] of this.lightEls) {
       const light = this.lights.get(z) ?? null;
       const glow =
-        light === null ? 0 : "switchedOn" in light ? Number(light.switchedOn) : Math.min(1, Math.max(0, light.lux / FULL_GLOW_LUX));
+        light === null ? 0
+        : "switchedOn" in light ? Number(light.switchedOn)
+        : light.onOff ? Number(light.lux >= ON_OFF_LUX)
+        : Math.min(1, Math.max(0, light.lux / FULL_GLOW_LUX));
       const beamOpacity = this.opts.beamOpacity == null ? 0.32 : this.opts.beamOpacity;
       els.beams?.setAttribute("opacity", String(beamOpacity * glow));
       els.fixture.setAttribute("opacity", String(OFF_FIXTURE_OPACITY + (1 - OFF_FIXTURE_OPACITY) * glow));
