@@ -164,9 +164,17 @@ interface RobotAnim {
 
 type Attrs = Record<string, string | number>;
 
+/**
+ * A level's light on the map: its sensor's reading, or its switch (with
+ * NEXT_PUBLIC_MAP_LIGHTS_FROM_SWITCHES), or null with neither
+ */
+export type LevelLight = { lux: number } | { switchedOn: boolean } | null;
+
 /** "L0 light: 412 lux", by the map's level label: for the fixture's title and the map's label */
-export function levelLightText(levelId: number, lux: number | null) {
-  return `L${levelId} light: ${lux === null ? "no reading" : `${Math.round(lux)} lux`}`;
+export function levelLightText(levelId: number, light: LevelLight) {
+  if (light === null) return `L${levelId} light: no reading`;
+  if ("switchedOn" in light) return `L${levelId} light: switched ${light.switchedOn ? "on" : "off"}`;
+  return `L${levelId} light: ${Math.round(light.lux)} lux`;
 }
 
 /** A level's light fixture, updated from its reading without redrawing the farm */
@@ -188,8 +196,8 @@ export class FarmRenderer {
   private trailLayer: SVGGElement | null = null;
   private robotLayer: SVGGElement | null = null;
   private labelLayer: SVGGElement | null = null;
-  /** Each level's light in lux, by z; null or missing: no current reading */
-  private lights = new Map<number, number | null>();
+  /** Each level's light, by z; null or missing: no current reading */
+  private lights = new Map<number, LevelLight>();
   private lightEls = new Map<number, LightEls>();
   private destroyed = false;
   private PAL = PAL_DARK;
@@ -261,25 +269,26 @@ export class FarmRenderer {
     this.drawRobots();
   }
 
-  /** Each level's light in lux by z, null where there's no current reading */
-  setLights(lights: Map<number, number | null>) {
+  /** Each level's light by z, null where there's no current reading */
+  setLights(lights: Map<number, LevelLight>) {
     this.lights = lights;
     if (!this.destroyed) this.applyLights();
   }
 
   /**
-   * Lit as bright as the level's light reads. With no reading it's drawn as
-   * off, and its title says so: the map never shows a light it doesn't know
-   * is on.
+   * Lit as bright as the level's light reads, or fully while it's switched
+   * on. With no reading it's drawn as off, and its title says so: the map
+   * never shows a light it doesn't know is on.
    */
   private applyLights() {
     for (const [z, els] of this.lightEls) {
-      const lux = this.lights.get(z) ?? null;
-      const glow = lux === null ? 0 : Math.min(1, Math.max(0, lux / FULL_GLOW_LUX));
+      const light = this.lights.get(z) ?? null;
+      const glow =
+        light === null ? 0 : "switchedOn" in light ? Number(light.switchedOn) : Math.min(1, Math.max(0, light.lux / FULL_GLOW_LUX));
       const beamOpacity = this.opts.beamOpacity == null ? 0.32 : this.opts.beamOpacity;
       els.beams?.setAttribute("opacity", String(beamOpacity * glow));
       els.fixture.setAttribute("opacity", String(OFF_FIXTURE_OPACITY + (1 - OFF_FIXTURE_OPACITY) * glow));
-      els.title.textContent = levelLightText(els.levelId, lux);
+      els.title.textContent = levelLightText(els.levelId, light);
     }
   }
 

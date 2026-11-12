@@ -78,7 +78,7 @@ needs to be in the `dialout` group to open serial ports).
 | `reopen_interval_ms` | Retry delay for a missing or dropped port |
 | `baud`, `max_line_length`, `watchdog_interval_ms` | Serial and timing settings |
 | `lights.shelf_id` | The shelf whose node has the light relays. Leave `lights` out for no grow light control |
-| `lights.levels` | The level each relay channel switches, in order: `[0, 1]` is D5 for level 0, D6 for level 1. The dashboard shows a switch per level |
+| `lights.levels` | The level each relay channel switches, in order: `[0]` is D5 for level 0 (`[0, 1]` would add D6 for level 1). The dashboard shows a switch per level |
 
 ## Grow lights
 
@@ -87,10 +87,10 @@ operator has switched them off on the dashboard. The node switches them
 through relays (Adafruit #4409) on D5 and D6, wired across the lights' 0–10 V
 dim wires ([wiring](wiring/shelf-sensor.md#grow-light-relays)); the bridge
 decides. Each relay is given a level in `lights.levels` and the dashboard
-shows a switch per level. The farm has one light supply for both levels for
-now, so only the relay on D5 ("Level 0" on the dashboard) is wired: it
-switches every light, and the "Level 1" switch changes nothing until a
-second supply is wired to the D6 relay.
+shows a switch per level. The farm has one light supply for both levels, so
+the config lists only level 0: the relay on D5 switches every light, and the
+dashboard shows a single "Level 0" switch. Wiring a second supply to the D6
+relay and adding `1` to `levels` adds a "Level 1" switch.
 
 **Setting it up**
 
@@ -104,7 +104,7 @@ second supply is wired to the D6 relay.
    `sudo systemctl restart farm-shelf-bridge`. A config from before the
    operator switch works as it is; its `robot_timeout_ms` is no longer used.
 4. Check `journalctl -u farm-shelf-bridge -n 20` shows
-   `[LIGHTS]  levels 0, 1 by shelf-1's relays`, then drive a robot onto and
+   `[LIGHTS]  levels 0 by shelf-1's relays`, then drive a robot onto and
    off the dock.
 
 **When they're on**
@@ -200,8 +200,13 @@ newest reading of any shelf; the remote path waits on the Supabase bridge.
 The Light card and History page show each level's light. The farm map draws
 each level's grow light as bright as the reading for that level (its
 `level` is the topology's `z`). Full brightness is
-`FULL_GLOW_LUX` in `web/src/lib/farm/map/renderer.ts`: set it to what a sensor
-reads under its light at full brightness. A level with no current reading
+`FULL_GLOW_LUX` in `web/src/lib/farm/map/renderer.ts` (5000 lux): a level is
+drawn in proportion to its reading up to that, so there's no on/off cutoff.
+Set it to what a sensor reads under its light at full brightness. With
+`NEXT_PUBLIC_MAP_LIGHTS_FROM_SWITCHES=true` in `dashboard.env` the map draws
+the lights from the Lights card's switches instead (full on or off), for a
+day the sensors aren't working; a level without its own switch follows
+whether any light is on, and the remote dashboard still uses the sensors. A level with no current reading
 (none in the last 10 s, the sensor `null`, or no sensor faces it) is drawn as
 off, never as lit; its tooltip says "no reading".
 This assumes one shelf node, as on this farm: with several, the card and map
