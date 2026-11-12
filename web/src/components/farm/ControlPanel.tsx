@@ -128,7 +128,7 @@ export function ControlPanel({
   const [operatorKey, setOperatorKey] = useState("");
   const [keyDraft, setKeyDraft] = useState("");
   const [showKey, setShowKey] = useState(false);
-  const [quickImmediate, setQuickImmediate] = useState(false);
+  const [quickImmediate, setQuickImmediate] = useState(true);
   const [action, setAction] = useState<ActionAtTarget | "">("");
   const [durationMin, setDurationMin] = useState("");
   const [goImmediate, setGoImmediate] = useState(false);

@@ -9,7 +9,7 @@
 // Run:  npx tsx src/index.ts
 // Flags:
 //   AUTONOMOUS=false  — wait for orchestrator commands instead of self-assigning
-//   ROBOT_ID=robot-1  — robot identifier
+//   ROBOT_ID=robot-5  — robot identifier (not robot-1: that is the real robot)
 //   BROKER_URL=mqtt://localhost:1883
 // ============================================================
 
@@ -32,7 +32,7 @@ import {
 
 // --- Config --------------------------------------------------
 
-const ROBOT_ID = process.env.ROBOT_ID ?? "robot-1";
+const ROBOT_ID = process.env.ROBOT_ID ?? "robot-5";
 const BROKER_URL = process.env.BROKER_URL ?? "mqtt://localhost:1883";
 const TOPOLOGY_PATH = process.env.TOPOLOGY_PATH ?? "../../topology.json";
 const AUTONOMOUS = process.env.AUTONOMOUS !== "false"; // default true
@@ -337,6 +337,12 @@ async function main() {
           console.log(`[RC] controller connected`);
           publishTelemetry();
         }, CONTROLLER_CONNECT_MS);
+        return;
+      }
+
+      // The simulated elevator ride is timed (firmware MANUAL_ELEVATOR off)
+      if (cmd.command === "elevator_arrived") {
+        console.log(`[CMD] elevator_arrived ignored: the simulated ride is timed`);
         return;
       }
 
