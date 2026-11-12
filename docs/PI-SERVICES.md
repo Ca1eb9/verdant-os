@@ -197,16 +197,10 @@ sudo -u farm -H bash -c 'cd /opt/verdant-os/farm-controller/orchestrator && set 
 2. Add `deploy/env/<name>.env.example`, and create `/etc/verdant/<name>.env` from it on the Pi (step 4).
 3. Add `farm-<name>` to `SERVICES` in `scripts/pi-deploy.sh`, then deploy.
 
-## SD card care
+## Keeping it running
 
-SD cards fail from sudden power loss during a write and from wear. With this setup:
-
-- **Always shut down with `sudo poweroff`** before unplugging. This matters more than anything else here.
-- Logs are capped (step 5). The ingester's database is the main writer, about one row per robot per second, flushed to the card in batches (SQLite's `synchronous = NORMAL`: a power cut can lose the last moments of rows, never the file); it keeps 7 days (`RETENTION_DAYS` in `ingester.env`) and deletes older rows daily, so it stops growing after a week. Every service logs a recurring problem (bad messages, a broker that's down) once until it clears.
-- Use a quality A2-rated card from a known brand.
-- Back up now and then:
-  - the data: `sudo tar czf ~/verdant-backup-$(date +%F).tgz /var/lib/verdant /etc/verdant`, then copy it off the Pi
-  - the whole card: Raspberry Pi OS's **SD Card Copier** onto a spare card, so a dead card is a two-minute swap
+Power cuts, SD card wear, a UPS and booting from a USB drive are in
+[PI-RELIABILITY.md](PI-RELIABILITY.md).
 
 ## Running lighter (optional)
 
@@ -229,7 +223,7 @@ Disabling keeps the packages, so nothing is lost. Leave `avahi-daemon` (it's wha
 
 - **No real-time clock.** The Pi sets its clock over the uplink at boot. Without the uplink it restores the time it last saved, which can be behind. The orchestrator doesn't care (it uses receive times), but timestamps in the ingester's database can be off after a long time without the uplink.
 - **A WiFi uplink drops more often than Ethernet.** Nothing on the farm depends on it; only `apt`, the clock and the Supabase bridge do, and the bridge has to reconnect on its own when it comes back.
-- **Power.** Use the official 5 V / 5 A (Pi 5) or 5 V / 3 A (Pi 4) supply. Under-voltage causes random crashes; `vcgencmd get_throttled` shows it.
+- **Power.** Use the official 5 V / 5 A (Pi 5) or 5 V / 3 A (Pi 4) supply; more in [PI-RELIABILITY.md](PI-RELIABILITY.md).
 - **Mosquitto** isn't a farm unit: it's the OS package's own `mosquitto.service`, configured in [WIFI-SETUP.md](WIFI-SETUP.md). The farm services start after it; while it's down they keep retrying every 5 seconds, and they reconnect on their own when it restarts.
 - **Retained messages.** The orchestrator publishes the farm layout and each robot's state as retained messages, which the dashboard reads when it connects. Mosquitto keeps them across its own restarts only with persistence on: check `grep persistence /etc/mosquitto/mosquitto.conf` shows `persistence true` (the default).
 
