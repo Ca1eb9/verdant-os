@@ -78,7 +78,8 @@ needs to be in the `dialout` group to open serial ports).
 | `reopen_interval_ms` | Retry delay for a missing or dropped port |
 | `baud`, `max_line_length`, `watchdog_interval_ms` | Serial and timing settings |
 | `lights.shelf_id` | The shelf whose node has the light relays. Leave `lights` out for no grow light control |
-| `lights.levels` | The level each relay channel switches, in order: `[0]` is D5 for level 0 (`[0, 1]` would add D6 for level 1). The dashboard shows a switch per level |
+| `lights.levels` | The level each relay channel switches, in order: `[0]` is D5 for level 0 (`[0, 1]` adds D6 for level 1). At most two, the node's relays. The dashboard shows a switch per level |
+| `lights.follow_robots` | `true`: each level is lit only while a robot is on it (or riding the elevator to it). `false` or left out: every level is lit until all the robots are docked |
 
 ## Grow lights
 
@@ -110,7 +111,7 @@ relay and adding `1` to `levels` adds a "Level 1" switch.
 **When they're on**
 
 - **Robots docked: off.** A robot reaching the dock (its `current_node` is a
-  dock node in the topology) turns the lights off once every robot is there.
+  dock node in the topology) turns every level off once every robot is there.
   They come back on as soon as one drives off: a robot on its dock tag that's
   `en_route` counts as leaving. The robot is the source of truth: it's where
   its last tag says.
@@ -119,8 +120,21 @@ relay and adding `1` to `levels` adds a "Level 1" switch.
   the robots do; On lets them follow the robots again. The remote dashboard has no
   switch, like jog. Switches live in the bridge's memory: a bridge restart or
   Pi reboot switches every light back on.
+- **Per level (`follow_robots: true`).** With a supply per level (D5 and D6,
+  `levels: [0, 1]`), each level is lit only while a robot is on it: the level
+  of the last tag it read (the node's `z`). Riding the elevator, it also lights
+  the level it's riding to, from the elevator tag it rides from, so that level
+  is lit when it drives off; the bridge works out the ride's end with the same
+  shortest path the robot computes, to its task's target (the orchestrator's
+  retained `farm/robot/{id}/state`) or, returning, to the dock. A ride through
+  several levels lights only the last. A stopped robot doesn't look ahead. The
+  dashboard says "Off: no robot on this level" for a level waiting for one.
+  Off (the default), every level is lit while any robot is out.
 - A robot that goes **silent** stays where it last was: only reaching the dock
-  turns the lights off, so a robot out of WiFi on a level keeps them on.
+  turns the lights off, so a robot out of WiFi on a level keeps them on (per
+  level: its level).
+- A robot whose place can't be told, one that **hasn't read a tag** since it
+  booted or reports a node the topology doesn't have, lights every level.
 - With **no robot heard from** yet (the bridge just started), or before the
   orchestrator's topology says where the dock is, the lights stay on.
 
@@ -139,7 +153,8 @@ each change: `[LIGHTS] lights 0 (robots docked)`, and each switch:
 | Bridge stopped, or the Pi off | All on, 30 s after the last line it got (the node's `LIGHTS_TIMEOUT_MS`) |
 | Broker down | The bridge can't hear the robots or the operator, so it stops sending: all on 30 s later |
 | Orchestrator not running at the bridge's start | On until its retained topology says where the dock is. Once loaded, the bridge keeps it |
-| A robot powered off or out of WiFi | Stays where it last was: off only if that was the dock |
+| A robot powered off or out of WiFi | Stays where it last was: off only if that was the dock (per level: its level stays lit) |
+| Orchestrator not running, so no task target (per level) | Only the elevator look-ahead is affected: the new level comes on at its first tag instead of during the ride |
 
 **Turning it off for the demo or a test:** switch the lights On on the
 dashboard, or remove `lights` from `/etc/verdant/shelf-bridge-config.json` and

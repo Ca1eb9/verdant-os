@@ -42,6 +42,16 @@ describe("shelf bridge config", () => {
     assert.throws(() => load({ ...base, lights: { ...lights, levels: [0.5] } }), /levels/);
   });
 
+  it("takes follow_robots as true or false, and leaves it out by default", () => {
+    assert.equal(load({ ...base, lights }).lights?.follow_robots, undefined);
+    assert.equal(load({ ...base, lights: { ...lights, follow_robots: true } }).lights?.follow_robots, true);
+    assert.throws(() => load({ ...base, lights: { ...lights, follow_robots: "yes" } }), /follow_robots/);
+  });
+
+  it("refuses more levels than the node has relays", () => {
+    assert.throws(() => load({ ...base, lights: { ...lights, levels: [0, 1, 2] } }), /2 relays/);
+  });
+
   it("takes a config from before the operator switch, robot_timeout_ms unused", () => {
     assert.ok(load({ ...base, lights: { ...lights, robot_timeout_ms: 10000 } }).lights);
   });

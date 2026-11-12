@@ -362,13 +362,15 @@ async function main() {
 
   publishLights();
   if (lights && config.lights) {
-    console.log(`[LIGHTS]  levels ${config.lights.levels.join(", ")} by ${config.lights.shelf_id}'s relays`);
+    console.log(`[LIGHTS]  levels ${config.lights.levels.join(", ")} by ${config.lights.shelf_id}'s relays, ${config.lights.follow_robots ? "each lit while a robot is on it" : "off while the robots are docked"}`);
     mqtt.subscribe<unknown>(TOPICS.system.topology, (msg) => {
       if (!lights.setTopology(msg)) {
         logs.warn("lights topology", "[LIGHTS] ignored an invalid topology; lights keep the last one");
         return;
       }
       logs.ok("lights topology");
+      publishLights();
+      sendLights();
     });
     mqtt.subscribe<unknown>(TOPICS.robot.telemetryAll, (msg, topic) => {
       const robotId = extractIdFromTopic(topic);
@@ -381,6 +383,16 @@ async function main() {
       publishLights();
       sendLights();
     });
+    // The task's target, for the elevator ride's end
+    if (config.lights.follow_robots) {
+      mqtt.subscribe<unknown>(TOPICS.robot.stateAll, (msg, topic) => {
+        const robotId = extractIdFromTopic(topic);
+        if (!robotId) return;
+        lights.onState(robotId, msg);
+        publishLights();
+        sendLights();
+      });
+    }
     mqtt.subscribe<unknown>(TOPICS.lights.set, (msg) => {
       if (!isLightSwitch(msg) || !lights.setOperator(msg.level, msg.on)) {
         logs.warn("lights set", `[LIGHTS] ignoring an invalid light switch: ${JSON.stringify(msg)}`);

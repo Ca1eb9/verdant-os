@@ -16,6 +16,7 @@
   ],
   "lights": {
     "shelf_id": "shelf-1",
-    "levels": [0]
+    "levels": [0],
+    "follow_robots": false
   }
 }

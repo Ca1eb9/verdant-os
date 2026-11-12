@@ -9,14 +9,14 @@ import styles from "@/components/dashboard/DashboardView.module.css";
 function statusOf(light: LightState, robotsDocked: boolean) {
   if (light.on) return "Lit";
   if (!light.operator_on) return "Switched off";
-  return robotsDocked ? "Off while the robots are docked" : "Off";
+  return robotsDocked ? "Off while the robots are docked" : "Off: no robot on this level";
 }
 
 /**
  * The operator's switch for each level's grow lights, on FarmNet only (the
  * remote dashboard has none, like jog). A level is lit while it's switched on
- * and a robot is out on the farm; the shelf bridge turns them all off while
- * every robot is docked.
+ * and a robot is out on the farm (with the bridge's follow_robots, on that
+ * level); the shelf bridge turns them all off while every robot is docked.
  */
 export function LightsCard() {
   const { lights, setLight } = useGrowLights();
