@@ -68,8 +68,16 @@ export class GrowLights {
   /** The operator's switch per configured level, on until switched off (in memory: a restart turns them on) */
   private operatorOn: boolean[];
 
+  /**
+   * follow_robots as it applies: one switch can't light levels one by one (it
+   * would leave every level dark while a robot is on another), so with a
+   * single level it's ignored
+   */
+  readonly followRobots: boolean;
+
   constructor(private config: GrowLightsConfig) {
     this.operatorOn = config.levels.map(() => true);
+    this.followRobots = config.follow_robots === true && config.levels.length > 1;
   }
 
   /** The orchestrator's retained topology. False if it isn't a usable one. */
@@ -127,7 +135,7 @@ export class GrowLights {
    * topology yet, or a robot whose place it can't tell)
    */
   litLevels(): Set<number> | null {
-    if (!this.config.follow_robots) return this.robotsDocked() ? new Set() : null;
+    if (!this.followRobots) return this.robotsDocked() ? new Set() : null;
     const graph = this.graph;
     if (!graph || this.robots.size === 0) return null;
     const lit = new Set<number>();

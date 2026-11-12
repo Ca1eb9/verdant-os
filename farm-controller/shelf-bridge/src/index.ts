@@ -362,7 +362,10 @@ async function main() {
 
   publishLights();
   if (lights && config.lights) {
-    console.log(`[LIGHTS]  levels ${config.lights.levels.join(", ")} by ${config.lights.shelf_id}'s relays, ${config.lights.follow_robots ? "each lit while a robot is on it" : "off while the robots are docked"}`);
+    console.log(`[LIGHTS]  levels ${config.lights.levels.join(", ")} by ${config.lights.shelf_id}'s relays, ${lights.followRobots ? "each lit while a robot is on it" : "off while the robots are docked"}`);
+    if (config.lights.follow_robots && !lights.followRobots) {
+      console.warn("[LIGHTS] follow_robots ignored: it needs a relay per level, and lights.levels has one");
+    }
     mqtt.subscribe<unknown>(TOPICS.system.topology, (msg) => {
       if (!lights.setTopology(msg)) {
         logs.warn("lights topology", "[LIGHTS] ignored an invalid topology; lights keep the last one");
@@ -384,7 +387,7 @@ async function main() {
       sendLights();
     });
     // The task's target, for the elevator ride's end
-    if (config.lights.follow_robots) {
+    if (lights.followRobots) {
       mqtt.subscribe<unknown>(TOPICS.robot.stateAll, (msg, topic) => {
         const robotId = extractIdFromTopic(topic);
         if (!robotId) return;

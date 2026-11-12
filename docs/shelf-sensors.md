@@ -79,7 +79,7 @@ needs to be in the `dialout` group to open serial ports).
 | `baud`, `max_line_length`, `watchdog_interval_ms` | Serial and timing settings |
 | `lights.shelf_id` | The shelf whose node has the light relays. Leave `lights` out for no grow light control |
 | `lights.levels` | The level each relay channel switches, in order: `[0]` is D5 for level 0 (`[0, 1]` adds D6 for level 1). At most two, the node's relays. The dashboard shows a switch per level |
-| `lights.follow_robots` | `true`: each level is lit only while a robot is on it (or riding the elevator to it). `false` or left out: every level is lit until all the robots are docked |
+| `lights.follow_robots` | `true`: each level is lit only while a robot is on it (or riding the elevator to it); needs a relay per level, so with one level in `levels` it's ignored (logged at start). `false` or left out, the default: every level is lit until all the robots are docked |
 
 ## Grow lights
 

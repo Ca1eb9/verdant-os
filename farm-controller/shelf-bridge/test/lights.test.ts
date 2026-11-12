@@ -188,6 +188,17 @@ describe("grow lights, per level (follow_robots on)", () => {
   });
 });
 
+describe("follow_robots with one switch", () => {
+  it("is ignored: the one light stays on while a robot is on another level", () => {
+    const l = growLights([0], true);
+    assert.equal(l.followRobots, false);
+    l.onTelemetry("robot-1", at("cp-12", "working"));
+    assert.equal(l.line(), "lights 1");
+    l.onTelemetry("robot-1", at("dock-1", "charging"));
+    assert.equal(l.line(), "lights 0");
+  });
+});
+
 describe("the operator's switch", () => {
   it("keeps a level off whatever the robots do, until switched on", () => {
     const l = growLights([0, 1]);
