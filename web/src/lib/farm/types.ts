@@ -55,7 +55,8 @@ export type GrowthStage = "seedling" | "vegetative" | "mature" | "harvest_ready"
 
 export type CommandType =
   | "navigate" | "return_to_dock" | "stop" | "resume" | "cancel" | "jog" | "connect_controller"
-  | "charge_complete";
+  | "charge_complete"
+  | "elevator_arrived";
 
 export type JogDirection = "forward" | "backward";
 

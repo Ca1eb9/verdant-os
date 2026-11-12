@@ -196,6 +196,9 @@ static void test_inbound(const std::string& in_dir) {
   CHECK(c.type == CommandType::Jog && c.direction == JogDirection::Forward);
   CHECK(parse(R"({"command":"connect_controller"})", c) == CommandParseResult::Ok);
   CHECK(c.type == CommandType::ConnectController);
+  CHECK(parse(R"({"command":"elevator_arrived"})", c) == CommandParseResult::Ok);
+  CHECK(c.type == CommandType::ElevatorArrived);
+  CHECK(parse(R"({"command":"drive"})", c) == CommandParseResult::UnknownCommand);
 
   // null optional fields are treated as absent.
   CHECK(parse(R"({"command":"return_to_dock","task_id":null,"priority":"critical","source":"alert"})", c) ==

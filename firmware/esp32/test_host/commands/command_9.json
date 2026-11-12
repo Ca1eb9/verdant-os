@@ -1,0 +1,1 @@
+{ "command": "elevator_arrived", "priority": "critical", "source": "local" }

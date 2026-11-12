@@ -68,10 +68,13 @@ enum class Turn : uint8_t { Straight = 0, Right = 1, UTurn = 2, Left = 3 };
 
 // ConnectController goes to the pad task, not nav (g_pad_connect_requests).
 // ChargeComplete: the operator ends a dock trip as if the charge completed.
+// ElevatorArrived: the operator says the elevator has reached the level the
+// robot rides to (MANUAL_ELEVATOR in config.h).
 // Drive: the Bluetooth controller's stick, at a speed (robot-only, never on
 // the wire): keep it last, after every wire command.
 enum class CommandType : uint8_t {
-  Navigate, ReturnToDock, Stop, Resume, Cancel, Jog, ConnectController, ChargeComplete, Drive
+  Navigate, ReturnToDock, Stop, Resume, Cancel, Jog, ConnectController, ChargeComplete,
+  ElevatorArrived, Drive
 };
 
 // jog only; None means the field was absent.

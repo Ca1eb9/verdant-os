@@ -53,6 +53,12 @@ class Motion {
   // way off, then waits ELEVATOR_WAIT_MS per level ridden.
   void follow_edge(NodeIndex from, NodeIndex to, EdgeDrive drive, uint32_t now);
   void creep(uint32_t now);
+  // MANUAL_ELEVATOR (config.h): the ride ends on elevator_arrived(), not
+  // after ELEVATOR_WAIT_MS. Set once by the nav task.
+  void set_manual_elevator(bool on) { manual_elevator_ = on; }
+  // The operator's elevator_arrived command: drives off the elevator. False
+  // (nothing done) unless it's waiting on the elevator with manual_elevator.
+  bool elevator_arrived(uint32_t now);
   // Backs onto the dock (the robot faces away from it) and stops there; the
   // charger contact is reported separately, and brakes. Stopped at the dock
   // for CHARGE_CONTACT_TIMEOUT_MS without that brake: it can't charge.
@@ -88,6 +94,7 @@ class Motion {
   uint32_t ride_started_ms_ = 0;
   uint32_t ride_ms_ = 0;
   bool exit_backward_ = false;
+  bool manual_elevator_ = false;
   // Driving/Creeping/Entering/Docking: time spent with the motors free.
   uint32_t driven_ms_ = 0;
   uint32_t last_check_ms_ = 0;

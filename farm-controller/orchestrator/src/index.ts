@@ -533,11 +533,13 @@ function onRemoteCommand(raw: unknown, topic: string) {
   logs.ok(`command ${topic}`);
   const msg = raw;
 
-  // Jog (manual driving) and connect_controller (the robot looks for its
-  // Bluetooth controller): for an operator at the farm, so farm network
-  // only. Always immediate, one robot, never queued. Jogs aren't logged:
-  // they repeat while held.
-  if (msg.command.command === "jog" || msg.command.command === "connect_controller") {
+  // Jog (manual driving), connect_controller (the robot looks for its
+  // Bluetooth controller) and elevator_arrived (the robot may drive off the
+  // elevator): for an operator at the farm, so farm network only. Always
+  // immediate, one robot, never queued. Jogs aren't logged: they repeat
+  // while held.
+  if (msg.command.command === "jog" || msg.command.command === "connect_controller" ||
+      msg.command.command === "elevator_arrived") {
     const name = msg.command.command;
     if (topic !== TOPICS.commands.local) {
       console.log(`[REMOTE] ${name} rejected: only accepted from the farm network`);
@@ -553,7 +555,7 @@ function onRemoteCommand(raw: unknown, topic: string) {
       source: CommandSource.LOCAL,
     };
     if (name === "jog") command.direction = msg.command.direction;
-    else console.log(`[REMOTE] → ${msg.robot_id}: connect_controller`);
+    else console.log(`[REMOTE] → ${msg.robot_id}: ${name}`);
     mqtt.publish(TOPICS.robot.command(msg.robot_id), command);
     return;
   }

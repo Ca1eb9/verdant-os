@@ -108,6 +108,7 @@ class Rig : public NavOutput {
     edge_drive = d;
   }
   void creep() override { motion.push_back("creep"); }
+  void elevator_arrived() override { motion.push_back("elevator arrived"); }
   void jog(JogDirection d) override { motion.push_back(d == JogDirection::Backward ? "jog b" : "jog f"); }
   void drive(int16_t speed) override { motion.push_back("drive " + std::to_string(speed)); }
   void start_docking() override { motion.push_back("dock"); }
@@ -489,6 +490,28 @@ static void test_drive_direction() {
   CHECK(r.status() == RobotStatus::Working);
   r.core.snapshot(t);
   CHECK(t.heading == Heading::East);
+
+  // Sent back down before the next tag: the elevator is still ahead, so
+  // it goes on forward and off backward, as it came.
+  Rig back;
+  back.boot_at("cp-02");
+  back.command(navigate("t7", "cp-12", TargetAction::Water, 10));
+  back.tag("elev-1-L0");
+  back.tag("elev-1-L1");
+  CHECK(back.last_motion() == "edge elev-1-L1>cp-11" && back.edge_drive == EdgeDrive::Backward);
+  back.command(make(CommandType::ReturnToDock));
+  CHECK(back.last_motion() == "edge elev-1-L1>elev-1-L0");
+  CHECK(back.edge_drive == EdgeDrive::ElevatorBackward && back.core.reversing());
+
+  // elevator_arrived reaches the motion hooks only while following a path.
+  Rig ride;
+  ride.boot_at("cp-02");
+  ride.command(make(CommandType::ElevatorArrived));
+  CHECK(ride.last_motion() != "elevator arrived");
+  ride.command(navigate("t8", "cp-11", TargetAction::Water, 10));
+  ride.tag("elev-1-L0");
+  ride.command(make(CommandType::ElevatorArrived));
+  CHECK(ride.last_motion() == "elevator arrived" && ride.status() == RobotStatus::EnRoute);
 
   // Up two levels: one ride, off only at the top.
   Rig two;

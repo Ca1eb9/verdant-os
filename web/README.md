@@ -57,6 +57,8 @@ Restart the dev server after changing it; its startup output lists `Environments
 
 Also set `NEXT_PUBLIC_FARM_ID` and `NEXT_PUBLIC_FARM_NAME` to that Pi's farm (its row in Supabase's `farms` table). On FarmNet the dashboard belongs to that one farm, and the header's farm picker is locked to it.
 
+`NEXT_PUBLIC_MANUAL_ELEVATOR=true` shows an **Elevator arrived** button while a robot is on the elevator, on the farm network only. Use it only with robots flashed with `MANUAL_ELEVATOR` on (firmware `config.h`), which wait on the elevator for that button instead of a fixed time; turn both on together.
+
 Manual control is hidden for a robot that hasn't read its first tag yet (`initializing`). Set `NEXT_PUBLIC_JOG_WHILE_INITIALIZING=true` to offer it there too, e.g. to drive a robot onto a tag; the robot accepts those jogs either way. It's read at build time.
 
 ## Operator Sign-In

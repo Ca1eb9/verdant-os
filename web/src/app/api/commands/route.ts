@@ -53,6 +53,8 @@ function parseCommand(body: unknown): { farmId: string; robotId: string; command
   if (raw.command === "jog") return "Manual driving is only available on the farm network.";
   // for an operator at the robot; the orchestrator refuses it from Supabase too
   if (raw.command === "connect_controller") return "Connecting a controller is only available on the farm network.";
+  // for an operator who can see the elevator; the orchestrator refuses it from Supabase too
+  if (raw.command === "elevator_arrived") return "Releasing a robot from the elevator is only available on the farm network.";
   if (!COMMANDS.includes(raw.command as CommandType)) {
     return "command must be navigate, return_to_dock, stop, resume, cancel or charge_complete.";
   }

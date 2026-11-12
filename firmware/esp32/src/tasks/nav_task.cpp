@@ -59,6 +59,12 @@ class QueueOutput : public NavOutput {
     motion.follow_edge(from, to, drive, millis());
   }
   void creep() override { motion.creep(millis()); }
+  void elevator_arrived() override {
+    if (!motion.elevator_arrived(millis())) {
+      note(MANUAL_ELEVATOR ? "ignored: elevator_arrived while not waiting on the elevator"
+                           : "ignored: elevator_arrived with MANUAL_ELEVATOR off");
+    }
+  }
 
   // Charge contact detection is the dock sequence card's.
   void start_docking() override { motion.start_docking(millis()); }
@@ -216,6 +222,7 @@ void nav_task(void* /*param*/) {
   LOG("nav", "graph '%s': %u nodes, dock %s", GRAPH_VERSION, GRAPH_NODE_COUNT,
       GRAPH_NODES[GRAPH_DOCK].id);
   core.set_charge_sense_always(CHARGE_SENSE_ALWAYS);
+  out.motion.set_manual_elevator(MANUAL_ELEVATOR);
   core.begin();
 
   for (;;) {

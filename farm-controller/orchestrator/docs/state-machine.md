@@ -212,6 +212,7 @@ From `farm/commands/local` (dashboard on the farm network) and
 | `stop` | Immediate: sent to the robot(s). Otherwise: a stop task per robot (the dashboard sends it as critical), run when the robot is next idle ("pause after the current task"). A robot with no `current_node` yet (initializing) never takes queued work, so it gets the stop straight away |
 | `return_to_dock` | Immediate: sent to the robot(s). Otherwise: a dock task per robot |
 | `resume` | Always sent straight to the robot(s); also ends `manual` |
+| `elevator_arrived` | Farm network only, like `jog`: sent straight to the named robot, never queued. |
 | `charge_complete` | Always sent straight to the robot(s), like `resume`: ends a dock trip as if it had charged |
 | `cancel` | Needs a `robot_id` or `task_id`. Cancels that queued or assigned task, or the robot's current task, including while `lost`. Refused for an assigned stop task (use `resume`) |
 | `jog` | Only from `farm/commands/local` and for a known robot; sent straight to it, never queued |
