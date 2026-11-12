@@ -186,45 +186,47 @@ their drawings.
 `# bh1750 top failed` lines should appear. Covering one sensor lowers only its
 own reading.
 
-## Level light relays
+## Grow light relays
 
-Two Adafruit STEMMA Non-Latching Mini Relays (#4409) switch the level grow
-lights: one per level. Each relay's contacts short that light's 0–10 V dim
-wires, which turns the light off; released, the light is at full brightness.
-The light's driver puts about 10 V on those wires itself, so nothing here
-makes 10 V. What the node does with them: "Level lights" in
-[shelf-sensors.md](../shelf-sensors.md#level-lights).
+Adafruit STEMMA Non-Latching Mini Relays (#4409) switch the grow lights, one
+relay per level (`lights.levels` in `shelf-bridge-config.json`: D5 is level 0,
+D6 level 1). The farm has one light supply for both levels for now, so only
+**relay 1 on D5** is wired, and it switches every light; the D6 relay takes a
+second supply when there is one. A relay's contacts short the
+supply's 0–10 V dim wires, which turns its lights off; released, they're at
+full brightness. The supply puts about 10 V on those wires itself, so nothing
+here makes 10 V. What the node does with them: "Grow lights" in
+[shelf-sensors.md](../shelf-sensors.md#grow-lights).
 
-They aren't on the breadboard or perfboard drawings. Each relay plugs into
-the Uno with its STEMMA JST cable (or three jumpers) and sits next to the
-lights:
+They aren't on the breadboard or perfboard drawings. A relay plugs into the
+Uno with its STEMMA JST cable (or three jumpers), no soldering, and sits next
+to the light supply:
 
 ```
-  Uno                 Relay 1 (level 0)          Level 0 light
+  Uno                 Relay 1 (level 0)          Light supply
   D5  ───────────────  SIG
   5V  ──┬────────────  +  (3-5V)                 dim wire + ──┐
   GND ──┼─┬──────────  −  (GND)          COM ─────────────────┘
         │ │                              NO  ───── dim wire −
-        │ │           Relay 2 (level 1)          Level 1 light
+        │ │           Relay 2 (level 1, only with a second supply)
   D6  ──┼─┼──────────  SIG
-        └─┼──────────  +                         dim wire + ──┐
-          └──────────  −                 COM ─────────────────┘
-                                         NO  ───── dim wire −
+        └─┼──────────  +
+          └──────────  −
 ```
 
 | Relay | Pin | Goes to |
 |---|---|---|
-| Relay 1 (level 0) | SIG | Uno **D5** |
-| Relay 2 (level 1) | SIG | Uno **D6** |
-| Both | + | 5V (the + rail) |
-| Both | − | GND (the − rail) |
+| Relay 1 | SIG | Uno **D5** |
+| Relay 2 (optional) | SIG | Uno **D6** |
+| Each | + | 5V (the + rail) |
+| Each | − | GND (the − rail) |
 | Each | + and − | A 100 µF capacitor across them (below) |
-| Each | COM and NO screw terminals | That level light's two 0–10 V dim wires (usually purple and grey/pink) |
+| Each | COM and NO screw terminals | Its light supply's two 0–10 V dim wires (usually purple and grey/pink) |
 
-The JST cable's colours are black (−), red (+) and white (SIG). Which relay
-lights which level is the Pi's setting (`lights.levels` in
-`shelf-bridge-config.json`), so if the levels come out swapped, swap the
-numbers there instead of the wires.
+The JST cable's colours are black (−), red (+) and white (SIG). The relays
+are in the order of `lights.levels` in `shelf-bridge-config.json`: the first
+level is D5, the second D6. If they come out swapped, swap the numbers there
+instead of the wires.
 
 - **Use COM and NO, never NC.** On NO, a relay with no power (Uno off,
   resetting or unplugged) leaves the light on, which is what the plants need.

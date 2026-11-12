@@ -28,7 +28,7 @@ const BASE_SHELF_Y = 320;
 export interface Level {
   /** Topology z value */
   z: number;
-  /** Label shown on the shelf (L1, L2, ...) */
+  /** Label shown on the shelf (L0, L1, ...): the topology's z */
   id: number;
   shelfY: number;
   lightY: number;
@@ -119,7 +119,7 @@ function buildLevels(zs: number[]): { levels: Level[]; gnd: number; viewH: numbe
   const offset = (count - BASE_LEVELS) * LEVEL_PITCH;
   const levels = (zs.length ? zs : [0]).map((z, i) => {
     const shelfY = BASE_SHELF_Y + offset - LEVEL_PITCH * i;
-    return { z, id: i + 1, shelfY, lightY: shelfY - 62 };
+    return { z, id: z, shelfY, lightY: shelfY - 62 };
   });
   return { levels, gnd: BASE_GND + offset, viewH: BASE_VIEW_H + offset };
 }

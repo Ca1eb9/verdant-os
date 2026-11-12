@@ -1,125 +1,102 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { LevelLights } from "../src/lights.js";
+import { GrowLights, isLightSwitch } from "../src/lights.js";
 
-// The repo's farm: dock and level 0, elevator stops elev-1-L0/L1/L2, levels 1 and 2
+// The repo's farm, with its dock at dock-1
 const topology = JSON.parse(readFileSync(new URL("../../topology.json", import.meta.url), "utf-8"));
-const TIMEOUT = 10_000;
 
-function lightsAt(levels = [0, 1]) {
-  const l = new LevelLights({ shelf_id: "shelf-1", levels, robot_timeout_ms: TIMEOUT });
+function growLights(levels = [0]) {
+  const l = new GrowLights({ shelf_id: "shelf-1", levels });
   assert.ok(l.setTopology(topology));
   return l;
 }
 
 const at = (node: string | null, status = "en_route") => ({ current_node: node, status });
-const lit = (l: LevelLights, now = 0) => [...(l.litLevels(now) ?? [])].sort();
 
-describe("level lights", () => {
-  it("lights nothing, and sends nothing, before the topology", () => {
-    const l = new LevelLights({ shelf_id: "shelf-1", levels: [0, 1], robot_timeout_ms: TIMEOUT });
-    l.onTelemetry("robot-1", at("cp-01"), 0);
-    assert.equal(l.command(0), null);
+describe("grow lights", () => {
+  it("are on with no robot heard from, and before the topology", () => {
+    assert.equal(growLights().line(), "lights 1");
+    const l = new GrowLights({ shelf_id: "shelf-1", levels: [0] });
+    l.onTelemetry("robot-1", at("dock-1", "charging"));
+    assert.equal(l.line(), "lights 1");
     assert.equal(l.setTopology({ nodes: [] }), false);
-    assert.equal(l.command(0), null);
   });
 
-  it("lights the level of the robot's last tag", () => {
-    const l = lightsAt();
-    assert.deepEqual(l.command(0), { line: "lights 00", on: [] });
-    l.onTelemetry("robot-1", at("cp-01"), 0);
-    assert.deepEqual(l.command(0), { line: "lights 10", on: [0] });
-    l.onTelemetry("robot-1", at("cp-12", "working"), 1);
-    assert.deepEqual(l.command(1), { line: "lights 01", on: [1] });
+  it("go off when the robot reaches the dock, and on as it drives off", () => {
+    const l = growLights();
+    l.onTelemetry("robot-1", at("cp-01"));
+    assert.equal(l.line(), "lights 1");
+    l.onTelemetry("robot-1", at("dock-1", "docking"));
+    assert.equal(l.line(), "lights 0");
+    assert.equal(l.state(5).robots_docked, true);
+    l.onTelemetry("robot-1", at("dock-1", "charging"));
+    assert.equal(l.line(), "lights 0");
+    // its last tag is still the dock until the next one
+    l.onTelemetry("robot-1", at("dock-1", "en_route"));
+    assert.equal(l.line(), "lights 1");
   });
 
-  it("doesn't count a robot parked on the dock or before its first tag", () => {
-    const l = lightsAt();
-    l.onTelemetry("robot-1", at("dock-1", "charging"), 0);
-    l.onTelemetry("robot-2", at(null, "initializing"), 0);
-    assert.deepEqual(lit(l), []);
-    l.onTelemetry("robot-1", at("dock-1", "idle"), 0);
-    assert.deepEqual(lit(l), []);
-    // Driving off: its last tag is still the dock's
-    l.onTelemetry("robot-1", at("dock-1"), 0);
-    assert.deepEqual(lit(l), [0]);
+  it("stay on while any robot is off the dock", () => {
+    const l = growLights();
+    l.onTelemetry("robot-1", at("dock-1", "charging"));
+    l.onTelemetry("robot-2", at("cp-12", "working"));
+    assert.equal(l.line(), "lights 1");
+    l.onTelemetry("robot-2", at("dock-1", "idle"));
+    assert.equal(l.line(), "lights 0");
   });
 
-  it("lights the level it rides to, from the elevator tag it rides from", () => {
-    const l = lightsAt();
-    l.onState("robot-1", { task: { target_node: "water-11" } });
-    l.onTelemetry("robot-1", at("cp-02"), 0);
-    assert.deepEqual(lit(l), [0]);
-    l.onTelemetry("robot-1", at("elev-1-L0"), 1);
-    assert.deepEqual(lit(l, 1), [0, 1]);
-    // Off the elevator on level 1: level 0 goes off
-    l.onTelemetry("robot-1", at("elev-1-L1"), 2);
-    assert.deepEqual(lit(l, 2), [1]);
+  it("keep a robot that goes silent where it last was", () => {
+    const l = growLights();
+    l.onTelemetry("robot-1", at("cp-12", "working"));
+    // nothing more from it: only reaching the dock turns them off
+    assert.equal(l.line(), "lights 1");
   });
 
-  it("lights only the last level of a ride through several", () => {
-    const l = lightsAt([0, 1, 2]);
-    l.onTelemetry("robot-1", at("elev-1-L0"), 0);
-    l.onState("robot-1", { task: { target_node: "cp-22" } });
-    assert.deepEqual(lit(l), [0, 2]);
+  it("count a robot that hasn't read a tag yet as off the dock", () => {
+    const l = growLights();
+    l.onTelemetry("robot-1", at(null, "initializing"));
+    assert.equal(l.line(), "lights 1");
   });
 
-  it("rides down to the dock when returning", () => {
-    const l = lightsAt();
-    l.onTelemetry("robot-1", at("elev-1-L1", "returning_to_dock"), 0);
-    assert.deepEqual(lit(l), [0, 1]);
+  it("follow the operator's switch per level, docked or not", () => {
+    const l = growLights([0, 1]);
+    l.onTelemetry("robot-1", at("cp-01"));
+    assert.ok(l.setOperator(1, false));
+    assert.equal(l.line(), "lights 10");
+    assert.deepEqual(l.state(7), {
+      lights: [{ level: 0, operator_on: true, on: true }, { level: 1, operator_on: false, on: false }],
+      robots_docked: false,
+      timestamp: 7,
+    });
+    l.onTelemetry("robot-1", at("dock-1", "charging"));
+    assert.equal(l.line(), "lights 00");
+    l.onTelemetry("robot-1", at("cp-01"));
+    assert.ok(l.setOperator(1, true));
+    assert.equal(l.line(), "lights 11");
   });
 
-  it("doesn't look ahead when stopped, or with a target on the same level", () => {
-    const l = lightsAt();
-    l.onState("robot-1", { task: { target_node: "water-11" } });
-    l.onTelemetry("robot-1", at("elev-1-L0", "stopped"), 0);
-    assert.deepEqual(lit(l), [0]);
-    l.onState("robot-1", { task: { target_node: "water-01" } });
-    l.onTelemetry("robot-1", at("elev-1-L0"), 0);
-    assert.deepEqual(lit(l), [0]);
-    l.onState("robot-1", { task: null });
-    assert.deepEqual(lit(l), [0]);
+  it("refuse a switch for a level no relay switches", () => {
+    const l = growLights();
+    assert.equal(l.setOperator(1, false), false);
+    assert.equal(l.setOperator(0.5, false), false);
+    assert.equal(l.line(), "lights 1");
   });
 
-  it("keeps a level lit while any robot is on it", () => {
-    const l = lightsAt();
-    l.onTelemetry("robot-1", at("cp-01"), 0);
-    l.onTelemetry("robot-2", at("cp-11"), 0);
-    assert.deepEqual(lit(l), [0, 1]);
-    l.onTelemetry("robot-2", at("dock-1", "docking"), 1);
-    assert.deepEqual(lit(l, 1), [0]);
+  it("refuse invalid telemetry", () => {
+    const l = growLights();
+    assert.equal(l.onTelemetry("robot-1", { current_node: 5, status: "idle" }), false);
+    assert.equal(l.onTelemetry("robot-1", null), false);
   });
+});
 
-  it("forgets a silent robot", () => {
-    const l = lightsAt();
-    l.onTelemetry("robot-1", at("cp-01"), 0);
-    assert.deepEqual(lit(l, TIMEOUT), [0]);
-    assert.deepEqual(lit(l, TIMEOUT + 1), []);
-  });
-
-  it("keeps robots after a broker outage until their telemetry is back", () => {
-    const l = lightsAt();
-    l.onTelemetry("robot-1", at("cp-01"), 0);
-    l.refreshRobots(3 * TIMEOUT);
-    assert.deepEqual(lit(l, 3 * TIMEOUT), [0]);
-  });
-
-  it("ignores invalid telemetry, unknown nodes and levels without a relay", () => {
-    const l = lightsAt();
-    assert.equal(l.onTelemetry("robot-1", { status: "en_route" }, 0), false);
-    assert.equal(l.onTelemetry("robot-1", null, 0), false);
-    l.onTelemetry("robot-1", at("cp-99"), 0);
-    assert.deepEqual(lit(l), []);
-    l.onTelemetry("robot-1", at("cp-21"), 0);
-    assert.deepEqual(l.command(0), { line: "lights 00", on: [] });
-  });
-
-  it("uses a target that arrived before the robot's telemetry", () => {
-    const l = lightsAt();
-    l.onState("robot-1", { task: { target_node: "water-11" } });
-    l.onTelemetry("robot-1", at("elev-1-L0"), 0);
-    assert.deepEqual(lit(l), [0, 1]);
+describe("isLightSwitch", () => {
+  const ok = { level: 0, on: false, issued_by: "dashboard", timestamp: 1 };
+  it("takes a switch from the dashboard", () => assert.equal(isLightSwitch(ok), true));
+  it("refuses malformed ones", () => {
+    assert.equal(isLightSwitch({ ...ok, on: "false" }), false);
+    assert.equal(isLightSwitch({ ...ok, level: "0" }), false);
+    assert.equal(isLightSwitch({ ...ok, issued_by: "" }), false);
+    assert.equal(isLightSwitch({ ...ok, timestamp: null }), false);
   });
 });

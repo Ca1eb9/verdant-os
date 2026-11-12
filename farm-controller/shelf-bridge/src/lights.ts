@@ -1,155 +1,94 @@
 // ============================================================
-// Level lights
+// Grow lights
 //
-// Which levels' lights should be on, from where the robots
-// report they are. A robot lights the level of the last tag it
-// read; riding the elevator, it also lights the level it's
-// riding to, so that level is lit when it drives off. A robot
-// parked on the dock (not driving off it), or silent, lights
-// nothing.
-//
-// The robot doesn't report its path, so the ride's end comes
-// from the same shortest path the robot computes on board
-// (navigation.ts), to the target the orchestrator assigned.
+// Which levels' grow lights (one relay channel each on a shelf
+// node) should be on. Each is on unless the operator switched it
+// off on the dashboard, or every robot is parked on the dock: a
+// robot reaching the dock turns them off, and one leaving it
+// turns them back on.
 // ============================================================
 
-import {
-  type FarmTopology,
-  type GraphEdge,
-  type GraphNode,
-  type NavGraph,
-  RobotStatus,
-  buildGraph,
-  dijkstra,
-} from "@farm/shared";
-import type { LevelLightsConfig } from "./config.js";
-
-interface RobotSeen {
-  node: string | null;
-  status: string;
-  /** Monotonic ms of its last telemetry */
-  at: number;
-  /** The orchestrator's target for its task, from its retained state */
-  target: string | null;
-}
+import { type LightState, type LightSwitch, type LightsState, RobotStatus } from "@farm/shared";
+import type { GrowLightsConfig } from "./config.js";
 
 type Obj = Record<string, unknown>;
 
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 const isStr = (v: unknown): v is string => typeof v === "string" && v.length > 0;
 
-function isNode(v: unknown): v is GraphNode {
-  return isObj(v) && isStr(v.id) && Number.isInteger(v.z) && isStr(v.type);
+/** A light switch from the dashboard; its level is checked against the config by setOperator */
+export function isLightSwitch(v: unknown): v is LightSwitch {
+  return isObj(v) && Number.isInteger(v.level) && typeof v.on === "boolean" &&
+    isStr(v.issued_by) && typeof v.timestamp === "number" && Number.isFinite(v.timestamp);
 }
 
-function isEdge(v: unknown): v is GraphEdge {
-  return isObj(v) && isStr(v.from) && isStr(v.to) &&
-    typeof v.cost === "number" && Number.isFinite(v.cost) && v.cost >= 0;
-}
+export class GrowLights {
+  /** Dock node ids, from the topology */
+  private docks: Set<string> | null = null;
+  /** Each robot's last report: whether it was parked on a dock */
+  private parked = new Map<string, boolean>();
+  /** The operator's switch per configured level, on until switched off (in memory: a restart turns them on) */
+  private operatorOn: boolean[];
 
-export class LevelLights {
-  private graph: NavGraph | null = null;
-  /** The first dock, as on the robot (GRAPH_DOCK), the simulator and the scheduler */
-  private dock: string | null = null;
-  private robots = new Map<string, RobotSeen>();
-  /** Targets that arrived before the robot's first telemetry */
-  private targets = new Map<string, string | null>();
+  constructor(private config: GrowLightsConfig) {
+    this.operatorOn = config.levels.map(() => true);
+  }
 
-  constructor(private config: LevelLightsConfig) {}
-
-  /** The orchestrator's retained topology. False if it isn't a usable one. */
+  /** The orchestrator's retained topology, for its dock nodes. False if it isn't a usable one. */
   setTopology(raw: unknown): boolean {
-    if (!isObj(raw) || !Array.isArray(raw.nodes) || !Array.isArray(raw.edges) ||
-        raw.nodes.length === 0 || !raw.nodes.every(isNode) || !raw.edges.every(isEdge)) {
+    if (!isObj(raw) || !Array.isArray(raw.nodes) || raw.nodes.length === 0 ||
+        !raw.nodes.every((n) => isObj(n) && isStr(n.id) && isStr(n.type))) {
       return false;
     }
-    this.graph = buildGraph(raw as unknown as FarmTopology);
-    this.dock = (raw.nodes as GraphNode[]).find((n) => n.type === "dock")?.id ?? null;
+    this.docks = new Set((raw.nodes as Obj[]).filter((n) => n.type === "dock").map((n) => n.id as string));
     return true;
   }
 
-  /** A robot's telemetry. False if it isn't valid telemetry. */
-  onTelemetry(robotId: string, raw: unknown, now: number): boolean {
+  /**
+   * A robot's telemetry. False if it isn't valid telemetry. A robot counts as
+   * parked from its dock tag until it drives off (en_route from the dock turns
+   * the lights on as it leaves). A robot that goes silent keeps its last place:
+   * only reaching the dock turns the lights off.
+   */
+  onTelemetry(robotId: string, raw: unknown): boolean {
     if (!isObj(raw) || !isStr(raw.status) || !(raw.current_node === null || isStr(raw.current_node))) {
       return false;
     }
-    this.robots.set(robotId, {
-      node: raw.current_node,
-      status: raw.status,
-      at: now,
-      target: this.robots.get(robotId)?.target ?? this.targets.get(robotId) ?? null,
-    });
+    const onDock = raw.current_node !== null && (this.docks?.has(raw.current_node) ?? false);
+    this.parked.set(robotId, onDock && raw.status !== RobotStatus.EN_ROUTE);
+    return true;
+  }
+
+  /** The operator's switch for one level's lights. False if no relay switches that level. */
+  setOperator(level: number, on: boolean): boolean {
+    const channel = this.config.levels.indexOf(level);
+    if (channel < 0) return false;
+    this.operatorOn[channel] = on;
     return true;
   }
 
   /**
-   * Counts every known robot as just heard from, e.g. after a broker outage
-   * in which their telemetry couldn't arrive: otherwise their levels go off
-   * until each one's next telemetry
+   * Every robot heard from is parked. None heard from (the bridge just
+   * started, or no topology yet to know the dock): not docked, so the lights
+   * stay on, as the node keeps them with no word from the Pi.
    */
-  refreshRobots(now: number) {
-    for (const robot of this.robots.values()) robot.at = now;
+  robotsDocked(): boolean {
+    return this.parked.size > 0 && [...this.parked.values()].every(Boolean);
   }
 
-  /** The orchestrator's retained state for a robot: only its task's target is used */
-  onState(robotId: string, raw: unknown) {
-    if (!isObj(raw)) return;
-    const target = isObj(raw.task) && isStr(raw.task.target_node) ? raw.task.target_node : null;
-    this.targets.set(robotId, target);
-    const robot = this.robots.get(robotId);
-    if (robot) robot.target = target;
+  /** Each level's switch and whether its lights are lit, for the dashboard */
+  state(timestamp: number): LightsState {
+    const docked = this.robotsDocked();
+    const lights: LightState[] = this.config.levels.map((level, i) => ({
+      level,
+      operator_on: this.operatorOn[i],
+      on: this.operatorOn[i] && !docked,
+    }));
+    return { lights, robots_docked: docked, timestamp };
   }
 
-  /** The levels to light; null until the topology is known */
-  litLevels(now: number): Set<number> | null {
-    const graph = this.graph;
-    if (!graph) return null;
-    const lit = new Set<number>();
-    for (const robot of this.robots.values()) {
-      if (now - robot.at > this.config.robot_timeout_ms || robot.node === null) continue;
-      const node = graph.nodes.get(robot.node);
-      // Unknown to this topology, or parked on the dock: not on a level. Its
-      // last tag stays the dock until the next one, so driving off counts.
-      if (!node) continue;
-      if (node.type === "dock" && robot.status !== RobotStatus.EN_ROUTE) continue;
-      lit.add(node.z);
-      const rideEnd = this.rideEnd(graph, node, robot);
-      if (rideEnd) lit.add(rideEnd.z);
-    }
-    return lit;
-  }
-
-  /**
-   * The line for the node, "lights " and one 1 (on) or 0 per channel, and the
-   * configured levels it turns on. Null until the topology is known.
-   */
-  command(now: number): { line: string; on: number[] } | null {
-    const lit = this.litLevels(now);
-    if (!lit) return null;
-    const on = this.config.levels.filter((level) => lit.has(level));
-    return { line: `lights ${this.config.levels.map((level) => (lit.has(level) ? "1" : "0")).join("")}`, on };
-  }
-
-  /**
-   * At an elevator and about to ride it: the elevator node where the ride
-   * ends (a ride through several levels is one ride, so the levels passed
-   * aren't lit). Null when it isn't riding from here.
-   */
-  private rideEnd(graph: NavGraph, node: GraphNode, robot: RobotSeen): GraphNode | null {
-    if (node.type !== "elevator") return null;
-    let route: string[] | null = null;
-    if (robot.status === RobotStatus.EN_ROUTE && robot.target) {
-      route = dijkstra(graph, node.id, robot.target);
-    } else if (robot.status === RobotStatus.RETURNING_TO_DOCK && this.dock) {
-      route = dijkstra(graph, node.id, this.dock);
-    }
-    if (!route) return null;
-    let end: GraphNode | null = null;
-    for (const id of route.slice(1)) {
-      const next = graph.nodes.get(id);
-      if (next?.type !== "elevator") break;
-      end = next;
-    }
-    return end && end.z !== node.z ? end : null;
+  /** The line for the node: "lights " and one 1 (on) or 0 per relay channel */
+  line(): string {
+    return `lights ${this.state(0).lights.map((l) => (l.on ? "1" : "0")).join("")}`;
   }
 }

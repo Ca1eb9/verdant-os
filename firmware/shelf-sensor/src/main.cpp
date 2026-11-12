@@ -4,7 +4,7 @@
 // pH conversion and timestamp. Lines starting with '#' are logs the bridge
 // ignores. A failed sensor prints null; the others keep reporting.
 // The other way, the bridge sends "lights <0|1 per channel>" to switch the
-// level light relays (README "Input").
+// grow light relays (README "Input").
 
 #include <Arduino.h>
 #include <BH1750.h>

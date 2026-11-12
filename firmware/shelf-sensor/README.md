@@ -4,7 +4,7 @@ Reads the shelf's air and reservoir sensors and prints one JSON line every
 5 s over USB serial. It has no WiFi and no clock: the Pi's `shelf-bridge`
 service maps the USB port to a shelf, converts pH, stamps the receive time
 and publishes `ShelfSensorData` to `farm/shelf/{id}/sensors`. It also drives
-two relays that switch the level grow lights, when the bridge tells it to
+relays that switch the grow lights, when the bridge tells it to
 (see Input). Every node runs the same build.
 
 ## Build, flash, monitor
@@ -44,7 +44,7 @@ set in `src/config.h`; change both together.
   per-shelf calibration, so recalibrating never needs a reflash.
 - `seq` restarts at 0 when the board reboots (the Pi opening the port also
   resets an Uno).
-- `# lights 10` is logged when the level lights change (see Input).
+- `# lights 10` is logged when the grow lights change (see Input).
 - A hardware watchdog resets the board if the loop hangs for 8 s, and I2C
   calls time out instead of hanging on a stuck bus. A sensor left holding the
   bus is clocked free at the next report (`# i2c bus was stuck, cleared`);
@@ -55,7 +55,7 @@ set in `src/config.h`; change both together.
 
 ## Input
 
-The bridge sends one line to switch the level light relays
+The bridge sends one line to switch the grow light relays
 (`PIN_LIGHT_RELAY` in `src/config.h`: D5 is channel 0, D6 channel 1):
 
 ```
@@ -76,7 +76,7 @@ missing from the end of the line is turned on. Anything else is logged as
   stopped without the board resetting.
 - An energised relay shorts that light's 0–10 V dim wires, which turns it off
   (`LIGHT_OFF_RELAY_STATE`). Wiring:
-  [docs/wiring/shelf-sensor.md](../../docs/wiring/shelf-sensor.md#level-light-relays).
+  [docs/wiring/shelf-sensor.md](../../docs/wiring/shelf-sensor.md#grow-light-relays).
 
 To try it by hand, stop the bridge and type `lights 01` in
 `pio device monitor`: the D5 relay clicks on (its light off) and the board

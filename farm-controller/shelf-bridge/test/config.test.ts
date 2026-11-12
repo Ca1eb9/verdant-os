@@ -21,7 +21,7 @@ function load(config: object) {
   return loadConfig(path);
 }
 
-const lights = { shelf_id: "shelf-1", levels: [0, 1], robot_timeout_ms: 10000 };
+const lights = { shelf_id: "shelf-1", levels: [0, 1] };
 
 describe("shelf bridge config", () => {
   it("takes the repo's config", () => {
@@ -42,6 +42,10 @@ describe("shelf bridge config", () => {
     assert.throws(() => load({ ...base, lights: { ...lights, levels: [0.5] } }), /levels/);
   });
 
+  it("takes a config from before the operator switch, robot_timeout_ms unused", () => {
+    assert.ok(load({ ...base, lights: { ...lights, robot_timeout_ms: 10000 } }).lights);
+  });
+
   it("gives a shelf without light_levels one light sensor at its level", () => {
     assert.deepEqual(load(base).shelves[0].light_levels, [0]);
   });
@@ -51,9 +55,5 @@ describe("shelf bridge config", () => {
     assert.throws(() => load({ ...base, shelves: [{ ...shelf, light_levels: [] }] }), /light_levels/);
     assert.throws(() => load({ ...base, shelves: [{ ...shelf, light_levels: [0, 0] }] }), /unique/);
     assert.throws(() => load({ ...base, shelves: [{ ...shelf, light_levels: [0.5] }] }), /light_levels/);
-  });
-
-  it("refuses a missing robot timeout", () => {
-    assert.throws(() => load({ ...base, lights: { ...lights, robot_timeout_ms: 0 } }), /robot_timeout_ms/);
   });
 });

@@ -7,6 +7,7 @@ import type {
   FarmAlert,
   FarmTopology,
   LightReading,
+  LightsState,
   RemoteCommand,
   RobotStateUpdate,
   RobotStatus,
@@ -98,4 +99,11 @@ export function isShelfValues(v: unknown): v is Omit<ShelfSensorData, "level"> {
 
 export function isShelfData(v: unknown): v is ShelfSensorData {
   return isShelfValues(v) && Number.isInteger((v as Record<string, unknown>).level);
+}
+
+/** The shelf bridge's grow lights: each level's operator switch and whether it's lit */
+export function isLightsState(v: unknown): v is LightsState {
+  return isRecord(v) && Array.isArray(v.lights) && typeof v.robots_docked === "boolean" && isNum(v.timestamp) &&
+    v.lights.every((l) => isRecord(l) && Number.isInteger(l.level) && typeof l.operator_on === "boolean" &&
+      typeof l.on === "boolean");
 }

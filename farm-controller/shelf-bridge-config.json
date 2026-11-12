@@ -16,7 +16,6 @@
   ],
   "lights": {
     "shelf_id": "shelf-1",
-    "levels": [0, 1],
-    "robot_timeout_ms": 10000
+    "levels": [0, 1]
   }
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertsCard } from "@/components/dashboard/AlertsCard";
 import { FarmMapCard } from "@/components/dashboard/FarmMapCard";
+import { LightsCard } from "@/components/dashboard/LightsCard";
 import { RobotsCard } from "@/components/dashboard/RobotsCard";
 import { SensorCard, type MetricTone } from "@/components/dashboard/SensorCard";
 import { useSelectedFarm } from "@/components/farms/FarmContext";
@@ -154,6 +155,7 @@ export function DashboardView() {
         <FarmMapCard />
         <div className={styles.sideStack}>
           <RobotsCard />
+          <LightsCard />
           <AlertsCard />
         </div>
       </div>

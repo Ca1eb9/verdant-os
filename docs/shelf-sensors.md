@@ -13,9 +13,9 @@ flowchart LR
     Bridge -- "farm/alerts<br/>shelf silent" --> Broker
     Broker --> Ingester["ingester → shelf_sensors"]
     Broker --> SupaBridge["supabase-bridge →<br/>Supabase sensor_events"]
-    Broker -- "robot telemetry, topology,<br/>robot state" --> Bridge
-    Bridge -- "USB serial<br/>lights 10" --> Uno
-    Uno --> Relays["2 relays →<br/>level lights' 0-10 V dim wires"]
+    Broker -- "robot telemetry, topology,<br/>operator light switch" --> Bridge
+    Bridge -- "USB serial<br/>lights 1" --> Uno
+    Uno --> Relays["relay →<br/>grow lights' 0-10 V dim wires"]
 ```
 
 ## Hardware
@@ -77,61 +77,59 @@ needs to be in the `dialout` group to open serial ports).
 | `silence_timeout_ms` | No valid reading this long → one alert, resolved by an info alert when readings resume |
 | `reopen_interval_ms` | Retry delay for a missing or dropped port |
 | `baud`, `max_line_length`, `watchdog_interval_ms` | Serial and timing settings |
-| `lights.shelf_id` | The shelf whose node has the light relays. Leave `lights` out for no level lights |
-| `lights.levels` | Level lit by each relay channel, in order: `[0, 1]` is D5 for level 0, D6 for level 1 |
-| `lights.robot_timeout_ms` | A robot with no telemetry this long stops lighting its level |
+| `lights.shelf_id` | The shelf whose node has the light relays. Leave `lights` out for no grow light control |
+| `lights.levels` | The level each relay channel switches, in order: `[0, 1]` is D5 for level 0, D6 for level 1. The dashboard shows a switch per level |
 
-## Level lights
+## Grow lights
 
-Each level's grow light comes on while a robot is on that level, and goes off
-when none is. The node switches them through two relays (Adafruit #4409) on
-D5 and D6, wired across each light's 0–10 V dim wires
-([wiring](wiring/shelf-sensor.md#level-light-relays)); the bridge decides.
+The grow lights are on unless the robots are all parked on the dock, or the
+operator has switched them off on the dashboard. The node switches them
+through relays (Adafruit #4409) on D5 and D6, wired across the lights' 0–10 V
+dim wires ([wiring](wiring/shelf-sensor.md#grow-light-relays)); the bridge
+decides. Each relay is given a level in `lights.levels` and the dashboard
+shows a switch per level. The farm has one light supply for both levels for
+now, so only the relay on D5 ("Level 0" on the dashboard) is wired: it
+switches every light, and the "Level 1" switch changes nothing until a
+second supply is wired to the D6 relay.
 
 **Setting it up**
 
-1. Wire the relays and check each light turns fully off with its dim wires
-   shorted ([wiring](wiring/shelf-sensor.md#level-light-relays)).
+1. Wire the relay and check the lights turn fully off with their dim wires
+   shorted ([wiring](wiring/shelf-sensor.md#grow-light-relays)).
 2. Reflash the shelf node (`cd firmware/shelf-sensor && pio run -t upload`):
    firmware from before the lights ignores the bridge's lines.
 3. Copy the `lights` block from the repo's `shelf-bridge-config.json` into
    `/etc/verdant/shelf-bridge-config.json` (a deploy never changes that
    file), set its `shelf_id` and `levels`, and
-   `sudo systemctl restart farm-shelf-bridge`.
-4. Check `journalctl -u farm-shelf-bridge -n 20` shows `[LIGHTS] topology
-   loaded` and a `[LIGHTS] ... (lights ..)` line, then drive a robot off the
-   dock.
+   `sudo systemctl restart farm-shelf-bridge`. A config from before the
+   operator switch works as it is; its `robot_timeout_ms` is no longer used.
+4. Check `journalctl -u farm-shelf-bridge -n 20` shows
+   `[LIGHTS]  levels 0, 1 by shelf-1's relays`, then drive a robot onto and
+   off the dock.
 
-**Which levels are lit**
+**When they're on**
 
-- A robot lights the level of the **last tag it read** (`current_node` in its
-  telemetry; the level is the node's `z` in the topology). The robot is the
-  source of truth, and a missed tag only delays the change to the next tag.
-- **Riding the elevator,** it also lights the level it's riding to, from the
-  moment it reads the elevator tag it rides from. The robot doesn't report
-  its path, so the bridge works out the ride's end with the same shortest
-  path the robot computes on board, to its task's target (from the
-  orchestrator's retained `farm/robot/{id}/state`) or, returning, to the dock.
-  So the new level is already lit when the robot drives off the elevator, and
-  the old one goes off when it reads its first tag on the new level. A ride
-  through several levels only lights the last.
-- A robot **parked on the dock** (idle, docking or charging) lights nothing:
-  the level comes on as it drives off the dock, and goes off once it's back.
-- A robot that's **silent** for `robot_timeout_ms` lights nothing: its
-  level goes off up to `watchdog_interval_ms` after that (10–15 s with the
-  repo's config).
-- A robot that's stopped, in error or driven by hand keeps its level lit, but
-  doesn't look ahead to a ride.
-- A level is lit while **any** robot is on it. Levels with no relay in
-  `lights.levels` are ignored. The node has two relays, so `lights.levels`
-  takes at most two levels; with more, the node rejects every line
-  (`node: bad input` in the bridge's log) and the lights stay on.
+- **Robots docked: off.** A robot reaching the dock (its `current_node` is a
+  dock node in the topology) turns the lights off once every robot is there.
+  They come back on as soon as one drives off: a robot on its dock tag that's
+  `en_route` counts as leaving. The robot is the source of truth: it's where
+  its last tag says.
+- **The operator's switch.** On FarmNet the dashboard's **Lights** card
+  has an On/Off switch per level. Off keeps that level's lights off whatever
+  the robots do; On lets them follow the robots again. The remote dashboard has no
+  switch, like jog. Switches live in the bridge's memory: a bridge restart or
+  Pi reboot switches every light back on.
+- A robot that goes **silent** stays where it last was: only reaching the dock
+  turns the lights off, so a robot out of WiFi on a level keeps them on.
+- With **no robot heard from** yet (the bridge just started), or before the
+  orchestrator's topology says where the dock is, the lights stay on.
 
-The bridge sends the node `lights 10` (level 0 on, level 1 off) when that
-changes, and again with every reading, so a lost line or a node that reset is
-put right within one report (5 s). It only sends once the orchestrator's topology has
-arrived; until then the node keeps every light on. The bridge logs each
-change: `[LIGHTS] level 0, 1 on (lights 11)`.
+The bridge sends the node `lights 10` (one `1` on or `0` off per relay) when
+that changes, and again with every reading, so a lost line or a node that
+reset is put right within one report (5 s). It also publishes each light's
+switch and state per level, retained, on `farm/lights/state` for the dashboard. It logs
+each change: `[LIGHTS] lights 0 (robots docked)`, and each switch:
+`[LIGHTS] level 1 switched off by dashboard`.
 
 **Failures leave the lights on**, never off: the plants keep their light.
 
@@ -139,14 +137,13 @@ change: `[LIGHTS] level 0, 1 on (lights 11)`.
 |---|---|
 | Uno unpowered, resetting or unplugged | All on (relays released) until the bridge resends, within a few seconds of it printing again |
 | Bridge stopped, or the Pi off | All on, 30 s after the last line it got (the node's `LIGHTS_TIMEOUT_MS`) |
-| Orchestrator not running at the bridge's start | All on until its retained topology arrives. Once loaded, the bridge keeps it, so an orchestrator restart changes nothing |
-| Broker down | The bridge can't hear the robots, so it stops sending: all on 30 s later. When the broker is back, the robots it knew keep their levels until their telemetry resumes, so nothing flickers off |
-| A robot powered off or out of WiFi | Its level goes off after `robot_timeout_ms` |
-| Orchestrator not running, so no task target | Only an elevator ride on the way to a task is affected: the new level comes on at its first tag instead of during the ride. A return to the dock needs no target |
+| Broker down | The bridge can't hear the robots or the operator, so it stops sending: all on 30 s later |
+| Orchestrator not running at the bridge's start | On until its retained topology says where the dock is. Once loaded, the bridge keeps it |
+| A robot powered off or out of WiFi | Stays where it last was: off only if that was the dock |
 
-**Turning it off for the demo or a test:** remove `lights` from
-`/etc/verdant/shelf-bridge-config.json` and restart the bridge; the node's
-lights go back on 30 s later.
+**Turning it off for the demo or a test:** switch the lights On on the
+dashboard, or remove `lights` from `/etc/verdant/shelf-bridge-config.json` and
+restart the bridge; the node's lights go back on 30 s later.
 
 ## pH calibration
 
