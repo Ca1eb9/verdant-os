@@ -128,7 +128,12 @@ export interface RobotCommand {
   command:
     | "navigate" | "return_to_dock" | "stop" | "resume" | "cancel" | "jog" | "connect_controller"
     /** End a dock trip (on the way, docking or charging) as if the charge completed */
-    | "charge_complete";
+    | "charge_complete"
+    /**
+     * The elevator has reached the level the robot rides to: drive off it. Only
+     * acted on by a robot built with MANUAL_ELEVATOR (farm network only, like jog).
+     */
+    | "elevator_arrived";
   task_id?: string;
   path?: string[];
   target_node?: string;

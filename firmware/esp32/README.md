@@ -81,6 +81,7 @@ ToF approach: while driving an edge it slows to `APPROACH_SPEED` once anything a
 | `couldn't get onto the elevator` / `the dock` | the end wall not reached after `APPROACH_TIMEOUT_MS` of driving |
 | `can't charge: no charge contact on the dock` | at `DOCK_STOP_CM` for `CHARGE_CONTACT_TIMEOUT_MS` with the contact still open (dead charger, dirty pads): something the robot can't fix, so the orchestrator raises an alert |
 | `turn needed: not supported yet` | the next node is to the side (placeholder) |
+| `rear distance sensor not working` / `front distance sensor not working` | creeping onto the dock or elevator for `APPROACH_TIMEOUT_MS` with that side's sensor dead |
 
 `nav/survival` runs at the top of every nav loop, before anything else (thresholds in `config.h`, "Survival overrides"):
 

@@ -84,6 +84,7 @@ class Rig : public NavOutput {
   void brake() override {}
   void follow_edge(NodeIndex, NodeIndex, EdgeDrive) override {}
   void creep() override {}
+  void elevator_arrived() override {}
   void jog(JogDirection) override {}
   void drive(int16_t) override {}
   void start_docking() override {}

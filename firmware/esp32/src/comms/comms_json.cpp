@@ -54,6 +54,7 @@ const char* to_wire(CommandType c) {
     case CommandType::Jog: return "jog";
     case CommandType::ConnectController: return "connect_controller";
     case CommandType::ChargeComplete: return "charge_complete";
+    case CommandType::ElevatorArrived: return "elevator_arrived";
     case CommandType::Drive: return "drive";  // robot-only, for the log
   }
   return "stop";
@@ -240,7 +241,7 @@ CommandParseResult parse_command_json(const char* json, size_t len, Command& out
   // command (required)
   JsonVariantConst cmd = o["command"];
   if (!cmd.is<const char*>()) return CommandParseResult::MissingCommand;
-  if (!from_wire(cmd.as<const char*>(), CommandType::Navigate, CommandType::ChargeComplete,
+  if (!from_wire(cmd.as<const char*>(), CommandType::Navigate, CommandType::ElevatorArrived,
                  out.type))
     return CommandParseResult::UnknownCommand;
 

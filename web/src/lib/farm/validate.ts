@@ -22,6 +22,7 @@ const STATUSES: RobotStatus[] = [
 const NODE_TYPES = ["checkpoint", "elevator", "dock", "water"];
 const COMMANDS = [
   "navigate", "return_to_dock", "stop", "resume", "cancel", "jog", "connect_controller", "charge_complete",
+  "elevator_arrived",
 ];
 const SEVERITIES: AlertSeverity[] = ["info", "warning", "critical"];
 const ALERT_SOURCES = ["robot", "elevator", "shelf", "system"];

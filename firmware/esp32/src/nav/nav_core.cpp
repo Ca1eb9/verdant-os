@@ -98,6 +98,14 @@ void NavCore::on_command(const Command& cmd, uint32_t now) {
     case CommandType::ConnectController: break;  // comms hands it to the pad task
     case CommandType::Drive: drive(cmd.speed, now); break;
     case CommandType::ChargeComplete: end_charge(now); break;
+    case CommandType::ElevatorArrived:
+      // Only a robot following its path rides the elevator.
+      if (status_ == RobotStatus::EnRoute || status_ == RobotStatus::ReturningToDock) {
+        out_.elevator_arrived();
+      } else {
+        out_.note("ignored: elevator_arrived while not riding the elevator");
+      }
+      break;
   }
 }
 
@@ -106,9 +114,11 @@ void NavCore::on_tag(NodeIndex node, uint32_t now) {
     out_.note("ignored: tag isn't in the graph");
     return;
   }
-  // Not on a re-read of the same tag (e.g. during the ride): by then
-  // reversing_ is already the way off.
-  if (node != node_ && GRAPH_NODES[node].type == NodeType::Elevator) {
+  // Not on a re-read of the same tag (e.g. during the ride), nor on the tag
+  // it drives off onto after a ride: by then reversing_ is already the way
+  // off, and the elevator is behind it.
+  bool rode_here = node_ != NO_NODE && GRAPH_NODES[node_].type == NodeType::Elevator;
+  if (node != node_ && !rode_here && GRAPH_NODES[node].type == NodeType::Elevator) {
     elevator_exit_backward_ = !reversing_;
   }
   node_ = node;

@@ -49,6 +49,12 @@ void Motion::follow_edge(NodeIndex from, NodeIndex to, EdgeDrive drive, uint32_t
   }
 }
 
+bool Motion::elevator_arrived(uint32_t now) {
+  if (!manual_elevator_ || phase_ != Phase::Riding) return false;
+  start_driving(Phase::Driving, exit_backward_, CRUISE_SPEED, now);
+  return true;
+}
+
 void Motion::creep(uint32_t now) { start_driving(Phase::Creeping, false, CREEP_SPEED, now); }
 
 void Motion::start_docking(uint32_t now) {
@@ -65,7 +71,8 @@ const char* Motion::check(uint32_t now, const SensorData& s, bool motors_killed)
       phase_ = Phase::Idle;
       return fault_;
     case Phase::Riding:
-      if (now - ride_started_ms_ >= ride_ms_) {
+      // manual_elevator: until elevator_arrived(), however long.
+      if (!manual_elevator_ && now - ride_started_ms_ >= ride_ms_) {
         start_driving(Phase::Driving, exit_backward_, CRUISE_SPEED, now);
       }
       return nullptr;
@@ -99,9 +106,13 @@ const char* Motion::check(uint32_t now, const SensorData& s, bool motors_killed)
   // The nav task starts drives with a fresh millis(), so a drive started this
   // loop can be a few ms ahead of `now`: counting that would wrap to ~49 days
   // of driving and fault at once. Wait for the clock to catch up instead.
+  // Creeping in on a dead sensor never reaches the wall, and its held flag
+  // (OBSTACLE_FAILSAFE) would stop the clock for good: that time counts, so
+  // the robot faults instead of sitting there.
+  bool blind = approaching() && !(backward_ ? s.tof_rear_ok : s.tof_front_ok);
   int32_t elapsed = (int32_t)(now - last_check_ms_);
   if (elapsed > 0) {
-    if (!held) driven_ms_ += (uint32_t)elapsed;
+    if (!held || blind) driven_ms_ += (uint32_t)elapsed;
     last_check_ms_ = now;
   }
 
@@ -116,6 +127,8 @@ const char* Motion::check(uint32_t now, const SensorData& s, bool motors_killed)
     }
     if (driven_ms_ < APPROACH_TIMEOUT_MS) return nullptr;
     phase_ = Phase::Idle;
+    // Halts it too (NavCore::fault), which matters with OBSTACLE_FAILSAFE off.
+    if (blind) return backward_ ? "rear distance sensor not working" : "front distance sensor not working";
     return entering ? "couldn't get onto the elevator" : "couldn't get onto the dock";
   }
 

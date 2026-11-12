@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { CommandError, type CommandRecord, type CommandRequest, type FarmDataSource } from "@/lib/farm/data-source";
 import type { Scene } from "@/lib/farm/map/layout";
-import { resolveNode, type NavGraph } from "@/lib/farm/navigation";
+import { dijkstra, resolveNode, type NavGraph } from "@/lib/farm/navigation";
 import { describeTask, isStale, statusLabel, type RobotView } from "@/lib/farm/robots";
 import type {
   ActionAtTarget,
@@ -36,6 +36,11 @@ const RC_WINDOW_S = 10;
  * either way. Fixed at build time (dashboard.env, web/.env.local).
  */
 const JOG_WHILE_INITIALIZING = process.env.NEXT_PUBLIC_JOG_WHILE_INITIALIZING === "true";
+/**
+ * The robots are built with MANUAL_ELEVATOR (firmware config.h): they stay on
+ * the elevator until the operator says it has arrived. Offers that button.
+ */
+const MANUAL_ELEVATOR = process.env.NEXT_PUBLIC_MANUAL_ELEVATOR === "true";
 /** States the robot accepts a jog in */
 const JOGGABLE: RobotStatus[] = ["idle", "en_route", "working", "stopped", "error", "manual"];
 const SHOWN_JOGGABLE: RobotStatus[] = JOG_WHILE_INITIALIZING ? [...JOGGABLE, "initializing"] : JOGGABLE;
@@ -63,6 +68,7 @@ const COMMAND_LABEL: Record<RobotCommand["command"], string> = {
   cancel: "Cancel task",
   jog: "Jog",
   connect_controller: "Connect to RC",
+  elevator_arrived: "Elevator arrived",
   charge_complete: "Charge complete",
 };
 
@@ -255,6 +261,16 @@ export function ControlPanel({
       { robot_id: robot.id, command: { command: "return_to_dock", priority: "critical", immediate: quickImmediate } },
       () => dockNode && onRouteStart(robot, dockNode.id),
     );
+
+  // On the elevator: following a route whose next node from the elevator tag
+  // it last read is the elevator on another level. Once it drives off it
+  // reads that level's tag, and the next node is no longer an elevator.
+  const rideTo = status === "en_route" ? robot?.task?.targetNode : status === "returning_to_dock" ? dockNode?.id : undefined;
+  const nextHop = node?.type === "elevator" && rideTo ? dijkstra(graph, node.id, rideTo)?.[1] : undefined;
+  const onElevator = localMode && online && graph.nodes.get(nextHop ?? "")?.type === "elevator";
+
+  const sendElevatorArrived = () =>
+    robot && send({ robot_id: robot.id, command: { command: "elevator_arrived", priority: "critical", immediate: true } });
 
   const sendResume = () =>
     robot && send({ robot_id: robot.id, command: { command: "resume", priority: "critical", immediate: true } });
@@ -511,6 +527,13 @@ export function ControlPanel({
             Charge complete
           </button>
         </span>
+        {MANUAL_ELEVATOR && onElevator ? (
+          <span title="Press once the elevator has stopped at the robot's next level and it is safe to drive off. The robot waits on the elevator until then.">
+            <button type="button" className={styles.btn} disabled={busy} onClick={sendElevatorArrived}>
+              Elevator arrived
+            </button>
+          </span>
+        ) : null}
         <label className={styles.check}>
           <input
             id="quick-immediate"

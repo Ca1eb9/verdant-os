@@ -253,6 +253,7 @@ The robot never queues commands: each one acts on the current state right away.
 | `jog` | Manual driving from the dashboard; `direction` is `forward` or `backward`. Accepted in `idle`, `en_route`, `working`, `stopped`, `error`, `manual` and `initializing` (no tag needed: e.g. to drive it onto one); ignored on dock trips and below the motor cutoff. The dashboard only offers it before the first tag when `NEXT_PUBLIC_JOG_WHILE_INITIALIZING` is on. The Bluetooth controller's jogs (robot-only) are also accepted on a dock trip. The first jog enters `manual`. Each jog drives for a fixed **500 ms** from when it is received (`JOG_PULSE_MS` in `config.h`); a jog arriving while driving restarts the 500 ms. When the window runs out, the motors stop by themselves. `backward` reverses without turning; the heading doesn't change. |
 | `connect_controller` | Look for the Bluetooth controller for `PAD_CONNECT_WINDOW_MS` (10 s), in any status, `initializing` included. Otherwise the robot only looks while it can't reach the broker. Bluetooth (and the WiFi power saving it needs) only runs while it's looking or connected, so commands aren't delayed the rest of the time (`WIFI_POWER_SAVE` in `config.h`). No reply: `controller_connected` in telemetry turns `true` when one connects, and the controller rumbles once. Farm network only, like `jog`. |
 | `charge_complete` | End a dock trip (on the way, docking or charging) as if the charge had completed: `charge_complete` and on with a kept task, or `idle` (`stopped` if latched). A dock task is completed first. Ignored otherwise. From the dashboard, locally or remotely. Below 15% the forced return sends it straight back. |
+| `elevator_arrived` | Only with `MANUAL_ELEVATOR` on in `config.h`, and only while the robot is stopped on the elevator waiting for it: drive off (see [Driving](#driving)). Ignored otherwise, with the flag off included, and while it is still creeping onto the platform. Farm network only, like `jog`: the operator has to see the elevator. |
 | `cancel` | Drop the task with this `task_id` if it is the current, paused or kept task: clear it without setting `last_completed_task_id` and without an event. A cancelled task that was moving or working goes to `idle` (or stays `stopped`). Cancelling a dock task stops the trip to the dock. Cancelling a kept task leaves the dock trip running, so the robot still charges. Ignore it if the id doesn't match. The orchestrator resends it whenever telemetry still shows the cancelled task, e.g. after the robot was offline. |
 
 The orchestrator sends a queued `stop` only when the robot is idle, so it acts as
@@ -310,7 +311,17 @@ elevator's tag on the new level. Before the wait it creeps onto the platform
 to its end wall (see "ToF approach"). A path through several levels (e.g.
 `elev-1-L0` to `elev-1-L2`) is one ride: it only drives off at the last level.
 "How it drove on" is the drive direction when the robot read the elevator tag
-it's leaving from.
+it's leaving from. The tag it drives off onto after a ride doesn't count: the
+elevator is behind it there, so sent straight back it drives on the way it
+came off.
+
+**Manual elevator (backup).** With `MANUAL_ELEVATOR` on in `config.h` the ride
+isn't timed: the robot stays on the platform, for as long as it takes, until
+an operator sends `elevator_arrived`, then drives off as above. The dashboard
+shows its **Elevator arrived** button only when built with
+`NEXT_PUBLIC_MANUAL_ELEVATOR=true`, on the farm network, while the robot is on
+the elevator. Turn both on together: a robot with the flag and a dashboard
+without it leaves the robot on the elevator with no button to release it.
 
 ### ToF approach
 
@@ -333,7 +344,9 @@ stops short of the tag.
   then waits for the charger contact, which stops the motors. The robot only
   reads the contact while docking or charging.
 - If the end wall isn't reached within `APPROACH_TIMEOUT_MS` of driving, the
-  robot faults (see Faults).
+  robot faults (see Faults). So does a creep on a distance sensor that has
+  stopped working for that long: its held obstacle flag would otherwise keep
+  the robot in `docking` (or at the elevator) for good.
 
 The sensor task owns the obstacle flags; the nav task only sets each side's
 stop distance (`g_obstacle_front_stop_cm`, `g_obstacle_rear_stop_cm`). When it
@@ -387,7 +400,8 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
   known tag is read again, publish `recovery`, re-plan from that node and
   continue.
 - **Approach not finished:** the elevator or dock end wall isn't reached
-  within a timeout. The robot faults the same way.
+  within a timeout, or the distance sensor it creeps in on isn't working
+  (`rear distance sensor not working`). The robot faults the same way.
 - **Can't charge:** at `DOCK_STOP_CM` with no charger contact after a short
   wait (`CHARGE_CONTACT_TIMEOUT_MS`): the charger is off or the pads don't
   touch, which the robot can't fix. It faults the same way, and the

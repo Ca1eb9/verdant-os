@@ -212,6 +212,11 @@ constexpr uint32_t CREEP_TIMEOUT_MS = 15000;        // no tag this long while cr
 constexpr int16_t CRUISE_SPEED = 150;               // between tags (0..255)
 constexpr int16_t CREEP_SPEED = 90;                 // looking for a tag after boot (0..255)
 constexpr uint32_t ELEVATOR_WAIT_MS = 5000;         // per level ridden: stay put, then drive off
+// Backup for an elevator that can't be timed: the robot stays on it until an
+// operator sends elevator_arrived, however long that takes, and ELEVATOR_WAIT_MS
+// isn't used. The dashboard only shows the button with
+// NEXT_PUBLIC_MANUAL_ELEVATOR on, so turn both on together. Logged at boot when on.
+constexpr bool MANUAL_ELEVATOR = false;
 
 // Approach (ToF): slow down near anything ahead. After reading the elevator
 // or dock tag, creep in until this close to the end wall instead of stopping

@@ -61,6 +61,9 @@ class NavOutput {
   // `to` (e.g. resuming after a stop). For an elevator ride, `to` is the
   // level it drives off at, which may be several levels away.
   virtual void follow_edge(NodeIndex from, NodeIndex to, EdgeDrive drive) = 0;
+  // The operator says the elevator has arrived (the elevator_arrived
+  // command): drive off it, if the robot is waiting on it for that.
+  virtual void elevator_arrived() = 0;
   // Drive forward slowly until a tag is read (localizing).
   virtual void creep() = 0;
   // Drive one JOG_PULSE_MS pulse at JOG_SPEED. Backward reverses without turning.

@@ -46,6 +46,15 @@ static SensorData open_road() {
   SensorData s = {};
   s.obstacle_front_cm = NAN;
   s.obstacle_rear_cm = NAN;
+  s.tof_front_ok = true;
+  s.tof_rear_ok = true;
+  return s;
+}
+// The rear sensor stopped answering: no distance, its flag held (OBSTACLE_FAILSAFE).
+static SensorData rear_dead() {
+  SensorData s = open_road();
+  s.tof_rear_ok = false;
+  s.obstacle_rear_stop = true;
   return s;
 }
 static SensorData front(float cm, bool flag = false) {
@@ -183,6 +192,70 @@ static void test_elevator() {
   CHECK(m.check(now += APPROACH_TIMEOUT_MS, front(NAN, true), false) == nullptr);
   CHECK(same(m.check(now += 1, open_road(), false), "couldn't get onto the elevator"));
   CHECK(m.stop_cm(false) == OBSTACLE_STOP_CM);
+}
+
+static void test_manual_elevator() {
+  SCENARIO("manual elevator");
+  Sink s;
+  Motion m(s);
+  uint32_t now = 1000;
+
+  // Off: the command does nothing, the ride is timed.
+  m.follow_edge(N("elev-1-L0"), N("elev-1-L1"), EdgeDrive::ElevatorBackward, now);
+  m.check(now += 100, front(ELEVATOR_STOP_CM), false);
+  CHECK(!m.elevator_arrived(now));
+  CHECK(s.last_is_stop(true));
+
+  // On: it waits on the elevator far past ELEVATOR_WAIT_MS, with no fault.
+  m.set_manual_elevator(true);
+  m.follow_edge(N("elev-1-L0"), N("elev-1-L1"), EdgeDrive::ElevatorBackward, now);
+  // Not while still creeping on.
+  CHECK(!m.elevator_arrived(now));
+  CHECK(s.last_is_drive(APPROACH_SPEED));
+  m.check(now += 100, front(ELEVATOR_STOP_CM), false);
+  CHECK(s.last_is_stop(true));
+  size_t sent = s.sent.size();
+  CHECK(m.check(now += 100 * ELEVATOR_WAIT_MS, front(1, true), false) == nullptr);
+  CHECK(s.sent.size() == sent);
+  // The operator's command drives it off, the way the timer would have.
+  CHECK(m.elevator_arrived(now));
+  CHECK(s.last_is_drive(-CRUISE_SPEED));
+  // Once: it's driving now, and the missed-tag clock runs from here.
+  CHECK(!m.elevator_arrived(now));
+  CHECK(m.check(now += MISSED_TAG_TIMEOUT_MS - 1, open_road(), false) == nullptr);
+  CHECK(same(m.check(now += 1, open_road(), false), "missed tag"));
+}
+
+static void test_dead_sensor() {
+  SCENARIO("dead sensor while creeping in");
+  Sink s;
+  Motion m(s);
+  uint32_t now = 1000;
+
+  // Backing onto the dock with the rear sensor dead: its held flag doesn't
+  // stop the clock, so it faults rather than sit in docking.
+  m.start_docking(now);
+  CHECK(m.check(now += APPROACH_TIMEOUT_MS - 1, rear_dead(), false) == nullptr);
+  CHECK(same(m.check(now += 1, rear_dead(), false), "rear distance sensor not working"));
+
+  // A sensor that comes back (restarted) carries on: only held time with a
+  // working sensor is free.
+  m.start_docking(now);
+  CHECK(m.check(now += APPROACH_TIMEOUT_MS / 2, rear_dead(), false) == nullptr);
+  CHECK(m.check(now += APPROACH_TIMEOUT_MS, rear(0.5f, true), false) == nullptr);
+  CHECK(s.last_is_stop(true));
+
+  // Onto the elevator with the front sensor dead.
+  SensorData front_dead = open_road();
+  front_dead.tof_front_ok = false;
+  front_dead.obstacle_front_stop = true;
+  m.follow_edge(N("elev-1-L0"), N("elev-1-L1"), EdgeDrive::ElevatorBackward, now);
+  CHECK(m.check(now += APPROACH_TIMEOUT_MS - 1, front_dead, false) == nullptr);
+  CHECK(same(m.check(now += 1, front_dead, false), "front distance sensor not working"));
+
+  // Between tags a dead sensor is an obstacle (survival reports it): no fault.
+  m.follow_edge(N("water-01"), N("cp-01"), EdgeDrive::Backward, now);
+  CHECK(m.check(now += 10 * MISSED_TAG_TIMEOUT_MS, rear_dead(), false) == nullptr);
 }
 
 static void test_docking() {
@@ -334,6 +407,7 @@ class Robot : public NavOutput {
     motion.follow_edge(from, to, drive, now);
   }
   void creep() override { motion.creep(now); }
+  void elevator_arrived() override { motion.elevator_arrived(now); }
   void jog(JogDirection d) override { motion.jog(d, now); }
   void drive(int16_t speed) override { motion.drive(speed, now); }
   void start_docking() override { motion.start_docking(now); }
@@ -458,6 +532,8 @@ int main() {
   test_follow_edge();
   test_slow_zone();
   test_elevator();
+  test_manual_elevator();
+  test_dead_sensor();
   test_docking();
   test_other_hooks();
   test_manual_slow_zone();
