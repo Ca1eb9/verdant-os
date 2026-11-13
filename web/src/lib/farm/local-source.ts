@@ -42,6 +42,13 @@ import {
 } from "@/lib/farm/validate";
 
 const RECONNECT_MS = 2_000;
+/**
+ * How long one attempt may take to reach the broker. Generous: opened as
+ * farmnet.local, a fresh name lookup (multicast DNS) can take seconds, and an
+ * attempt given up mid-way starts over from scratch, so a page refresh took
+ * a reconnect or two to connect. A broker that's down still fails at once.
+ */
+const CONNECT_TIMEOUT_MS = 15_000;
 /** Commands listed per robot: the Dashboard API returns the same */
 const RECENT_COMMANDS = 10;
 /** Commands kept in memory across all robots */
@@ -282,7 +289,7 @@ export function createLocalSource(url: string, apiUrl?: string): FarmDataSource 
       lightListeners.size > 0;
     if (needed && !client) {
       connection = CONNECTING;
-      client = mqtt.connect(url, { reconnectPeriod: RECONNECT_MS, connectTimeout: RECONNECT_MS * 2 });
+      client = mqtt.connect(url, { reconnectPeriod: RECONNECT_MS, connectTimeout: CONNECT_TIMEOUT_MS });
       client.on("message", onMessage);
       client.on("connect", () => setConnection({ state: "connected" }));
       // Each failed reconnect closes again: stays offline, no flicker to "connecting"
