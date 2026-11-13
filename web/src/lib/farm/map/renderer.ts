@@ -10,17 +10,15 @@ import {
   DIPD,
   DOCK0,
   DOCK1,
-  ELEV0,
-  ELEV1,
-  EX,
   FX,
   RH,
   TOP,
-  VIEW_W,
   W,
-  dip,
+  basinsOf,
   levelOf,
   sinkAt,
+  type Dip,
+  type Frame,
   type Level,
   type Scene,
   type SlotPos,
@@ -254,6 +252,16 @@ export class FarmRenderer {
     return this.input?.scene.levels ?? [];
   }
 
+  /** The map's widths: the frame's right edge, the elevator shaft, the view */
+  private get frame(): Frame {
+    return this.input!.scene.frame;
+  }
+
+  /** A level's basins in the aisle on view */
+  private basins(lv: Level): Dip[] {
+    return basinsOf(lv, this.input?.aisleY ?? 0);
+  }
+
   // ---------- public render ----------
   render(input: RenderInput) {
     if (this.destroyed) return;
@@ -435,9 +443,10 @@ export class FarmRenderer {
     this.mk("stop", { offset: "0%", "stop-color": P.light, "stop-opacity": 0.38 }, bg);
     this.mk("stop", { offset: "100%", "stop-color": P.light, "stop-opacity": 0 }, bg);
     this.levels.forEach((lv, i) => {
-      const dp = dip(lv);
       const cp = this.mk("clipPath", { id: "fw-chan-" + i }, d);
-      this.mk("rect", { x: dp.l - dp.ramp, y: dp.y + 2, width: dp.r + dp.ramp - (dp.l - dp.ramp), height: DIPD }, cp);
+      for (const dp of this.basins(lv)) {
+        this.mk("rect", { x: dp.l - dp.ramp, y: dp.y + 2, width: dp.r + dp.ramp - (dp.l - dp.ramp), height: DIPD }, cp);
+      }
     });
   }
 
@@ -540,27 +549,37 @@ export class FarmRenderer {
     }
   }
 
-  // ---------- drawShelf: C-channel rail with a central \__/ water basin ----------
+  // ---------- drawShelf: C-channel rail dipping into a \__/ water basin under each water run ----------
   private drawShelf(p: Element, lv: Level) {
     const P = this.PAL;
     const t = 6;
-    const dp = dip(lv);
-    const R = dp.ramp;
+    const EX = this.frame.EX;
     const y = lv.shelfY;
-    const b = dp.b;
+    const dips = this.basins(lv);
     const g = this.mk("g", {}, p);
-    const top = "M" + FX + " " + y + " L" + (dp.l - R) + " " + y + " L" + dp.l + " " + b + " L" + dp.r + " " + b + " L" + (dp.r + R) + " " + y + " L" + EX + " " + y;
-    const web =
-      top + " L" + EX + " " + (y + t) + " L" + (dp.r + R + t * 0.7) + " " + (y + t) + " L" + (dp.r + t * 0.5) + " " + (b + t) +
-      " L" + (dp.l - t * 0.5) + " " + (b + t) + " L" + (dp.l - R - t * 0.7) + " " + (y + t) + " L" + FX + " " + (y + t) + " Z";
-    this.mk("path", { d: web, fill: P.shelf }, g);
+    // The rail's top edge, left to right, down into each basin and back up
+    let top = "M" + FX + " " + y;
+    for (const dp of dips) {
+      top += " L" + (dp.l - dp.ramp) + " " + y + " L" + dp.l + " " + dp.b + " L" + dp.r + " " + dp.b + " L" + (dp.r + dp.ramp) + " " + y;
+    }
+    top += " L" + EX + " " + y;
+    // and its underside, right to left
+    let under = " L" + EX + " " + (y + t);
+    for (const dp of [...dips].reverse()) {
+      under += " L" + (dp.r + dp.ramp + t * 0.7) + " " + (y + t) + " L" + (dp.r + t * 0.5) + " " + (dp.b + t) +
+        " L" + (dp.l - t * 0.5) + " " + (dp.b + t) + " L" + (dp.l - dp.ramp - t * 0.7) + " " + (y + t);
+    }
+    under += " L" + FX + " " + (y + t) + " Z";
+    this.mk("path", { d: top + under, fill: P.shelf }, g);
     this.mk("path", { d: top, fill: "none", stroke: P.shelfLit, "stroke-width": 1.3 }, g);
     // C-channel return flanges at both ends + gussets: reads as load-bearing rail
     this.mk("path", { d: "M" + FX + " " + y + " L" + (FX + 9) + " " + y + " L" + (FX + 9) + " " + (y + t + 7) + " L" + FX + " " + (y + t + 7) + " Z", fill: P.shelfDark }, g);
     this.mk("path", { d: "M" + (EX - 9) + " " + y + " L" + EX + " " + y + " L" + EX + " " + (y + t + 7) + " L" + (EX - 9) + " " + (y + t + 7) + " Z", fill: P.shelfDark }, g);
-    this.mk("path", { d: "M" + (dp.l - R) + " " + y + " L" + dp.l + " " + b + " M" + (dp.r + R) + " " + y + " L" + dp.r + " " + b, fill: "none", stroke: P.shelfDark, "stroke-width": 0.9, opacity: 0.55 }, g);
+    for (const dp of dips) {
+      this.mk("path", { d: "M" + (dp.l - dp.ramp) + " " + y + " L" + dp.l + " " + dp.b + " M" + (dp.r + dp.ramp) + " " + y + " L" + dp.r + " " + dp.b, fill: "none", stroke: P.shelfDark, "stroke-width": 0.9, opacity: 0.55 }, g);
+    }
     for (let bx = FX + 26; bx < EX - 14; bx += 62) {
-      if (bx > dp.l - R - 20 && bx < dp.r + R + 20) continue;
+      if (dips.some((dp) => bx > dp.l - dp.ramp - 20 && bx < dp.r + dp.ramp + 20)) continue;
       this.mk("path", { d: "M" + bx + " " + (y + t) + " l6 0 l-6 9 Z", fill: P.shelfDark, opacity: 0.45 }, g);
     }
     this.mkT("L" + lv.id, { x: FX + 6, y: y - 24, "text-anchor": "start", "font-size": "11px", fill: P.muted, "font-family": FONT, "font-weight": "500" }, g);
@@ -569,30 +588,34 @@ export class FarmRenderer {
   // ---------- drawWater: basin body (before rovers) + surface (after) ----------
   private drawWater(p: Element, lv: Level) {
     const P = this.PAL;
-    const dp = dip(lv);
-    const R = dp.ramp;
-    const sy = dp.y + 3;
-    const inset = R * (3 / DIPD);
     const g = this.mk("g", {}, p);
-    this.mk("path", { d: "M" + (dp.l - R + inset) + " " + sy + " L" + dp.l + " " + dp.b + " L" + dp.r + " " + dp.b + " L" + (dp.r + R - inset) + " " + sy + " Z", fill: "url(#fw-water)" }, g);
-    this.mk("path", { d: "M" + dp.l + " " + (dp.b - 1.4) + " L" + dp.r + " " + (dp.b - 1.4), fill: "none", stroke: P.waterBot, "stroke-width": 1.6, opacity: 0.5 }, g);
+    for (const dp of this.basins(lv)) {
+      const R = dp.ramp;
+      const sy = dp.y + 3;
+      const inset = R * (3 / DIPD);
+      this.mk("path", { d: "M" + (dp.l - R + inset) + " " + sy + " L" + dp.l + " " + dp.b + " L" + dp.r + " " + dp.b + " L" + (dp.r + R - inset) + " " + sy + " Z", fill: "url(#fw-water)" }, g);
+      this.mk("path", { d: "M" + dp.l + " " + (dp.b - 1.4) + " L" + dp.r + " " + (dp.b - 1.4), fill: "none", stroke: P.waterBot, "stroke-width": 1.6, opacity: 0.5 }, g);
+    }
   }
 
   private drawWaterVeil(p: Element, lv: Level, li: number) {
-    const dp = dip(lv);
-    const R = dp.ramp;
-    const sy = dp.y + 2;
-    const inset = R * (2 / DIPD);
     const g = this.mk("g", { "clip-path": "url(#fw-chan-" + li + ")" }, p);
-    this.mk("path", { d: "M" + (dp.l - R + inset) + " " + sy + " L" + dp.l + " " + dp.b + " L" + dp.r + " " + dp.b + " L" + (dp.r + R - inset) + " " + sy + " Z", fill: "url(#fw-water)", opacity: 0.55 }, g);
+    for (const dp of this.basins(lv)) {
+      const R = dp.ramp;
+      const sy = dp.y + 2;
+      const inset = R * (2 / DIPD);
+      this.mk("path", { d: "M" + (dp.l - R + inset) + " " + sy + " L" + dp.l + " " + dp.b + " L" + dp.r + " " + dp.b + " L" + (dp.r + R - inset) + " " + sy + " Z", fill: "url(#fw-water)", opacity: 0.55 }, g);
+    }
   }
 
   private drawWaterSurface(p: Element, lv: Level, li: number, phase: number) {
+    const dips = this.basins(lv);
+    if (!dips.length) return;
     const P = this.PAL;
-    const dp = dip(lv);
-    const x0 = dp.l - dp.ramp;
-    const x1 = dp.r + dp.ramp;
-    const y = dp.y + 1;
+    // waves across every basin; the level's clip path keeps them in the water
+    const x0 = dips[0].l - dips[0].ramp;
+    const x1 = dips[dips.length - 1].r + dips[dips.length - 1].ramp;
+    const y = dips[0].y + 1;
     const g = this.mk("g", { "clip-path": "url(#fw-chan-" + li + ")" }, p);
     const waves = [
       { dy: 2.2, amp: 1.2, len: 30, op: 0.8, w: 0.9 },
@@ -614,7 +637,7 @@ export class FarmRenderer {
     const { lightY, shelfY } = lv;
     const P = this.PAL;
     const x0 = FX + 6;
-    const x1 = EX - 6;
+    const x1 = this.frame.EX - 6;
     const g = this.mk("g", {}, p);
     const title = this.mk("title", {}, g);
     const span = shelfY - (lightY + 5);
@@ -689,7 +712,7 @@ export class FarmRenderer {
       const by = -48;
       const pct = Math.round(Math.max(0, Math.min(100, data.battery)));
       // keep the pill inside the viewBox at the dock and the elevator lane
-      const bx = Math.round(Math.min(Math.max(3 - x, trayW / 2 + 1 - bw / 2), VIEW_W - 3 - bw - x));
+      const bx = Math.round(Math.min(Math.max(3 - x, trayW / 2 + 1 - bw / 2), this.frame.VIEW_W - 3 - bw - x));
       const gx = bx + bw - 42;
       const gy = by + 3.8;
       this.mk("rect", { x: bx, y: by, width: bw, height: bh, rx: 7, fill: P.badgeFill, stroke: ac, "stroke-width": 0.8, opacity: 0.96 }, g);
@@ -731,8 +754,8 @@ export class FarmRenderer {
 
   private drawElevator(p: Element) {
     const P = this.PAL;
-    const x0 = ELEV0;
-    const x1 = ELEV1;
+    const x0 = this.frame.ELEV0;
+    const x1 = this.frame.ELEV1;
     const gnd = this.input!.scene.gnd;
     const g = this.mk("g", { "pointer-events": "none" }, p);
     this.mk("rect", { x: x0, y: TOP, width: x1 - x0, height: gnd - TOP, fill: P.bay, opacity: 0.1, rx: 3 }, g);
@@ -749,10 +772,10 @@ export class FarmRenderer {
     const P = this.PAL;
     const gnd = input.scene.gnd;
     svg.innerHTML = "";
-    svg.setAttribute("viewBox", `0 0 ${VIEW_W} ${input.scene.viewH}`);
+    svg.setAttribute("viewBox", `0 0 ${this.frame.VIEW_W} ${input.scene.viewH}`);
     this.defs(svg);
 
-    this.mk("rect", { x: FX, y: TOP, width: EX - FX, height: gnd - TOP, fill: P.backdrop }, svg);
+    this.mk("rect", { x: FX, y: TOP, width: this.frame.EX - FX, height: gnd - TOP, fill: P.backdrop }, svg);
 
     this.lightEls.clear();
     this.levels.forEach((lv, li) => {
@@ -776,8 +799,8 @@ export class FarmRenderer {
 
     const frame = this.mk("g", { "pointer-events": "none" }, svg);
     this.mk("line", { x1: FX, y1: TOP, x2: FX, y2: gnd, stroke: P.frame, "stroke-width": 1.6 }, frame);
-    this.mk("line", { x1: EX, y1: TOP, x2: EX, y2: gnd, stroke: P.frame, "stroke-width": 1.6 }, frame);
-    this.mk("rect", { x: DOCK0, y: gnd, width: ELEV1 - DOCK0, height: 4, fill: P.frame, rx: 1 }, frame);
+    this.mk("line", { x1: this.frame.EX, y1: TOP, x2: this.frame.EX, y2: gnd, stroke: P.frame, "stroke-width": 1.6 }, frame);
+    this.mk("rect", { x: DOCK0, y: gnd, width: this.frame.ELEV1 - DOCK0, height: 4, fill: P.frame, rx: 1 }, frame);
     this.drawDock(svg);
     this.drawElevator(svg);
   }
@@ -795,7 +818,7 @@ export class FarmRenderer {
       if (input.scene.nodeAisle.get(slot.nodeId) !== input.aisleY) continue;
       const pickable = input.targetable.has(slot.nodeId);
       const isTarget = input.targetNodeId === slot.nodeId;
-      const sink = sinkAt(this.levels, slot.x, slot.lv);
+      const sink = sinkAt(this.levels, slot.x, slot.lv, this.input?.aisleY ?? 0);
       const ox = slot.x + (W - slot.slotW) / 2;
       const g = this.mk("g", { "data-node": slot.nodeId, class: pickable ? "fw-slot" : "", style: pickable ? "cursor:pointer" : "" }, layer);
       const title = this.mk("title", {}, g);
@@ -876,7 +899,7 @@ export class FarmRenderer {
       // hidden when it is in another aisle (unless it is mid-animation out of this one)
       if (!st || st.hidden || (!this.slotInView(robot.nodeId) && !st.anim)) continue;
       const li = levelOf(this.levels, st.y);
-      const sink = li >= 0 ? sinkAt(this.levels, st.x, li) : 0;
+      const sink = li >= 0 ? sinkAt(this.levels, st.x, li, this.input?.aisleY ?? 0) : 0;
       const active = robot.id === input.selectedId;
       const lvShelf = li >= 0 ? this.levels[li].shelfY : st.y + RH;
       this.drawRobot(layer, st.x, st.y + sink, robot, {
