@@ -59,6 +59,7 @@
 .metricLabel {
   color: var(--muted);
   font-size: 0.82rem;
+  overflow-wrap: anywhere;
 }
 
 .live {
@@ -89,14 +90,19 @@
 
 .sensorGrid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.9rem;
 }
 
+/* minmax(0, 1fr) wherever a card's content sits: a plain 1fr track grows to
+   its widest unbreakable content (a serial port path in an alert), pushing
+   the cards past the page's edge */
 .sensorCard {
   min-height: 0;
+  min-width: 0;
   padding: 1rem;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 0.8rem;
   background: rgb(var(--panel-rgb) / 0.78);
@@ -172,6 +178,12 @@
   gap: 0.75rem;
 }
 
+/* a long word (an alert's serial port path) wraps instead of widening its card */
+.metricLabelRow > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .metricValue {
   font-size: 1.2rem;
   font-variant-numeric: tabular-nums;
@@ -226,6 +238,7 @@
 
 .robotList {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.6rem;
   margin: 0;
   padding: 0;
@@ -280,6 +293,6 @@
 
   .sideStack {
     grid-column: auto;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
