@@ -9,21 +9,17 @@
 const char GRAPH_VERSION[] = "1.0.0";
 
 const GraphNode GRAPH_NODES[] = {
-    {"dock-1", "0x1D5E", 0.0, 0.0, 0.0, NodeType::Dock},
-    {"cp-01", "0x2A01", 1.0, 0.0, 0.0, NodeType::Checkpoint},
+    {"dock-1", "0x8B802E54", 0.0, 0.0, 0.0, NodeType::Dock},
+    {"cp-01", "0x3C13", 1.0, 0.0, 0.0, NodeType::Checkpoint},
     {"water-01", "0x3C10", 2.0, 0.0, 0.0, NodeType::Water},
     {"cp-02", "0x2A02", 3.0, 0.0, 0.0, NodeType::Checkpoint},
     {"elev-1-L0", "0x8F00", 4.0, 0.0, 0.0, NodeType::Elevator},
     {"elev-1-L1", "0x8F01", 4.0, 0.0, 1.0, NodeType::Elevator},
-    {"cp-11", "0x2B01", 3.0, 0.0, 1.0, NodeType::Checkpoint},
-    {"water-11", "0x3C11", 2.0, 0.0, 1.0, NodeType::Water},
-    {"cp-12", "0x2B02", 1.0, 0.0, 1.0, NodeType::Checkpoint},
-    {"cp-13", "0x2B03", 0.0, 0.0, 1.0, NodeType::Checkpoint},
-    {"elev-1-L2", "0x8F02", 4.0, 0.0, 2.0, NodeType::Elevator},
-    {"cp-21", "0x2C01", 3.0, 0.0, 2.0, NodeType::Checkpoint},
-    {"cp-22", "0x2C02", 2.0, 0.0, 2.0, NodeType::Checkpoint},
+    {"cp-11", "0x34D40746", 3.0, 0.0, 1.0, NodeType::Checkpoint},
+    {"water-11", "0xB4874946", 2.0, 0.0, 1.0, NodeType::Water},
+    {"water-12", "0xF42F3F46", 1.0, 0.0, 1.0, NodeType::Water},
 };
-const uint8_t GRAPH_NODE_COUNT = 13;
+const uint8_t GRAPH_NODE_COUNT = 9;
 
 const GraphEdge GRAPH_EDGES[] = {
     {0, 1, 1.0, true},  // dock-1 - cp-01
@@ -32,16 +28,12 @@ const GraphEdge GRAPH_EDGES[] = {
     {3, 4, 1.0, true},  // cp-02 - elev-1-L0
     {5, 6, 1.0, true},  // elev-1-L1 - cp-11
     {6, 7, 1.0, true},  // cp-11 - water-11
-    {7, 8, 1.0, true},  // water-11 - cp-12
-    {8, 9, 1.0, true},  // cp-12 - cp-13
-    {10, 11, 1.0, true},  // elev-1-L2 - cp-21
-    {11, 12, 1.0, true},  // cp-21 - cp-22
+    {7, 8, 1.0, true},  // water-11 - water-12
     {4, 5, 3.0, true},  // elev-1-L0 - elev-1-L1
-    {5, 10, 3.0, true},  // elev-1-L1 - elev-1-L2
 };
-const uint16_t GRAPH_EDGE_COUNT = 12;
+const uint16_t GRAPH_EDGE_COUNT = 8;
 
 const NodeIndex GRAPH_DOCK = 0;  // dock-1
 
 // A planned path visits each node at most once.
-static_assert(13 <= MAX_PATH_LEN, "topology has more nodes than MAX_PATH_LEN in types.h");
+static_assert(9 <= MAX_PATH_LEN, "topology has more nodes than MAX_PATH_LEN in types.h");
