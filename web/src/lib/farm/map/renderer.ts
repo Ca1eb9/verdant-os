@@ -182,6 +182,24 @@ export function levelLightText(levelId: number, light: LevelLight) {
   return `L${levelId} light: ${Math.round(light.lux)} lux`;
 }
 
+// The status badge's narrowest: the design's, for a short action and percentage
+const BADGE_MIN_W = 98;
+
+/**
+ * A text element's drawn width. Measured where the browser lays it out; where
+ * it can't (not yet in a rendered svg), estimated from its length, on the wide
+ * side so nothing overlaps.
+ */
+function textWidth(el: SVGTextElement, fontPx: number): number {
+  let measured = 0;
+  try {
+    measured = el.getComputedTextLength();
+  } catch {
+    // not rendered
+  }
+  return measured > 0 ? measured : (el.textContent ?? "").length * fontPx * 0.62;
+}
+
 /** A level's light fixture, updated from its reading without redrawing the farm */
 interface LightEls {
   levelId: number;
@@ -711,20 +729,31 @@ export class FarmRenderer {
     // floating status badge: action text + a literal battery glyph and its percentage
     if (opts.active) {
       const ac = this.accent();
-      const bw = 98;
       const bh = 14;
       const by = -48;
       const pct = Math.round(Math.max(0, Math.min(100, data.battery)));
+      const pad = 7; // inside the pill's ends
+      const glyphW = 17.5; // the battery outline and its nub
+      const gap = 3; // glyph to percentage, and action to glyph at the least
+      const pill = this.mk("rect", { y: by, height: bh, rx: 7, fill: P.badgeFill, stroke: ac, "stroke-width": 0.8, opacity: 0.96 }, g);
+      const action = this.mkT(data.action, { y: by + 9.6, "font-size": "9.5px", fill: ac, "font-weight": "500", "font-family": FONT }, g);
+      const pctText = this.mkT(pct + "%", { y: by + 9.5, "text-anchor": "end", "font-size": "7.2px", fill: ac, "font-family": FONT }, g);
+      // Laid out from the texts' real widths, so "100%" or a long action
+      // widens the pill instead of running under the glyph
+      const actionW = textWidth(action, 9.5);
+      const pctW = textWidth(pctText, 7.2);
+      const bw = Math.max(BADGE_MIN_W, Math.ceil(pad + 2 + actionW + 2 * gap + glyphW + gap + pctW + pad));
       // keep the pill inside the viewBox at the dock and the elevator lane
       const bx = Math.round(Math.min(Math.max(this.frame.VIEW_X + 3 - x, trayW / 2 + 1 - bw / 2), this.frame.VIEW_X + this.frame.VIEW_W - 3 - bw - x));
-      const gx = bx + bw - 42;
+      const gx = bx + bw - pad - pctW - gap - glyphW;
       const gy = by + 3.8;
-      this.mk("rect", { x: bx, y: by, width: bw, height: bh, rx: 7, fill: P.badgeFill, stroke: ac, "stroke-width": 0.8, opacity: 0.96 }, g);
-      this.mkT(data.action, { x: bx + 9, y: by + 9.6, "font-size": "9.5px", fill: ac, "font-weight": "500", "font-family": FONT }, g);
+      pill.setAttribute("x", String(bx));
+      pill.setAttribute("width", String(bw));
+      action.setAttribute("x", String(bx + pad + 2));
+      pctText.setAttribute("x", String(bx + bw - pad));
       this.mk("rect", { x: gx, y: gy, width: 15, height: 6.8, rx: 1.3, fill: "none", stroke: ac, "stroke-width": 0.9 }, g);
       this.mk("rect", { x: gx + 15.5, y: gy + 2, width: 2, height: 3, rx: 0.6, fill: ac }, g);
       this.mk("rect", { x: gx + 1.3, y: gy + 1.3, width: Math.max(1.1, (12.4 * pct) / 100), height: 4.2, rx: 0.6, fill: ac }, g);
-      this.mkT(pct + "%", { x: bx + bw - 7, y: by + 9.5, "text-anchor": "end", "font-size": "7.2px", fill: ac, "font-family": FONT }, g);
     }
 
     this.mkT(data.id, {
