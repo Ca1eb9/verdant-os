@@ -558,7 +558,8 @@ export class FarmRenderer {
     const dips = this.basins(lv);
     const g = this.mk("g", {}, p);
     // The rail's top edge, left to right, down into each basin and back up
-    let top = "M" + FX + " " + y;
+    const FL = lv.left;
+    let top = "M" + FL + " " + y;
     for (const dp of dips) {
       top += " L" + (dp.l - dp.ramp) + " " + y + " L" + dp.l + " " + dp.b + " L" + dp.r + " " + dp.b + " L" + (dp.r + dp.ramp) + " " + y;
     }
@@ -569,20 +570,20 @@ export class FarmRenderer {
       under += " L" + (dp.r + dp.ramp + t * 0.7) + " " + (y + t) + " L" + (dp.r + t * 0.5) + " " + (dp.b + t) +
         " L" + (dp.l - t * 0.5) + " " + (dp.b + t) + " L" + (dp.l - dp.ramp - t * 0.7) + " " + (y + t);
     }
-    under += " L" + FX + " " + (y + t) + " Z";
+    under += " L" + FL + " " + (y + t) + " Z";
     this.mk("path", { d: top + under, fill: P.shelf }, g);
     this.mk("path", { d: top, fill: "none", stroke: P.shelfLit, "stroke-width": 1.3 }, g);
     // C-channel return flanges at both ends + gussets: reads as load-bearing rail
-    this.mk("path", { d: "M" + FX + " " + y + " L" + (FX + 9) + " " + y + " L" + (FX + 9) + " " + (y + t + 7) + " L" + FX + " " + (y + t + 7) + " Z", fill: P.shelfDark }, g);
+    this.mk("path", { d: "M" + FL + " " + y + " L" + (FL + 9) + " " + y + " L" + (FL + 9) + " " + (y + t + 7) + " L" + FL + " " + (y + t + 7) + " Z", fill: P.shelfDark }, g);
     this.mk("path", { d: "M" + (EX - 9) + " " + y + " L" + EX + " " + y + " L" + EX + " " + (y + t + 7) + " L" + (EX - 9) + " " + (y + t + 7) + " Z", fill: P.shelfDark }, g);
     for (const dp of dips) {
       this.mk("path", { d: "M" + (dp.l - dp.ramp) + " " + y + " L" + dp.l + " " + dp.b + " M" + (dp.r + dp.ramp) + " " + y + " L" + dp.r + " " + dp.b, fill: "none", stroke: P.shelfDark, "stroke-width": 0.9, opacity: 0.55 }, g);
     }
-    for (let bx = FX + 26; bx < EX - 14; bx += 62) {
+    for (let bx = FL + 26; bx < EX - 14; bx += 62) {
       if (dips.some((dp) => bx > dp.l - dp.ramp - 20 && bx < dp.r + dp.ramp + 20)) continue;
       this.mk("path", { d: "M" + bx + " " + (y + t) + " l6 0 l-6 9 Z", fill: P.shelfDark, opacity: 0.45 }, g);
     }
-    this.mkT("L" + lv.id, { x: FX + 6, y: y - 24, "text-anchor": "start", "font-size": "11px", fill: P.muted, "font-family": FONT, "font-weight": "500" }, g);
+    this.mkT("L" + lv.id, { x: FL + 6, y: y - 24, "text-anchor": "start", "font-size": "11px", fill: P.muted, "font-family": FONT, "font-weight": "500" }, g);
   }
 
   // ---------- drawWater: basin body (before rovers) + surface (after) ----------
@@ -636,7 +637,7 @@ export class FarmRenderer {
   private drawLights(p: Element, lv: Level) {
     const { lightY, shelfY } = lv;
     const P = this.PAL;
-    const x0 = FX + 6;
+    const x0 = lv.left + 6;
     const x1 = this.frame.EX - 6;
     const g = this.mk("g", {}, p);
     const title = this.mk("title", {}, g);
@@ -712,7 +713,7 @@ export class FarmRenderer {
       const by = -48;
       const pct = Math.round(Math.max(0, Math.min(100, data.battery)));
       // keep the pill inside the viewBox at the dock and the elevator lane
-      const bx = Math.round(Math.min(Math.max(3 - x, trayW / 2 + 1 - bw / 2), this.frame.VIEW_W - 3 - bw - x));
+      const bx = Math.round(Math.min(Math.max(this.frame.VIEW_X + 3 - x, trayW / 2 + 1 - bw / 2), this.frame.VIEW_X + this.frame.VIEW_W - 3 - bw - x));
       const gx = bx + bw - 42;
       const gy = by + 3.8;
       this.mk("rect", { x: bx, y: by, width: bw, height: bh, rx: 7, fill: P.badgeFill, stroke: ac, "stroke-width": 0.8, opacity: 0.96 }, g);
@@ -772,7 +773,7 @@ export class FarmRenderer {
     const P = this.PAL;
     const gnd = input.scene.gnd;
     svg.innerHTML = "";
-    svg.setAttribute("viewBox", `0 0 ${this.frame.VIEW_W} ${input.scene.viewH}`);
+    svg.setAttribute("viewBox", `${this.frame.VIEW_X} 0 ${this.frame.VIEW_W} ${input.scene.viewH}`);
     this.defs(svg);
 
     this.mk("rect", { x: FX, y: TOP, width: this.frame.EX - FX, height: gnd - TOP, fill: P.backdrop }, svg);

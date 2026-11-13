@@ -152,7 +152,7 @@ export function FarmMap({
         {emptyMessage ? <div className={styles.overlay}>{emptyMessage}</div> : null}
         <svg
           ref={svgRef}
-          viewBox={`0 0 ${scene.frame.VIEW_W} ${scene.viewH}`}
+          viewBox={`${scene.frame.VIEW_X} 0 ${scene.frame.VIEW_W} ${scene.viewH}`}
           width="100%"
           role="img"
           aria-label={`Side-view cross-section of the farm showing robots on each shelf level, the charging dock and the elevator. ${scene.levels

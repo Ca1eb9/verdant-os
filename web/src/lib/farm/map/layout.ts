@@ -1,9 +1,11 @@
 // Turns a FarmTopology into pixel positions for the side-view map.
 // Geometry constants are the ones from the side-view design. Along a level,
-// each topology x is a slot of equal width: the design's three (x 1 to 3)
-// fill the frame, and nodes further left or right add slots, widening the
-// frame and the map. A water node sits in its slot like any other, dipped
-// into a basin; water nodes in neighbouring slots share one basin.
+// each topology x is a slot of equal width, in the same place on every level:
+// the design's three (x 1 to 3) fill the frame. A level with a node further
+// left grows its own shelf out to it, over the dock bay; one further right
+// moves the elevator shaft, which every level meets, out to it. A water node
+// sits in its slot like any other, dipped into a basin; water nodes in
+// neighbouring slots share one basin.
 
 import type { FarmTopology, GraphNode, NodeType } from "@/lib/farm/types";
 
@@ -42,6 +44,8 @@ export interface Level {
   lightY: number;
   /** Its water basins, left to right, by aisle y (none where it has no water) */
   basins: Map<number, Dip[]>;
+  /** Its shelf's left end: the frame's, or further left for a node left of the design's three */
+  left: number;
 }
 
 /** The map's horizontal geometry, wider than the design's for a level with more slots */
@@ -53,6 +57,8 @@ export interface Frame {
   ELEV1: number;
   /** Rover x inside the elevator shaft */
   LANE_X: number;
+  /** The view's left edge: below 0 when a level's shelf grows out past the dock bay */
+  VIEW_X: number;
   VIEW_W: number;
 }
 
@@ -137,7 +143,7 @@ function buildLevels(zs: number[]): { levels: Level[]; gnd: number; viewH: numbe
   const offset = (count - BASE_LEVELS) * LEVEL_PITCH;
   const levels = (zs.length ? zs : [0]).map((z, i) => {
     const shelfY = BASE_SHELF_Y + offset - LEVEL_PITCH * i;
-    return { z, id: z, shelfY, lightY: shelfY - 62, basins: new Map<number, Dip[]>() };
+    return { z, id: z, shelfY, lightY: shelfY - 62, basins: new Map<number, Dip[]>(), left: FX };
   });
   return { levels, gnd: BASE_GND + offset, viewH: BASE_VIEW_H + offset };
 }
@@ -155,21 +161,26 @@ export function topologyToScene(topology: FarmTopology): Scene {
   const slots = new Map<string, SlotPos>();
   const nodeAisle = new Map<string, number>();
 
-  // Slots beyond the design's x 1 to 3 widen the frame: those on the left
-  // push everything right of the dock bay along
+  /** Left edge of topology x's slot: the same on every level */
+  const slotL = (x: number) => FX + (x - 1) * SLOT;
+  // A level's own nodes left of the design's three grow its shelf out (over
+  // the dock bay); nodes right of them, on any level, move the shaft out
+  for (const level of levels) {
+    const xs = nodes.filter((n) => onRail(n) && n.z === level.z).map((n) => n.x);
+    level.left = Math.min(FX, ...xs.map((x) => slotL(Math.floor(x))));
+  }
   const xs = nodes.filter(onRail).map((n) => n.x);
-  const extraL = xs.length ? Math.max(0, Math.ceil(1 - Math.min(...xs))) : 0;
   const extraR = xs.length ? Math.max(0, Math.ceil(Math.max(...xs) - BASE_SLOTS)) : 0;
-  const ex = EX + (extraL + extraR) * SLOT;
+  const ex = EX + extraR * SLOT;
+  const viewX = Math.min(0, ...levels.map((lv) => lv.left - DOCK0));
   const frame: Frame = {
     EX: ex,
     ELEV0: ex + ELEV_GAP,
     ELEV1: ex + ELEV_GAP + ELEV_W,
     LANE_X: ex + ELEV_GAP + 5,
-    VIEW_W: ex + ELEV_GAP + ELEV_W + VIEW_PAD,
+    VIEW_X: viewX,
+    VIEW_W: ex + ELEV_GAP + ELEV_W + VIEW_PAD - viewX,
   };
-  /** Left edge of topology x's slot */
-  const slotL = (x: number) => FX + (x - 1 + extraL) * SLOT;
 
   const put = (node: GraphNode, x: number, lv: number) => {
     slots.set(node.id, { nodeId: node.id, type: node.type, x: Math.round(x), y: levels[lv].shelfY - RH, lv, slotW: W });
