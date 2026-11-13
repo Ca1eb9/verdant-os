@@ -37,10 +37,11 @@ const RC_WINDOW_S = 10;
  */
 const JOG_WHILE_INITIALIZING = process.env.NEXT_PUBLIC_JOG_WHILE_INITIALIZING === "true";
 /**
- * The robots are built with MANUAL_ELEVATOR (firmware config.h): they stay on
- * the elevator until the operator says it has arrived. Offers that button.
+ * The robots are built with MANUAL_ELEVATOR (firmware config.h, on by
+ * default): they stay on the elevator until the operator says it has arrived.
+ * Offers that button unless built with NEXT_PUBLIC_MANUAL_ELEVATOR=false.
  */
-const MANUAL_ELEVATOR = process.env.NEXT_PUBLIC_MANUAL_ELEVATOR === "true";
+const MANUAL_ELEVATOR = process.env.NEXT_PUBLIC_MANUAL_ELEVATOR !== "false";
 /** States the robot accepts a jog in */
 const JOGGABLE: RobotStatus[] = ["idle", "en_route", "working", "stopped", "error", "manual"];
 const SHOWN_JOGGABLE: RobotStatus[] = JOG_WHILE_INITIALIZING ? [...JOGGABLE, "initializing"] : JOGGABLE;

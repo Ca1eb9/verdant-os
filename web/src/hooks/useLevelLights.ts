@@ -8,11 +8,12 @@ import type { Level } from "@/lib/farm/map/layout";
 import type { LevelLight } from "@/lib/farm/map/renderer";
 
 /**
- * Draw the map's lights from the light switches instead of the light sensors,
- * for a day the sensors aren't working (dashboard.env, web/.env.local). Fixed
- * at build time. Remotely there are no switches, so the sensors still draw.
+ * Draw the map's lights from the light switches instead of the light sensors
+ * (the default; NEXT_PUBLIC_MAP_LIGHTS_FROM_SWITCHES=false draws them from the
+ * sensors). Fixed at build time. Remotely there are no switches, so the
+ * sensors draw there either way.
  */
-const FROM_SWITCHES = process.env.NEXT_PUBLIC_MAP_LIGHTS_FROM_SWITCHES === "true";
+const FROM_SWITCHES = process.env.NEXT_PUBLIC_MAP_LIGHTS_FROM_SWITCHES !== "false";
 /**
  * Draw each level's light fully on or off from its sensor (on at ON_OFF_LUX in
  * the renderer) instead of in proportion to its reading. FROM_SWITCHES, when

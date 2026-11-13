@@ -315,13 +315,14 @@ it's leaving from. The tag it drives off onto after a ride doesn't count: the
 elevator is behind it there, so sent straight back it drives on the way it
 came off.
 
-**Manual elevator (backup).** With `MANUAL_ELEVATOR` on in `config.h` the ride
-isn't timed: the robot stays on the platform, for as long as it takes, until
-an operator sends `elevator_arrived`, then drives off as above. The dashboard
-shows its **Elevator arrived** button only when built with
-`NEXT_PUBLIC_MANUAL_ELEVATOR=true`, on the farm network, while the robot is on
-the elevator. Turn both on together: a robot with the flag and a dashboard
-without it leaves the robot on the elevator with no button to release it.
+**Manual elevator (the default).** With `MANUAL_ELEVATOR` on in `config.h` the
+ride isn't timed: the robot stays on the platform, for as long as it takes,
+until an operator sends `elevator_arrived`, then drives off as above. The
+dashboard shows its **Elevator arrived** button on the farm network while the
+robot is on the elevator, unless built with `NEXT_PUBLIC_MANUAL_ELEVATOR=false`.
+Change both together: a robot with the flag and a dashboard without it leaves
+the robot on the elevator with no button to release it. With both off, the
+ride is timed by `ELEVATOR_WAIT_MS`.
 
 ### ToF approach
 

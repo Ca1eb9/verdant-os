@@ -212,19 +212,17 @@ which mirrors them into Supabase's `sensor_events` table
 ([SUPABASE-SETUP.md](SUPABASE-SETUP.md)). On FarmNet the dashboard shows the
 newest reading of any shelf; the remote path waits on the Supabase bridge.
 
-The Light card and History page show each level's light. The farm map draws
-each level's grow light as bright as the reading for that level (its
-`level` is the topology's `z`). Full brightness is
-`FULL_GLOW_LUX` in `web/src/lib/farm/map/renderer.ts` (5000 lux): a level is
-drawn in proportion to its reading up to that, so there's no on/off cutoff.
-Set it to what a sensor reads under its light at full brightness. With
-`NEXT_PUBLIC_MAP_LIGHTS_FROM_SWITCHES=true` in `dashboard.env` the map draws
-the lights from the Lights card's switches instead (full on or off), for a
-day the sensors aren't working; a level without its own switch follows
-whether any light is on, and the remote dashboard still uses the sensors.
-`NEXT_PUBLIC_MAP_LIGHTS_ON_OFF=true` draws each level simply on (its sensor at
-`ON_OFF_LUX`, 2000 lux, or more) or off instead of in proportion; the
-switches option overrides it where it applies. A level with no current reading
+The Light card and History page show each level's light. On FarmNet the farm
+map draws each level's grow light from the Lights card's switches by default:
+fully on or off, a level without its own switch following whether any light
+is on. With `NEXT_PUBLIC_MAP_LIGHTS_FROM_SWITCHES=false` in `dashboard.env`,
+and on the remote dashboard (no switches there), it draws them from the light
+sensors instead: as bright as the reading for that level (its `level` is the
+topology's `z`), in proportion up to `FULL_GLOW_LUX` in
+`web/src/lib/farm/map/renderer.ts` (5000 lux), or with
+`NEXT_PUBLIC_MAP_LIGHTS_ON_OFF=true` simply on at `ON_OFF_LUX` (2000 lux) or
+more and off below. Set `FULL_GLOW_LUX` to what a sensor reads under its light
+at full brightness. A level with no current reading
 (none in the last 10 s, the sensor `null`, or no sensor faces it) is drawn as
 off, never as lit; its tooltip says "no reading".
 This assumes one shelf node, as on this farm: with several, the card and map
