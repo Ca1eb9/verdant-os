@@ -3,8 +3,9 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { GrowLights, isLightSwitch } from "../src/lights.js";
 
-// The repo's farm: dock and level 0, elevator stops elev-1-L0/L1/L2, levels 1 and 2
-const topology = JSON.parse(readFileSync(new URL("../../topology.json", import.meta.url), "utf-8"));
+// A fixed three-level farm, so the tests don't follow the live one: dock and
+// level 0, elevator stops elev-1-L0/L1/L2, levels 1 and 2
+const topology = JSON.parse(readFileSync(new URL("./fixtures/three-levels.json", import.meta.url), "utf-8"));
 
 function growLights(levels = [0], follow_robots?: boolean) {
   const l = new GrowLights({ shelf_id: "shelf-1", levels, follow_robots });

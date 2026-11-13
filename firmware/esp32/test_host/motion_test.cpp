@@ -7,7 +7,9 @@
 //
 // Checks the DriveCommands each hook sends, the ToF slow zone and approaches
 // (elevator, dock), the elevator wait, and every fault check() reports.
-// Build + run with ./run.sh
+// Built a second time with -DTHREE_LEVELS against
+// fixtures/three_level_topology.json for a ride through more than one level,
+// whatever the farm has. Build + run with ./run.sh
 
 #include <math.h>
 #include <stdio.h>
@@ -82,6 +84,8 @@ class Sink : public DriveSink {
   // Reaching the elevator or dock wall brakes at once; every other stop eases off.
   bool last_is_stop(bool brake) const { return last().mode == DriveMode::Stop && last().brake == brake; }
 };
+
+#ifndef THREE_LEVELS
 
 static void test_follow_edge() {
   SCENARIO("follow edge");
@@ -167,15 +171,6 @@ static void test_elevator() {
   CHECK(s.last_is_stop(true));
   m.check(now += ELEVATOR_WAIT_MS, open_road(), false);
   CHECK(s.last_is_drive(CRUISE_SPEED));
-
-  // Two levels in one ride: twice the wait.
-  m.follow_edge(N("elev-1-L0"), N("elev-1-L2"), EdgeDrive::ElevatorBackward, now);
-  m.check(now += 20, front(1), false);
-  sent = s.sent.size();
-  CHECK(m.check(now += 2 * ELEVATOR_WAIT_MS - 1, open_road(), false) == nullptr);
-  CHECK(s.sent.size() == sent);
-  m.check(now += 1, open_road(), false);
-  CHECK(s.last_is_drive(-CRUISE_SPEED));
 
   // A stop during the ride cancels it.
   m.follow_edge(N("elev-1-L1"), N("elev-1-L0"), EdgeDrive::ElevatorForward, now);
@@ -542,3 +537,29 @@ int main() {
   printf("motion_test: %s\n", failures ? "FAILED" : "passed");
   return failures ? 1 : 0;
 }
+
+#else
+
+// Against fixtures/three_level_topology.json: elevator stops elev-1-L0/L1/L2.
+static void test_two_level_ride() {
+  SCENARIO("two levels in one ride");
+  Sink s;
+  Motion m(s);
+  uint32_t now = 1000;
+  // Twice the wait, then off.
+  m.follow_edge(N("elev-1-L0"), N("elev-1-L2"), EdgeDrive::ElevatorBackward, now);
+  m.check(now += 20, front(1), false);
+  size_t sent = s.sent.size();
+  CHECK(m.check(now += 2 * ELEVATOR_WAIT_MS - 1, open_road(), false) == nullptr);
+  CHECK(s.sent.size() == sent);
+  m.check(now += 1, open_road(), false);
+  CHECK(s.last_is_drive(-CRUISE_SPEED));
+}
+
+int main() {
+  test_two_level_ride();
+  printf("motion_test (three levels): %s\n", failures ? "FAILED" : "passed");
+  return failures ? 1 : 0;
+}
+
+#endif
