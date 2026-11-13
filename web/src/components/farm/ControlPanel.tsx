@@ -436,7 +436,6 @@ export function ControlPanel({
     setMessage(value ? { tone: "ok", text: "Operator key saved on this device." } : null);
   };
 
-  const levelOf = (n: GraphNode | undefined) => (n ? scene.levels.findIndex((lv) => lv.z === n.z) + 1 : 0);
   const aisleOf = (n: GraphNode | undefined) => (n ? scene.aisles.find((a) => a.y === n.y)?.name : undefined);
 
   return (
@@ -480,7 +479,7 @@ export function ControlPanel({
           </div>
           <div>
             <dt>Position</dt>
-            <dd>{node ? `${node.id} · Aisle ${aisleOf(node)} L${levelOf(node)}` : robot ? "Unknown" : "—"}</dd>
+            <dd>{node ? `${node.id} · Aisle ${aisleOf(node)} L${node.z}` : robot ? "Unknown" : "—"}</dd>
           </div>
           <div>
             <dt>Last seen</dt>
