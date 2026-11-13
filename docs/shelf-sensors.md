@@ -90,8 +90,10 @@ dim wires ([wiring](wiring/shelf-sensor.md#grow-light-relays)); the bridge
 decides. Each relay is given a level in `lights.levels` and the dashboard
 shows a switch per level. The farm has one light supply for both levels, so
 the config lists only level 0: the relay on D5 switches every light, and the
-dashboard shows a single "Level 0" switch. Wiring a second supply to the D6
-relay and adding `1` to `levels` adds a "Level 1" switch.
+dashboard shows a single "Level 1" switch. Wiring a second supply to the D6
+relay and adding `1` to `levels` adds a "Level 2" switch. (The dashboard and
+map count levels from 1 for the operator; the topology's `z`, `levels` and
+`light_levels` count from 0, so level 0 is "Level 1" / L1.)
 
 **Setting it up**
 

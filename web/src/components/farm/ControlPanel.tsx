@@ -479,7 +479,7 @@ export function ControlPanel({
           </div>
           <div>
             <dt>Position</dt>
-            <dd>{node ? `${node.id} · Aisle ${aisleOf(node)} L${node.z}` : robot ? "Unknown" : "—"}</dd>
+            <dd>{node ? `${node.id} · Aisle ${aisleOf(node)} L${node.z + 1}` : robot ? "Unknown" : "—"}</dd>
           </div>
           <div>
             <dt>Last seen</dt>

@@ -175,7 +175,7 @@ type Attrs = Record<string, string | number>;
  */
 export type LevelLight = { lux: number; onOff?: boolean } | { switchedOn: boolean } | null;
 
-/** "L0 light: 412 lux", by the map's level label: for the fixture's title and the map's label */
+/** "L1 light: 412 lux", by the map's level label: for the fixture's title and the map's label */
 export function levelLightText(levelId: number, light: LevelLight) {
   if (light === null) return `L${levelId} light: no reading`;
   if ("switchedOn" in light) return `L${levelId} light: switched ${light.switchedOn ? "on" : "off"}`;

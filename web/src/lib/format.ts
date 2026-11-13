@@ -5,9 +5,12 @@ export function formatMetric(value: number, unit: string, precision = 1) {
   }).format(value)}${unit ? ` ${unit}` : ""}`;
 }
 
-/** A level by name, by its number in the topology and the config ("Level 0"), as the farm map's L0 */
+/**
+ * A level by name for the operator, counted from 1 as the farm map's L1 ("Level
+ * 1" is z 0). The topology and the configs count from 0.
+ */
 export function levelName(level: number) {
-  return `Level ${level}`;
+  return `Level ${level + 1}`;
 }
 
 export function average(values: number[]) {

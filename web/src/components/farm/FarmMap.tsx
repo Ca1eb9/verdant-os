@@ -179,7 +179,7 @@ export function FarmMap({
               <strong>{selected.id}</strong>
               <span>
                 {selectedNode
-                  ? `${selectedNode.id} (${selectedAisle ? `Aisle ${selectedAisle}, ` : ""}L${selectedNode.z})`
+                  ? `${selectedNode.id} (${selectedAisle ? `Aisle ${selectedAisle}, ` : ""}L${selectedNode.z + 1})`
                   : "Position unknown"}
               </span>
               <span>{selectedDraw?.action}</span>
