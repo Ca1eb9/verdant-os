@@ -766,6 +766,21 @@ export class FarmRenderer {
     this.mkT("Elevator", { x: (x0 + x1) / 2, y: gnd + 14, "text-anchor": "middle", "font-size": "10px", fill: P.muted, "font-family": FONT }, g);
   }
 
+  /**
+   * Each level's bay: from its shelf (its floor; the ground for the lowest,
+   * whose walls stand on it) up to the shelf above (its ceiling; the top for
+   * the highest), at its own left end
+   */
+  private bands(): { left: number; top: number; bottom: number }[] {
+    const levels = this.levels;
+    const gnd = this.input!.scene.gnd;
+    return levels.map((lv, i) => ({
+      left: lv.left,
+      top: i === levels.length - 1 ? TOP : levels[i + 1].shelfY,
+      bottom: i === 0 ? gnd : lv.shelfY,
+    }));
+  }
+
   // ---------- scene ----------
   private drawFarm() {
     const svg = this.svg;
@@ -776,7 +791,10 @@ export class FarmRenderer {
     svg.setAttribute("viewBox", `${this.frame.VIEW_X} 0 ${this.frame.VIEW_W} ${input.scene.viewH}`);
     this.defs(svg);
 
-    this.mk("rect", { x: FX, y: TOP, width: this.frame.EX - FX, height: gnd - TOP, fill: P.backdrop }, svg);
+    // Each level's own bay, from its shelf up to the one above (or the top)
+    for (const band of this.bands()) {
+      this.mk("rect", { x: band.left, y: band.top, width: this.frame.EX - band.left, height: band.bottom - band.top, fill: P.backdrop }, svg);
+    }
 
     this.lightEls.clear();
     this.levels.forEach((lv, li) => {
@@ -799,8 +817,13 @@ export class FarmRenderer {
     this.labelLayer = this.mk("g", { "pointer-events": "none" }, svg);
 
     const frame = this.mk("g", { "pointer-events": "none" }, svg);
-    this.mk("line", { x1: FX, y1: TOP, x2: FX, y2: gnd, stroke: P.frame, "stroke-width": 1.6 }, frame);
-    this.mk("line", { x1: this.frame.EX, y1: TOP, x2: this.frame.EX, y2: gnd, stroke: P.frame, "stroke-width": 1.6 }, frame);
+    // Each level's walls at its own ends: levels with the same ends stack into
+    // one straight post, and a level reaching further out has its wall out there
+    for (const band of this.bands()) {
+      for (const x of [band.left, this.frame.EX]) {
+        this.mk("line", { x1: x, y1: band.top, x2: x, y2: band.bottom, stroke: P.frame, "stroke-width": 1.6 }, frame);
+      }
+    }
     this.mk("rect", { x: DOCK0, y: gnd, width: this.frame.ELEV1 - DOCK0, height: 4, fill: P.frame, rx: 1 }, frame);
     this.drawDock(svg);
     this.drawElevator(svg);
