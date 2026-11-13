@@ -106,6 +106,9 @@ const ON_OFF_LUX = 2000;
 // brighter than off: losing the feed mustn't look like the light coming on.
 const OFF_FIXTURE_OPACITY = 0.35;
 
+// A shelf's rail: its depth below the top edge
+const SHELF_T = 6;
+
 // plant colours
 const PLANT = { stem: "#3A6B18", leaf: "#5E9224", mid: "#8CBB4E", tip: "#B7D68C" };
 
@@ -552,7 +555,7 @@ export class FarmRenderer {
   // ---------- drawShelf: C-channel rail dipping into a \__/ water basin under each water run ----------
   private drawShelf(p: Element, lv: Level) {
     const P = this.PAL;
-    const t = 6;
+    const t = SHELF_T;
     const EX = this.frame.EX;
     const y = lv.shelfY;
     const dips = this.basins(lv);
@@ -768,15 +771,15 @@ export class FarmRenderer {
 
   /**
    * Each level's bay: from its shelf (its floor; the ground for the lowest,
-   * whose walls stand on it) up to the shelf above (its ceiling; the top for
-   * the highest), at its own left end
+   * whose walls stand on it) up to the underside of the shelf above (its
+   * ceiling; the top for the highest), at its own left end
    */
   private bands(): { left: number; top: number; bottom: number }[] {
     const levels = this.levels;
     const gnd = this.input!.scene.gnd;
     return levels.map((lv, i) => ({
       left: lv.left,
-      top: i === levels.length - 1 ? TOP : levels[i + 1].shelfY,
+      top: i === levels.length - 1 ? TOP : levels[i + 1].shelfY + SHELF_T,
       bottom: i === 0 ? gnd : lv.shelfY,
     }));
   }
