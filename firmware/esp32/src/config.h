@@ -31,7 +31,7 @@
 // The one Bluetooth controller this robot accepts, set in secrets.h. Empty:
 // any Xbox controller in pairing mode can connect (README "Bluetooth controller").
 #ifndef PAD_ADDRESS
-#define PAD_ADDRESS ""
+#define PAD_ADDRESS "78:86:2e:ce:06:33"
 #endif
 
 // ---- Comms timing -------------------------------------------------------------
@@ -117,8 +117,8 @@ constexpr uint32_t TOF_TIMING_BUDGET_US = 33000;
 // speed's limit, and longer wires slow the edges: the front sensor's 400 mm
 // STEMMA QT cable is too long for 400 kHz. The rear bus (short cables) also
 // carries the AHT20, which takes 400 kHz at most.
-constexpr uint32_t I2C_FRONT_HZ = 100000;
-constexpr uint32_t I2C_REAR_HZ = 400000;
+constexpr uint32_t I2C_FRONT_HZ = 400000;
+constexpr uint32_t I2C_REAR_HZ = 400000; //400000
 constexpr uint32_t TOF_TIMEOUT_MS = 500;        // no data this long = sensor fault
 constexpr uint32_t TOF_REINIT_MS = 5000;
 // A sensor that resets on its own (a dip in its supply) forgets its setup and
