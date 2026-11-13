@@ -18,6 +18,7 @@ export const RH = 17; // rover height, chassis top to wheel bottom
 export const DIPD = 10; // basin depth
 export const TOP = 44; // top of the frame / elevator shaft
 export const VIEW_W = 660;
+const WATER_GAP = 6; // between water stations side by side in one basin
 
 const BASE_LEVELS = 3;
 const LEVEL_PITCH = 100;
@@ -32,6 +33,8 @@ export interface Level {
   id: number;
   shelfY: number;
   lightY: number;
+  /** Basin's left edge: the design's, or further left for more water stations than one */
+  basinL: number;
 }
 
 export interface Dip {
@@ -72,16 +75,40 @@ export interface Scene {
   slots: Map<string, SlotPos>;
 }
 
+const BASIN_HALF = (W / 2 + 4) * 3; // 3x the original basin
+const BASIN_L = Math.round((FX + EX) / 2 - BASIN_HALF);
+const BASIN_R = Math.round((FX + EX) / 2 + BASIN_HALF);
+const RAMP = 16;
+/** Where the design's one water station sits: the basin's middle */
+const WATER_X = Math.round(BASIN_L + (BASIN_R - BASIN_L - W) / 2);
+/** The furthest left a water station goes, past the basin's ramp and the frame */
+const WATER_MIN_X = FX + 8 + RAMP + (WATER_X - BASIN_L);
+
 export function dip(level: Level): Dip {
-  const cx = (FX + EX) / 2;
-  const half = (W / 2 + 4) * 3; // 3x the original basin
   return {
-    l: Math.round(cx - half),
-    r: Math.round(cx + half),
+    l: level.basinL,
+    r: BASIN_R,
     y: level.shelfY,
     b: level.shelfY + DIPD,
-    ramp: 16,
+    ramp: RAMP,
   };
+}
+
+/**
+ * Water stations' x along one basin, in order: the rightmost at the design's
+ * spot, the others side by side to its left, as the basin extends left for
+ * them. Squeezed together only if they'd run past the frame.
+ */
+function waterXs(n: number): number[] {
+  if (n <= 0) return [];
+  const step = n > 1 ? Math.min(W + WATER_GAP, (WATER_X - WATER_MIN_X) / (n - 1)) : 0;
+  return Array.from({ length: n }, (_, j) => Math.round(WATER_X - (n - 1 - j) * step));
+}
+
+/** The basin's left edge for n water stations: as far past the leftmost as the design's is past its one */
+function basinLeft(n: number): number {
+  const xs = waterXs(n);
+  return xs.length ? Math.min(BASIN_L, xs[0] - (WATER_X - BASIN_L)) : BASIN_L;
 }
 
 /** How far a rover at x has dipped into this level's basin (0 on the flat rail) */
@@ -119,7 +146,7 @@ function buildLevels(zs: number[]): { levels: Level[]; gnd: number; viewH: numbe
   const offset = (count - BASE_LEVELS) * LEVEL_PITCH;
   const levels = (zs.length ? zs : [0]).map((z, i) => {
     const shelfY = BASE_SHELF_Y + offset - LEVEL_PITCH * i;
-    return { z, id: z, shelfY, lightY: shelfY - 62 };
+    return { z, id: z, shelfY, lightY: shelfY - 62, basinL: BASIN_L };
   });
   return { levels, gnd: BASE_GND + offset, viewH: BASE_VIEW_H + offset };
 }
@@ -170,6 +197,13 @@ export function topologyToScene(topology: FarmTopology): Scene {
 
   for (const node of nodes) nodeAisle.set(node.id, node.y);
 
+  // Each level's basin fits its most water stations in any aisle
+  for (const level of levels) {
+    const most = Math.max(0, ...(aisles.map((a) =>
+      nodes.filter((n) => n.y === a.y && n.z === level.z && n.type === "water").length)));
+    level.basinL = basinLeft(most);
+  }
+
   for (const node of nodes) {
     const lv = lvIndex.get(node.z) ?? 0;
     // the charging bay sits off the left end of the lowest level
@@ -187,13 +221,10 @@ export function topologyToScene(topology: FarmTopology): Scene {
       const water = onLevel.filter((n) => n.type === "water");
       const rest = onLevel.filter((n) => n.type !== "water");
 
-      // water stations take the basin
-      placeZone(
-        water,
-        [Math.round(dp.l + (dp.r - dp.l - W) / 2), Math.round(dp.l + (dp.r - dp.l - W) / 2)],
-        [dp.l, dp.r],
-        (node, x, slotW) => put(node, x, li, slotW),
-      );
+      // water stations take the basin, side by side in x order
+      const xs = waterXs(water.length);
+      const slotW = water.length > 1 ? Math.min(W, Math.floor(xs[1] - xs[0] - 4)) : W;
+      water.forEach((node, j) => put(node, xs[j], li, slotW));
 
       // the rest spread either side of the basin, keeping their order along x
       let left: GraphNode[];
