@@ -22,6 +22,11 @@ export interface GrowLightsConfig {
   shelf_id: string;
   /** The level each relay channel switches, in channel order (the node's PIN_LIGHT_RELAY) */
   levels: number[];
+  /**
+   * Light each level only while a robot is on it (or riding the elevator to
+   * it). Off or left out: every level is lit until all the robots are docked.
+   */
+  follow_robots?: boolean;
 }
 
 export interface ShelfBridgeConfig {
@@ -52,6 +57,12 @@ function isShelfPort(v: unknown): v is ShelfPort {
     isNum(s.ph_mv_per_unit) && s.ph_mv_per_unit !== 0
   );
 }
+
+/**
+ * Relays on a shelf node (PIN_LIGHT_RELAY in firmware/shelf-sensor/src/config.h):
+ * a longer lights line is refused by the node, which then keeps every light on
+ */
+const NODE_LIGHT_CHANNELS = 2;
 
 /** Throws with the reason; the bridge can't run without a valid shelf list */
 export function loadConfig(path: string): ShelfBridgeConfig {
@@ -88,4 +99,10 @@ function checkLights(v: unknown, shelfIds: string[]) {
     throw new Error("lights.levels must be a non-empty array of levels");
   }
   if (new Set(l.levels).size !== l.levels.length) throw new Error("lights.levels values must be unique");
+  if (l.levels.length > NODE_LIGHT_CHANNELS) {
+    throw new Error(`lights.levels has ${l.levels.length} levels; the node has ${NODE_LIGHT_CHANNELS} relays`);
+  }
+  if (l.follow_robots !== undefined && typeof l.follow_robots !== "boolean") {
+    throw new Error("lights.follow_robots must be true or false");
+  }
 }

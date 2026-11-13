@@ -172,6 +172,7 @@ After it's back:
 | Restart a service | `sudo systemctl restart farm-orchestrator` |
 | Update to the latest code | `sudo bash /opt/verdant-os/scripts/pi-deploy.sh` |
 | Try a branch | `sudo bash /opt/verdant-os/scripts/pi-deploy.sh <branch>` |
+| Add settings a newer version has to the `.env` files | `sudo bash /opt/verdant-os/scripts/pi-env-sync.sh`, then the deploy script ([below](#new-settings-after-an-update)) |
 | Watch MQTT traffic | `mosquitto_sub -t 'farm/#' -v` |
 | Clear all alerts (e.g. before a demo) | `cd /opt/verdant-os && npm run clear-alerts` |
 | Turn the Pi off | `sudo poweroff`, then wait for the green LED to stop before unplugging |
@@ -179,6 +180,19 @@ After it's back:
 Clearing alerts deletes them from the Pi's database and from Supabase (through the Supabase bridge), empties the Alerts page in every open dashboard, and makes the services forget their open alerts: a problem that's still there is raised again (a sensor reading after the alert engine's hold time, a silent shelf after the shelf bridge's timeout). A robot that's still lost isn't raised again until it reconnects and goes silent again. A service that's stopped at the time misses it and keeps its alerts.
 
 The deploy script stops the services while it installs (a few minutes). That's safe: the robots keep working without the Pi and report their real state when it's back.
+
+### New settings after an update
+
+An update can add settings to the repo's `deploy/env/*.env.example`, but a deploy never touches the Pi's own `/etc/verdant/*.env`. To add the missing ones with their defaults:
+
+```bash
+sudo bash /opt/verdant-os/scripts/pi-env-sync.sh
+sudo bash /opt/verdant-os/scripts/pi-deploy.sh
+```
+
+For each service it lists what it added, or `up to date`. Nothing already in a file changes: each missing variable is appended at the end, with its comment from the example, under a dated `# Added by scripts/pi-env-sync.sh` line. A variable you've commented out (`#NAME=...`) counts as there, so it isn't added back. A service with no `.env` yet gets a copy of its example. Read what it added (`sudo nano /etc/verdant/<service>.env`) in case a default needs your value, such as a Supabase key. Rerun the deploy script afterwards: `NEXT_PUBLIC_*` values are fixed when the dashboard is built, and it restarts the services for the rest. It only adds what's missing, so running it again changes nothing. `bash scripts/pi-env-sync-test.sh` tests it without a Pi.
+
+It doesn't touch `shelf-bridge-config.json`, which isn't a `.env` file.
 
 ### Running a service by hand
 

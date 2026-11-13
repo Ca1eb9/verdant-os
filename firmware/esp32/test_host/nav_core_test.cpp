@@ -10,7 +10,9 @@
 // before telemetry).
 //
 // Built a second time with -DTIE_FIXTURE against fixtures/tie_topology.json
-// for targets that can't be reached. Build + run with ./run.sh
+// for targets that can't be reached, and a third with -DTHREE_LEVELS against
+// fixtures/three_level_topology.json for a ride through more than one level,
+// whatever the farm has. Build + run with ./run.sh
 
 #include <math.h>
 #include <stdio.h>
@@ -192,7 +194,7 @@ static Command navigate(const char* task_id, const char* target, TargetAction ac
 
 // ---- Scenarios -------------------------------------------------------------------
 
-#ifndef TIE_FIXTURE
+#if !defined(TIE_FIXTURE) && !defined(THREE_LEVELS)
 
 static Command with_path(Command c, std::initializer_list<const char*> path) {
   for (const char* p : path) strncpy(c.path[c.path_len++], p, NODE_ID_LEN - 1);
@@ -495,7 +497,7 @@ static void test_drive_direction() {
   // it goes on forward and off backward, as it came.
   Rig back;
   back.boot_at("cp-02");
-  back.command(navigate("t7", "cp-12", TargetAction::Water, 10));
+  back.command(navigate("t7", "water-12", TargetAction::Water, 10));
   back.tag("elev-1-L0");
   back.tag("elev-1-L1");
   CHECK(back.last_motion() == "edge elev-1-L1>cp-11" && back.edge_drive == EdgeDrive::Backward);
@@ -512,23 +514,6 @@ static void test_drive_direction() {
   ride.tag("elev-1-L0");
   ride.command(make(CommandType::ElevatorArrived));
   CHECK(ride.last_motion() == "elevator arrived" && ride.status() == RobotStatus::EnRoute);
-
-  // Up two levels: one ride, off only at the top.
-  Rig two;
-  two.boot_at("cp-02");
-  two.command(navigate("t5", "cp-21", TargetAction::Water, 10));
-  two.tag("elev-1-L0");
-  CHECK(two.last_motion() == "edge elev-1-L0>elev-1-L2");
-  CHECK(two.edge_drive == EdgeDrive::ElevatorBackward);
-  two.tag("elev-1-L2");
-  CHECK(two.last_motion() == "edge elev-1-L2>cp-21" && two.edge_drive == EdgeDrive::Backward);
-  // And back down from a level-2 checkpoint: forward onto it, off at the bottom.
-  two.tag("cp-21");
-  two.command(navigate("t6", "cp-02", TargetAction::Water, 10));
-  CHECK(two.last_motion() == "edge cp-21>elev-1-L2" && two.edge_drive == EdgeDrive::Forward);
-  two.tag("elev-1-L2");
-  CHECK(two.last_motion() == "edge elev-1-L2>elev-1-L0");
-  CHECK(two.edge_drive == EdgeDrive::ElevatorBackward);
 
   // Crept forward onto the elevator after boot: drives off backward.
   Rig e;
@@ -1322,6 +1307,36 @@ int main() {
   test_drive();
   test_fault_recovery();
   printf("nav_core_test: %s\n", failures ? "FAILED" : "passed");
+  return failures ? 1 : 0;
+}
+
+#elif defined(THREE_LEVELS)
+
+// Against fixtures/three_level_topology.json: elevator stops elev-1-L0/L1/L2,
+// level 2's checkpoints cp-21 and cp-22.
+static void test_two_level_ride() {
+  SCENARIO("up two levels");
+  // One ride, off only at the top.
+  Rig two;
+  two.boot_at("cp-02");
+  two.command(navigate("t5", "cp-21", TargetAction::Water, 10));
+  two.tag("elev-1-L0");
+  CHECK(two.last_motion() == "edge elev-1-L0>elev-1-L2");
+  CHECK(two.edge_drive == EdgeDrive::ElevatorBackward);
+  two.tag("elev-1-L2");
+  CHECK(two.last_motion() == "edge elev-1-L2>cp-21" && two.edge_drive == EdgeDrive::Backward);
+  // And back down from a level-2 checkpoint: forward onto it, off at the bottom.
+  two.tag("cp-21");
+  two.command(navigate("t6", "cp-02", TargetAction::Water, 10));
+  CHECK(two.last_motion() == "edge cp-21>elev-1-L2" && two.edge_drive == EdgeDrive::Forward);
+  two.tag("elev-1-L2");
+  CHECK(two.last_motion() == "edge elev-1-L2>elev-1-L0");
+  CHECK(two.edge_drive == EdgeDrive::ElevatorBackward);
+}
+
+int main() {
+  test_two_level_ride();
+  printf("nav_core_test (three levels): %s\n", failures ? "FAILED" : "passed");
   return failures ? 1 : 0;
 }
 

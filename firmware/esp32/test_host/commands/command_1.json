@@ -1,1 +1,1 @@
-{ "command": "navigate", "task_id": "7a1c", "target_node": "cp-12", "action_at_target": "grow", "priority": "normal", "source": "remote" }
+{ "command": "navigate", "task_id": "7a1c", "target_node": "water-12", "action_at_target": "grow", "priority": "normal", "source": "remote" }

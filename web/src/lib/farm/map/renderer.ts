@@ -10,17 +10,15 @@ import {
   DIPD,
   DOCK0,
   DOCK1,
-  ELEV0,
-  ELEV1,
-  EX,
   FX,
   RH,
   TOP,
-  VIEW_W,
   W,
-  dip,
+  basinsOf,
   levelOf,
   sinkAt,
+  type Dip,
+  type Frame,
   type Level,
   type Scene,
   type SlotPos,
@@ -100,10 +98,16 @@ export const PAL_LIGHT: typeof PAL_DARK = {
 // depends on the fixture and its distance: set it from a reading under the
 // farm's lights at full brightness.
 const FULL_GLOW_LUX = 5000;
+// With NEXT_PUBLIC_MAP_LIGHTS_ON_OFF a level is drawn fully on at or above
+// this reading and off below it, instead of in proportion
+const ON_OFF_LUX = 2000;
 // A level whose light reads 0, or has no reading, keeps its fixture this
 // visible, so it reads as off rather than missing. No reading never draws
 // brighter than off: losing the feed mustn't look like the light coming on.
 const OFF_FIXTURE_OPACITY = 0.35;
+
+// A shelf's rail: its depth below the top edge
+const SHELF_T = 6;
 
 // plant colours
 const PLANT = { stem: "#3A6B18", leaf: "#5E9224", mid: "#8CBB4E", tip: "#B7D68C" };
@@ -164,9 +168,36 @@ interface RobotAnim {
 
 type Attrs = Record<string, string | number>;
 
-/** "L0 light: 412 lux", by the map's level label: for the fixture's title and the map's label */
-export function levelLightText(levelId: number, lux: number | null) {
-  return `L${levelId} light: ${lux === null ? "no reading" : `${Math.round(lux)} lux`}`;
+/**
+ * A level's light on the map: its sensor's reading (`onOff`: drawn on or off
+ * at ON_OFF_LUX), or its switch (with NEXT_PUBLIC_MAP_LIGHTS_FROM_SWITCHES),
+ * or null with neither
+ */
+export type LevelLight = { lux: number; onOff?: boolean } | { switchedOn: boolean } | null;
+
+/** "L1 light: 412 lux", by the map's level label: for the fixture's title and the map's label */
+export function levelLightText(levelId: number, light: LevelLight) {
+  if (light === null) return `L${levelId} light: no reading`;
+  if ("switchedOn" in light) return `L${levelId} light: switched ${light.switchedOn ? "on" : "off"}`;
+  return `L${levelId} light: ${Math.round(light.lux)} lux`;
+}
+
+// The status badge's narrowest: the design's, for a short action and percentage
+const BADGE_MIN_W = 98;
+
+/**
+ * A text element's drawn width. Measured where the browser lays it out; where
+ * it can't (not yet in a rendered svg), estimated from its length, on the wide
+ * side so nothing overlaps.
+ */
+function textWidth(el: SVGTextElement, fontPx: number): number {
+  let measured = 0;
+  try {
+    measured = el.getComputedTextLength();
+  } catch {
+    // not rendered
+  }
+  return measured > 0 ? measured : (el.textContent ?? "").length * fontPx * 0.62;
 }
 
 /** A level's light fixture, updated from its reading without redrawing the farm */
@@ -188,8 +219,8 @@ export class FarmRenderer {
   private trailLayer: SVGGElement | null = null;
   private robotLayer: SVGGElement | null = null;
   private labelLayer: SVGGElement | null = null;
-  /** Each level's light in lux, by z; null or missing: no current reading */
-  private lights = new Map<number, number | null>();
+  /** Each level's light, by z; null or missing: no current reading */
+  private lights = new Map<number, LevelLight>();
   private lightEls = new Map<number, LightEls>();
   private destroyed = false;
   private PAL = PAL_DARK;
@@ -242,6 +273,16 @@ export class FarmRenderer {
     return this.input?.scene.levels ?? [];
   }
 
+  /** The map's widths: the frame's right edge, the elevator shaft, the view */
+  private get frame(): Frame {
+    return this.input!.scene.frame;
+  }
+
+  /** A level's basins in the aisle on view */
+  private basins(lv: Level): Dip[] {
+    return basinsOf(lv, this.input?.aisleY ?? 0);
+  }
+
   // ---------- public render ----------
   render(input: RenderInput) {
     if (this.destroyed) return;
@@ -261,25 +302,29 @@ export class FarmRenderer {
     this.drawRobots();
   }
 
-  /** Each level's light in lux by z, null where there's no current reading */
-  setLights(lights: Map<number, number | null>) {
+  /** Each level's light by z, null where there's no current reading */
+  setLights(lights: Map<number, LevelLight>) {
     this.lights = lights;
     if (!this.destroyed) this.applyLights();
   }
 
   /**
-   * Lit as bright as the level's light reads. With no reading it's drawn as
-   * off, and its title says so: the map never shows a light it doesn't know
-   * is on.
+   * Lit as bright as the level's light reads, or fully while it's switched
+   * on. With no reading it's drawn as off, and its title says so: the map
+   * never shows a light it doesn't know is on.
    */
   private applyLights() {
     for (const [z, els] of this.lightEls) {
-      const lux = this.lights.get(z) ?? null;
-      const glow = lux === null ? 0 : Math.min(1, Math.max(0, lux / FULL_GLOW_LUX));
+      const light = this.lights.get(z) ?? null;
+      const glow =
+        light === null ? 0
+        : "switchedOn" in light ? Number(light.switchedOn)
+        : light.onOff ? Number(light.lux >= ON_OFF_LUX)
+        : Math.min(1, Math.max(0, light.lux / FULL_GLOW_LUX));
       const beamOpacity = this.opts.beamOpacity == null ? 0.32 : this.opts.beamOpacity;
       els.beams?.setAttribute("opacity", String(beamOpacity * glow));
       els.fixture.setAttribute("opacity", String(OFF_FIXTURE_OPACITY + (1 - OFF_FIXTURE_OPACITY) * glow));
-      els.title.textContent = levelLightText(els.levelId, lux);
+      els.title.textContent = levelLightText(els.levelId, light);
     }
   }
 
@@ -419,9 +464,10 @@ export class FarmRenderer {
     this.mk("stop", { offset: "0%", "stop-color": P.light, "stop-opacity": 0.38 }, bg);
     this.mk("stop", { offset: "100%", "stop-color": P.light, "stop-opacity": 0 }, bg);
     this.levels.forEach((lv, i) => {
-      const dp = dip(lv);
       const cp = this.mk("clipPath", { id: "fw-chan-" + i }, d);
-      this.mk("rect", { x: dp.l - dp.ramp, y: dp.y + 2, width: dp.r + dp.ramp - (dp.l - dp.ramp), height: DIPD }, cp);
+      for (const dp of this.basins(lv)) {
+        this.mk("rect", { x: dp.l - dp.ramp, y: dp.y + 2, width: dp.r + dp.ramp - (dp.l - dp.ramp), height: DIPD }, cp);
+      }
     });
   }
 
@@ -524,59 +570,74 @@ export class FarmRenderer {
     }
   }
 
-  // ---------- drawShelf: C-channel rail with a central \__/ water basin ----------
+  // ---------- drawShelf: C-channel rail dipping into a \__/ water basin under each water run ----------
   private drawShelf(p: Element, lv: Level) {
     const P = this.PAL;
-    const t = 6;
-    const dp = dip(lv);
-    const R = dp.ramp;
+    const t = SHELF_T;
+    const EX = this.frame.EX;
     const y = lv.shelfY;
-    const b = dp.b;
+    const dips = this.basins(lv);
     const g = this.mk("g", {}, p);
-    const top = "M" + FX + " " + y + " L" + (dp.l - R) + " " + y + " L" + dp.l + " " + b + " L" + dp.r + " " + b + " L" + (dp.r + R) + " " + y + " L" + EX + " " + y;
-    const web =
-      top + " L" + EX + " " + (y + t) + " L" + (dp.r + R + t * 0.7) + " " + (y + t) + " L" + (dp.r + t * 0.5) + " " + (b + t) +
-      " L" + (dp.l - t * 0.5) + " " + (b + t) + " L" + (dp.l - R - t * 0.7) + " " + (y + t) + " L" + FX + " " + (y + t) + " Z";
-    this.mk("path", { d: web, fill: P.shelf }, g);
+    // The rail's top edge, left to right, down into each basin and back up
+    const FL = lv.left;
+    let top = "M" + FL + " " + y;
+    for (const dp of dips) {
+      top += " L" + (dp.l - dp.ramp) + " " + y + " L" + dp.l + " " + dp.b + " L" + dp.r + " " + dp.b + " L" + (dp.r + dp.ramp) + " " + y;
+    }
+    top += " L" + EX + " " + y;
+    // and its underside, right to left
+    let under = " L" + EX + " " + (y + t);
+    for (const dp of [...dips].reverse()) {
+      under += " L" + (dp.r + dp.ramp + t * 0.7) + " " + (y + t) + " L" + (dp.r + t * 0.5) + " " + (dp.b + t) +
+        " L" + (dp.l - t * 0.5) + " " + (dp.b + t) + " L" + (dp.l - dp.ramp - t * 0.7) + " " + (y + t);
+    }
+    under += " L" + FL + " " + (y + t) + " Z";
+    this.mk("path", { d: top + under, fill: P.shelf }, g);
     this.mk("path", { d: top, fill: "none", stroke: P.shelfLit, "stroke-width": 1.3 }, g);
     // C-channel return flanges at both ends + gussets: reads as load-bearing rail
-    this.mk("path", { d: "M" + FX + " " + y + " L" + (FX + 9) + " " + y + " L" + (FX + 9) + " " + (y + t + 7) + " L" + FX + " " + (y + t + 7) + " Z", fill: P.shelfDark }, g);
+    this.mk("path", { d: "M" + FL + " " + y + " L" + (FL + 9) + " " + y + " L" + (FL + 9) + " " + (y + t + 7) + " L" + FL + " " + (y + t + 7) + " Z", fill: P.shelfDark }, g);
     this.mk("path", { d: "M" + (EX - 9) + " " + y + " L" + EX + " " + y + " L" + EX + " " + (y + t + 7) + " L" + (EX - 9) + " " + (y + t + 7) + " Z", fill: P.shelfDark }, g);
-    this.mk("path", { d: "M" + (dp.l - R) + " " + y + " L" + dp.l + " " + b + " M" + (dp.r + R) + " " + y + " L" + dp.r + " " + b, fill: "none", stroke: P.shelfDark, "stroke-width": 0.9, opacity: 0.55 }, g);
-    for (let bx = FX + 26; bx < EX - 14; bx += 62) {
-      if (bx > dp.l - R - 20 && bx < dp.r + R + 20) continue;
+    for (const dp of dips) {
+      this.mk("path", { d: "M" + (dp.l - dp.ramp) + " " + y + " L" + dp.l + " " + dp.b + " M" + (dp.r + dp.ramp) + " " + y + " L" + dp.r + " " + dp.b, fill: "none", stroke: P.shelfDark, "stroke-width": 0.9, opacity: 0.55 }, g);
+    }
+    for (let bx = FL + 26; bx < EX - 14; bx += 62) {
+      if (dips.some((dp) => bx > dp.l - dp.ramp - 20 && bx < dp.r + dp.ramp + 20)) continue;
       this.mk("path", { d: "M" + bx + " " + (y + t) + " l6 0 l-6 9 Z", fill: P.shelfDark, opacity: 0.45 }, g);
     }
-    this.mkT("L" + lv.id, { x: FX + 6, y: y - 24, "text-anchor": "start", "font-size": "11px", fill: P.muted, "font-family": FONT, "font-weight": "500" }, g);
+    this.mkT("L" + lv.id, { x: FL + 6, y: y - 24, "text-anchor": "start", "font-size": "11px", fill: P.muted, "font-family": FONT, "font-weight": "500" }, g);
   }
 
   // ---------- drawWater: basin body (before rovers) + surface (after) ----------
   private drawWater(p: Element, lv: Level) {
     const P = this.PAL;
-    const dp = dip(lv);
-    const R = dp.ramp;
-    const sy = dp.y + 3;
-    const inset = R * (3 / DIPD);
     const g = this.mk("g", {}, p);
-    this.mk("path", { d: "M" + (dp.l - R + inset) + " " + sy + " L" + dp.l + " " + dp.b + " L" + dp.r + " " + dp.b + " L" + (dp.r + R - inset) + " " + sy + " Z", fill: "url(#fw-water)" }, g);
-    this.mk("path", { d: "M" + dp.l + " " + (dp.b - 1.4) + " L" + dp.r + " " + (dp.b - 1.4), fill: "none", stroke: P.waterBot, "stroke-width": 1.6, opacity: 0.5 }, g);
+    for (const dp of this.basins(lv)) {
+      const R = dp.ramp;
+      const sy = dp.y + 3;
+      const inset = R * (3 / DIPD);
+      this.mk("path", { d: "M" + (dp.l - R + inset) + " " + sy + " L" + dp.l + " " + dp.b + " L" + dp.r + " " + dp.b + " L" + (dp.r + R - inset) + " " + sy + " Z", fill: "url(#fw-water)" }, g);
+      this.mk("path", { d: "M" + dp.l + " " + (dp.b - 1.4) + " L" + dp.r + " " + (dp.b - 1.4), fill: "none", stroke: P.waterBot, "stroke-width": 1.6, opacity: 0.5 }, g);
+    }
   }
 
   private drawWaterVeil(p: Element, lv: Level, li: number) {
-    const dp = dip(lv);
-    const R = dp.ramp;
-    const sy = dp.y + 2;
-    const inset = R * (2 / DIPD);
     const g = this.mk("g", { "clip-path": "url(#fw-chan-" + li + ")" }, p);
-    this.mk("path", { d: "M" + (dp.l - R + inset) + " " + sy + " L" + dp.l + " " + dp.b + " L" + dp.r + " " + dp.b + " L" + (dp.r + R - inset) + " " + sy + " Z", fill: "url(#fw-water)", opacity: 0.55 }, g);
+    for (const dp of this.basins(lv)) {
+      const R = dp.ramp;
+      const sy = dp.y + 2;
+      const inset = R * (2 / DIPD);
+      this.mk("path", { d: "M" + (dp.l - R + inset) + " " + sy + " L" + dp.l + " " + dp.b + " L" + dp.r + " " + dp.b + " L" + (dp.r + R - inset) + " " + sy + " Z", fill: "url(#fw-water)", opacity: 0.55 }, g);
+    }
   }
 
   private drawWaterSurface(p: Element, lv: Level, li: number, phase: number) {
+    const dips = this.basins(lv);
+    if (!dips.length) return;
     const P = this.PAL;
-    const dp = dip(lv);
-    const x0 = dp.l - dp.ramp;
-    const x1 = dp.r + dp.ramp;
-    const y = dp.y + 1;
+    // waves across every basin; the level's clip path keeps them in the water
+    const x0 = dips[0].l - dips[0].ramp;
+    const x1 = dips[dips.length - 1].r + dips[dips.length - 1].ramp;
+    const y = dips[0].y + 1;
     const g = this.mk("g", { "clip-path": "url(#fw-chan-" + li + ")" }, p);
     const waves = [
       { dy: 2.2, amp: 1.2, len: 30, op: 0.8, w: 0.9 },
@@ -597,8 +658,8 @@ export class FarmRenderer {
   private drawLights(p: Element, lv: Level) {
     const { lightY, shelfY } = lv;
     const P = this.PAL;
-    const x0 = FX + 6;
-    const x1 = EX - 6;
+    const x0 = lv.left + 6;
+    const x1 = this.frame.EX - 6;
     const g = this.mk("g", {}, p);
     const title = this.mk("title", {}, g);
     const span = shelfY - (lightY + 5);
@@ -668,20 +729,31 @@ export class FarmRenderer {
     // floating status badge: action text + a literal battery glyph and its percentage
     if (opts.active) {
       const ac = this.accent();
-      const bw = 98;
       const bh = 14;
       const by = -48;
       const pct = Math.round(Math.max(0, Math.min(100, data.battery)));
+      const pad = 7; // inside the pill's ends
+      const glyphW = 17.5; // the battery outline and its nub
+      const gap = 3; // glyph to percentage, and action to glyph at the least
+      const pill = this.mk("rect", { y: by, height: bh, rx: 7, fill: P.badgeFill, stroke: ac, "stroke-width": 0.8, opacity: 0.96 }, g);
+      const action = this.mkT(data.action, { y: by + 9.6, "font-size": "9.5px", fill: ac, "font-weight": "500", "font-family": FONT }, g);
+      const pctText = this.mkT(pct + "%", { y: by + 9.5, "text-anchor": "end", "font-size": "7.2px", fill: ac, "font-family": FONT }, g);
+      // Laid out from the texts' real widths, so "100%" or a long action
+      // widens the pill instead of running under the glyph
+      const actionW = textWidth(action, 9.5);
+      const pctW = textWidth(pctText, 7.2);
+      const bw = Math.max(BADGE_MIN_W, Math.ceil(pad + 2 + actionW + 2 * gap + glyphW + gap + pctW + pad));
       // keep the pill inside the viewBox at the dock and the elevator lane
-      const bx = Math.round(Math.min(Math.max(3 - x, trayW / 2 + 1 - bw / 2), VIEW_W - 3 - bw - x));
-      const gx = bx + bw - 42;
+      const bx = Math.round(Math.min(Math.max(this.frame.VIEW_X + 3 - x, trayW / 2 + 1 - bw / 2), this.frame.VIEW_X + this.frame.VIEW_W - 3 - bw - x));
+      const gx = bx + bw - pad - pctW - gap - glyphW;
       const gy = by + 3.8;
-      this.mk("rect", { x: bx, y: by, width: bw, height: bh, rx: 7, fill: P.badgeFill, stroke: ac, "stroke-width": 0.8, opacity: 0.96 }, g);
-      this.mkT(data.action, { x: bx + 9, y: by + 9.6, "font-size": "9.5px", fill: ac, "font-weight": "500", "font-family": FONT }, g);
+      pill.setAttribute("x", String(bx));
+      pill.setAttribute("width", String(bw));
+      action.setAttribute("x", String(bx + pad + 2));
+      pctText.setAttribute("x", String(bx + bw - pad));
       this.mk("rect", { x: gx, y: gy, width: 15, height: 6.8, rx: 1.3, fill: "none", stroke: ac, "stroke-width": 0.9 }, g);
       this.mk("rect", { x: gx + 15.5, y: gy + 2, width: 2, height: 3, rx: 0.6, fill: ac }, g);
       this.mk("rect", { x: gx + 1.3, y: gy + 1.3, width: Math.max(1.1, (12.4 * pct) / 100), height: 4.2, rx: 0.6, fill: ac }, g);
-      this.mkT(pct + "%", { x: bx + bw - 7, y: by + 9.5, "text-anchor": "end", "font-size": "7.2px", fill: ac, "font-family": FONT }, g);
     }
 
     this.mkT(data.id, {
@@ -715,8 +787,8 @@ export class FarmRenderer {
 
   private drawElevator(p: Element) {
     const P = this.PAL;
-    const x0 = ELEV0;
-    const x1 = ELEV1;
+    const x0 = this.frame.ELEV0;
+    const x1 = this.frame.ELEV1;
     const gnd = this.input!.scene.gnd;
     const g = this.mk("g", { "pointer-events": "none" }, p);
     this.mk("rect", { x: x0, y: TOP, width: x1 - x0, height: gnd - TOP, fill: P.bay, opacity: 0.1, rx: 3 }, g);
@@ -726,6 +798,21 @@ export class FarmRenderer {
     this.mkT("Elevator", { x: (x0 + x1) / 2, y: gnd + 14, "text-anchor": "middle", "font-size": "10px", fill: P.muted, "font-family": FONT }, g);
   }
 
+  /**
+   * Each level's bay: from its shelf (its floor; the ground for the lowest,
+   * whose walls stand on it) up to the underside of the shelf above (its
+   * ceiling; the top for the highest), at its own left end
+   */
+  private bands(): { left: number; top: number; bottom: number }[] {
+    const levels = this.levels;
+    const gnd = this.input!.scene.gnd;
+    return levels.map((lv, i) => ({
+      left: lv.left,
+      top: i === levels.length - 1 ? TOP : levels[i + 1].shelfY + SHELF_T,
+      bottom: i === 0 ? gnd : lv.shelfY,
+    }));
+  }
+
   // ---------- scene ----------
   private drawFarm() {
     const svg = this.svg;
@@ -733,10 +820,13 @@ export class FarmRenderer {
     const P = this.PAL;
     const gnd = input.scene.gnd;
     svg.innerHTML = "";
-    svg.setAttribute("viewBox", `0 0 ${VIEW_W} ${input.scene.viewH}`);
+    svg.setAttribute("viewBox", `${this.frame.VIEW_X} 0 ${this.frame.VIEW_W} ${input.scene.viewH}`);
     this.defs(svg);
 
-    this.mk("rect", { x: FX, y: TOP, width: EX - FX, height: gnd - TOP, fill: P.backdrop }, svg);
+    // Each level's own bay, from its shelf up to the one above (or the top)
+    for (const band of this.bands()) {
+      this.mk("rect", { x: band.left, y: band.top, width: this.frame.EX - band.left, height: band.bottom - band.top, fill: P.backdrop }, svg);
+    }
 
     this.lightEls.clear();
     this.levels.forEach((lv, li) => {
@@ -759,9 +849,14 @@ export class FarmRenderer {
     this.labelLayer = this.mk("g", { "pointer-events": "none" }, svg);
 
     const frame = this.mk("g", { "pointer-events": "none" }, svg);
-    this.mk("line", { x1: FX, y1: TOP, x2: FX, y2: gnd, stroke: P.frame, "stroke-width": 1.6 }, frame);
-    this.mk("line", { x1: EX, y1: TOP, x2: EX, y2: gnd, stroke: P.frame, "stroke-width": 1.6 }, frame);
-    this.mk("rect", { x: DOCK0, y: gnd, width: ELEV1 - DOCK0, height: 4, fill: P.frame, rx: 1 }, frame);
+    // Each level's walls at its own ends: levels with the same ends stack into
+    // one straight post, and a level reaching further out has its wall out there
+    for (const band of this.bands()) {
+      for (const x of [band.left, this.frame.EX]) {
+        this.mk("line", { x1: x, y1: band.top, x2: x, y2: band.bottom, stroke: P.frame, "stroke-width": 1.6 }, frame);
+      }
+    }
+    this.mk("rect", { x: DOCK0, y: gnd, width: this.frame.ELEV1 - DOCK0, height: 4, fill: P.frame, rx: 1 }, frame);
     this.drawDock(svg);
     this.drawElevator(svg);
   }
@@ -779,7 +874,7 @@ export class FarmRenderer {
       if (input.scene.nodeAisle.get(slot.nodeId) !== input.aisleY) continue;
       const pickable = input.targetable.has(slot.nodeId);
       const isTarget = input.targetNodeId === slot.nodeId;
-      const sink = sinkAt(this.levels, slot.x, slot.lv);
+      const sink = sinkAt(this.levels, slot.x, slot.lv, this.input?.aisleY ?? 0);
       const ox = slot.x + (W - slot.slotW) / 2;
       const g = this.mk("g", { "data-node": slot.nodeId, class: pickable ? "fw-slot" : "", style: pickable ? "cursor:pointer" : "" }, layer);
       const title = this.mk("title", {}, g);
@@ -860,7 +955,7 @@ export class FarmRenderer {
       // hidden when it is in another aisle (unless it is mid-animation out of this one)
       if (!st || st.hidden || (!this.slotInView(robot.nodeId) && !st.anim)) continue;
       const li = levelOf(this.levels, st.y);
-      const sink = li >= 0 ? sinkAt(this.levels, st.x, li) : 0;
+      const sink = li >= 0 ? sinkAt(this.levels, st.x, li, this.input?.aisleY ?? 0) : 0;
       const active = robot.id === input.selectedId;
       const lvShelf = li >= 0 ? this.levels[li].shelfY : st.y + RH;
       this.drawRobot(layer, st.x, st.y + sink, robot, {
