@@ -10,12 +10,12 @@ const char GRAPH_VERSION[] = "1.0.0";
 
 const GraphNode GRAPH_NODES[] = {
     {"dock-1", "0x8B802E54", 0.0, 0.0, 0.0, NodeType::Dock},
-    {"cp-01", "0x3C13", 1.0, 0.0, 0.0, NodeType::Checkpoint},
-    {"water-01", "0x3C10", 2.0, 0.0, 0.0, NodeType::Water},
-    {"cp-02", "0x2A02", 3.0, 0.0, 0.0, NodeType::Checkpoint},
+    {"cp-01", "0x44274146", 1.0, 0.0, 0.0, NodeType::Checkpoint},
+    {"water-01", "0x34D40746", 2.0, 0.0, 0.0, NodeType::Water},
+    {"cp-02", "0xE48CF945", 3.0, 0.0, 0.0, NodeType::Checkpoint},
     {"elev-1-L0", "0x8F00", 4.0, 0.0, 0.0, NodeType::Elevator},
-    {"elev-1-L1", "0x8F01", 4.0, 0.0, 1.0, NodeType::Elevator},
-    {"cp-11", "0x34D40746", 3.0, 0.0, 1.0, NodeType::Checkpoint},
+    {"elev-1-L1", "0xBBB4DD4A", 4.0, 0.0, 1.0, NodeType::Elevator},
+    {"cp-11", "0xB407FC45", 3.0, 0.0, 1.0, NodeType::Checkpoint},
     {"water-11", "0xB4874946", 2.0, 0.0, 1.0, NodeType::Water},
     {"water-12", "0xF42F3F46", 1.0, 0.0, 1.0, NodeType::Water},
 };
