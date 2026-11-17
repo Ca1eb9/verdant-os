@@ -3,13 +3,13 @@
   "name": "Capstone Farm v1",
   "nodes": [
     { "id": "dock-1",    "tag_id": "0x8B802E54", "x": 0, "y": 0, "z": 0, "type": "dock" },
-    { "id": "cp-01",   "tag_id": "0x3C13", "x": 1, "y": 0, "z": 0, "type": "checkpoint" },
-    { "id": "water-01", "tag_id": "0x3C10", "x": 2, "y": 0, "z": 0, "type": "water" },
-    { "id": "cp-02",   "tag_id": "0x2A02", "x": 3, "y": 0, "z": 0, "type": "checkpoint" },
+    { "id": "cp-01",   "tag_id": "0x44274146", "x": 1, "y": 0, "z": 0, "type": "checkpoint" },
+    { "id": "water-01", "tag_id": "0x34D40746", "x": 2, "y": 0, "z": 0, "type": "water" },
+    { "id": "cp-02",   "tag_id": "0xE48CF945", "x": 3, "y": 0, "z": 0, "type": "checkpoint" },
     { "id": "elev-1-L0", "tag_id": "0x8F00", "x": 4, "y": 0, "z": 0, "type": "elevator" },
 
-    { "id": "elev-1-L1", "tag_id": "0x8F01", "x": 4, "y": 0, "z": 1, "type": "elevator" },
-    { "id": "cp-11",   "tag_id": "0x34D40746", "x": 3, "y": 0, "z": 1, "type": "checkpoint" },
+    { "id": "elev-1-L1", "tag_id": "0xBBB4DD4A", "x": 4, "y": 0, "z": 1, "type": "elevator" },
+    { "id": "cp-11",   "tag_id": "0xB407FC45", "x": 3, "y": 0, "z": 1, "type": "checkpoint" },
     { "id": "water-11", "tag_id": "0xB4874946", "x": 2, "y": 0, "z": 1, "type": "water" },
     { "id": "water-12",   "tag_id": "0xF42F3F46", "x": 1, "y": 0, "z": 1, "type": "water" }
   ],
