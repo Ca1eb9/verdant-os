@@ -333,9 +333,7 @@ constexpr uint8_t MOTOR_PWM_CHANNEL_IN2 = 1;
 
 // ---- Status LED (README "Status LED") ----------------------------------------------
 
-// 0-255 cap, so it isn't blinding on the bench. Below ~30 the dim states
-// (idle, stopped, manual) round down to off.
-constexpr uint8_t STATUS_LED_BRIGHTNESS = 60;
+constexpr uint8_t STATUS_LED_BRIGHTNESS = 20;   // 0-255 cap, so it isn't blinding on the bench
 // The order the LED reads its colour bytes: red first on the N8R8 boards,
 // green first (the usual WS2812) on DevKitC-1 boards.
 constexpr bool STATUS_LED_RED_FIRST = true;
