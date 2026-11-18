@@ -177,7 +177,7 @@ Task state is RAM only: the robot never writes to flash. A rebooted robot starts
 
 ## Status LED
 
-The onboard NeoPixel (GPIO38) shows the robot's state: colour is the status, the animation is the detail, and short flashes show what just happened. `show_status_led()` in `tasks/nav_task.cpp`; timings and brightness in `config.h`.
+The onboard RGB LED (`PIN_STATUS_LED`, GPIO48 on the N8R8 boards) shows the robot's state: colour is the status, the animation is the detail, and short flashes show what just happened. `show_status_led()` in `tasks/nav_task.cpp`; timings, brightness and colour order (`STATUS_LED_RED_FIRST`) in `config.h`. For a DevKitC-1 v1.1, set `PIN_STATUS_LED` to 38 and `STATUS_LED_RED_FIRST` to false.
 
 | Status | LED |
 |---|---|

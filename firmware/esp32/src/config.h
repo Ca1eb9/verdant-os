@@ -91,8 +91,10 @@ constexpr int PIN_MOTOR_IN2 = 6;
 // charges), under 0.5 V off the dock. ADC1, so it reads with WiFi on.
 constexpr int PIN_CHARGE_SENSE = 1;
 
-// Onboard NeoPixel (GPIO38 on DevKitC-1 v1.1 boards)
-constexpr int PIN_STATUS_LED = 38;
+// Onboard RGB LED: GPIO48 on the team's ESP32-S3 N8R8 boards (and DevKitC-1
+// v1.0), GPIO38 on DevKitC-1 v1.1. Some clones leave it behind an open "RGB"
+// solder jumper.
+constexpr int PIN_STATUS_LED = 48;
 
 // ---- RFID (PN532) ---------------------------------------------------------------
 
@@ -331,7 +333,12 @@ constexpr uint8_t MOTOR_PWM_CHANNEL_IN2 = 1;
 
 // ---- Status LED (README "Status LED") ----------------------------------------------
 
-constexpr uint8_t STATUS_LED_BRIGHTNESS = 20;   // 0-255 cap, so it isn't blinding on the bench
+// 0-255 cap, so it isn't blinding on the bench. Below ~30 the dim states
+// (idle, stopped, manual) round down to off.
+constexpr uint8_t STATUS_LED_BRIGHTNESS = 60;
+// The order the LED reads its colour bytes: red first on the N8R8 boards,
+// green first (the usual WS2812) on DevKitC-1 boards.
+constexpr bool STATUS_LED_RED_FIRST = true;
 constexpr uint32_t LED_BREATHE_MS = 2000;       // one breath (initializing, charging)
 constexpr uint32_t LED_BLINK_MS = 125;          // half a blink: 4 Hz (docking, error, obstacle)
 constexpr uint32_t LED_FLASH_MS = 100;          // one blip (tag read, jog, ignored command)
