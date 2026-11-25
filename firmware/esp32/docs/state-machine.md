@@ -1,12 +1,14 @@
-# Robot firmware state machine (intended)
+# Robot firmware state machine
 
-The navigation task's state machine, as specified in
-`docs/firmware-architecture.md`. The states are the `status` values the robot
-reports in telemetry. The simulator (`farm-controller/simulator`) implements the
-same behaviour and is the reference when in doubt.
+The navigation task's state machine (`src/nav/nav_core`), as specified in
+[docs/firmware-architecture.md](../../../docs/firmware-architecture.md). The
+states are the `status` values the robot reports in telemetry. The simulator
+(`farm-controller/simulator`) implements the same behaviour and is the
+reference when in doubt.
 
 Events are shown in `[brackets]` and are always pushed **before** the status
-changes (comms publishes queued events before telemetry). Thresholds are the proposed `config.h` values.
+changes (comms publishes queued events before telemetry). Thresholds are the
+`config.h` values.
 
 ## 1. Normal operation
 
@@ -110,14 +112,14 @@ stateDiagram-v2
   and stop latch kept (a `resume` while charging releases it as usual). From
   `initializing` the tag search stops; afterwards it waits halted in
   `initializing` (`resume` searches again), or goes `idle` if a tag was read
-  meanwhile. The `charge_complete` command works before the first tag too. A `stop` or manual control meanwhile
-  comes back to `charging` there, never driving to the dock; `navigate` and
+  meanwhile. The `charge_complete` command works before the first tag too.
+  A `stop` or manual control meanwhile comes back to `charging` there, never driving to the dock; `navigate` and
   `return_to_dock` replace it. With the flag on, losing the contact while
   `charging` (bench or dock) always ends the charge instead of backing onto
   the dock.
 - **`stop`** is accepted in any state, `initializing` included (the diagram
-  shows the common ones), and ignored when already `stopped`. `resume` returns to the
-  paused state, re-planning first if the robot was moved.
+  shows the common ones), and ignored when already `stopped`. `resume` returns
+  to the paused state, re-planning first if the robot was moved.
 - **`resume`** outside `manual` only acts if the stop latch is set. In `manual`
   it also clears the latch.
 - **Manual timeout:** each jog drives for 500 ms, and each Bluetooth stick

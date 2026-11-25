@@ -1,8 +1,22 @@
-# Farm Controller — Developer Setup
+# Farm Controller — Pi services
+
+The Node.js services that run the farm on the Pi. Each is an npm workspace in
+its own folder, and they talk to each other and to the robots only over MQTT.
+This page covers developer setup and each service. Running them on the Pi
+(systemd, deploys, settings files) is in [docs/PI-SERVICES.md](../docs/PI-SERVICES.md).
+
+**Quick start**, once Mosquitto is running (below), from the repo root:
+
+```bash
+npm install
+npm -w @farm/shared run build
+AUTONOMOUS=false npm run sim   # terminal 1: a simulated robot
+npm run orch                   # terminal 2: the orchestrator
+```
 
 ## Prerequisites
 
-- **Node.js** 18+ and npm
+- **Node.js** 20+ and npm (the Pi runs 22)
 - **Mosquitto** MQTT broker (local install)
 
 ### Install Mosquitto
@@ -90,6 +104,41 @@ npm -w @farm/shared run build
 
 ---
 
+## Project structure
+
+```
+farm-controller/
+├── shared/              # Types, topics, MQTT client, navigation utils
+├── simulator/           # Fake ESP32 robot for testing
+├── ingester/            # Telemetry → SQLite recorder
+├── orchestrator/        # Robot state, task queue, commands
+├── shelf-bridge/        # Shelf sensor node (USB serial) → MQTT
+├── alert-engine/        # Sensor readings out of range → alerts
+├── supabase-bridge/     # MQTT ↔ Supabase: remote commands in, farm data out
+├── dashboard-api/       # Stored data → dashboard (HTTP, read-only)
+├── topology.json        # Farm layout (nodes + edges); the firmware's flash graph is generated from it
+├── orchestrator-config.json  # Tunable orchestrator settings
+├── shelf-bridge-config.json  # Shelf serial ports and pH calibration
+├── alert-engine-config.json  # Alert ranges, hold time and cooldown
+├── supabase-bridge-config.json  # Sampling, flush and buffer settings
+└── package.json         # Workspace root
+```
+
+### Shared package
+
+`shared/src/` contains everything services share:
+
+- **`types.ts`** — All MQTT message types, state enums, topology types, config types
+- **`topics.ts`** — MQTT topic constants and helper functions
+- **`navigation.ts`** — Graph builder, Dijkstra pathfinding, heading/turn math
+- **`mqtt.ts`** — Typed MQTT client wrapper with auto-reconnect
+- **`state-file.ts`** — Saving and restoring a service's state file
+- **`log-once.ts`** — Logging a repeated problem once until it clears
+
+Every service imports from `@farm/shared`. Read `types.ts` and `topics.ts` before starting any task: they're the MQTT contract. Rebuild shared after changing it.
+
+---
+
 ## Running services
 
 Each service runs independently. Open a separate terminal for each one.
@@ -108,21 +157,20 @@ The simulator runs in **autonomous mode** by default — it picks random targets
 AUTONOMOUS=false npm run sim
 ```
 
-It reports as `robot-5` unless `ROBOT_ID` is set, so it never answers for the real `robot-1`. The plant scheduler's plant is on `robot-3` (`robot_plants` in `orchestrator-config.json`), so neither gets scheduler tasks; to try the scheduler, run `ROBOT_ID=robot-3 AUTONOMOUS=false npm run sim`.
+- It reports as `robot-5` unless `ROBOT_ID` is set, so it never answers for the real `robot-1`. The plant scheduler's plant is on `robot-3` (`robot_plants` in `orchestrator-config.json`), so neither gets scheduler tasks; to try the scheduler, run `ROBOT_ID=robot-3 AUTONOMOUS=false npm run sim`.
+- **Connect to RC** (`connect_controller`) "connects" a pretend Bluetooth controller 2 s later (`controller_connected` in telemetry), so the dashboard's confirmation can be tried without a robot. It never drops.
 
-**Connect to RC** (`connect_controller`) "connects" a pretend Bluetooth controller 2 s later (`controller_connected` in telemetry), so the dashboard's confirmation can be tried without a robot. It never drops.
+### Ingester
 
-### Ingester (telemetry recorder)
-
-Subscribes to all telemetry topics, to operator commands
-(`farm/commands/+`, jogs excepted) and to alerts (`farm/alerts`), and writes
-them to a local SQLite database.
+Subscribes to all telemetry topics, to operator commands (`farm/commands/+`,
+jogs excepted) and to alerts (`farm/alerts`), and writes them to a local
+SQLite database.
 
 The `alerts` table holds every `FarmAlert` (stored once per `alert_id`) with
 its `received_at`, and the `commands` table is the dashboard's command history
 on FarmNet. The Dashboard API serves both.
 
-Every table keeps `RETENTION_DAYS` (default 7) of rows: older ones, alerts
+Every table keeps `RETENTION_DAYS` (env, default 7) of rows: older ones, alerts
 still open included, are deleted at startup and once a day. It logs one line
 a minute of what it stored, and a malformed message once per topic until that
 topic is valid again.
@@ -131,7 +179,7 @@ topic is valid again.
 npm run ingest
 ```
 
-### Dashboard API (stored data for the dashboard)
+### Dashboard API
 
 Serves the ingester's database to the dashboard over HTTP, read-only. On
 FarmNet the dashboard sends commands straight over MQTT, so there is no
@@ -161,11 +209,7 @@ Settings: `PORT` (3001), `DB_PATH` (`../ingester/farm_telemetry.db`) and
 Point the dashboard at it with `NEXT_PUBLIC_DASHBOARD_API_URL`
 (`http://localhost:3001` locally).
 
-```bash
-npm -w @farm/dashboard-api test
-```
-
-The database file is created at `farm-controller/ingester/farm_telemetry.db`.
+The ingester creates the database at `farm-controller/ingester/farm_telemetry.db` (`DB_PATH`).
 
 ### Orchestrator
 
@@ -183,8 +227,7 @@ npm run orch
 - It publishes `topology.json` (retained) to `farm/system/topology` at startup,
   for the dashboard's map.
 - The plant scheduler queues water and grow tasks for each robot in
-  `robot_plants` (`orchestrator/docs/state-machine.md`, section 6). Tests:
-  `npm -w @farm/orchestrator test`.
+  `robot_plants` ([state machine](orchestrator/docs/state-machine.md#6-plant-scheduler), section 6).
 - Queued, assigned and finished tasks, and each robot's open lost, error and
   unknown-node alerts, are saved to `farm-controller/orchestrator-state.json`
   (gitignored) and restored on restart. "Robot recovered" resolves an open
@@ -195,8 +238,8 @@ npm run orch
 - It exits if the broker isn't reachable at startup. On the Pi it runs as a
   systemd service that starts after Mosquitto and restarts on failure: see
   [docs/PI-SERVICES.md](../docs/PI-SERVICES.md).
-- State machine diagrams: `orchestrator/docs/state-machine.md`. The robot-side
-  contract is in `docs/firmware-architecture.md`.
+- State machine diagrams: [orchestrator/docs/state-machine.md](orchestrator/docs/state-machine.md). The robot-side
+  contract is in [docs/firmware-architecture.md](../docs/firmware-architecture.md).
 
 ### Shelf bridge
 
@@ -315,54 +358,36 @@ before the bridge has sent what's buffered.
   (a data or constraint error) is logged and dropped, alone, so it can't hold
   up the rest.
 
-### Other services
+### Run scripts
 
-As new services are added, they'll follow the same pattern:
+Every service has a root script (`package.json`), and a `:dev` version that
+reloads on changes:
+
+| Service | Start | Package |
+|---|---|---|
+| Simulator | `npm run sim` | `@farm/simulator` |
+| Ingester | `npm run ingest` | `@farm/ingester` |
+| Dashboard API | `npm run api` | `@farm/dashboard-api` |
+| Orchestrator | `npm run orch` | `@farm/orchestrator` |
+| Shelf bridge | `npm run shelf` | `@farm/shelf-bridge` |
+| Alert engine | `npm run alert` | `@farm/alert-engine` |
+| Supabase bridge | `npm run bridge` (but see [above](#supabase-bridge)) | `@farm/supabase-bridge` |
+
+## Checks
+
+From the repo root:
 
 ```bash
-npm -w @farm/<package-name> run start
-# or for auto-reload during development:
-npm -w @farm/<package-name> run dev
+npm run typecheck                    # every workspace
+npm -w @farm/<package-name> test     # one service's tests
 ```
+
+The orchestrator, shelf bridge, alert engine, Supabase bridge and Dashboard API
+have tests (`test/*.test.ts`).
 
 ---
 
-## Project structure
-
-```
-farm-controller/
-├── shared/              # Types, topics, MQTT client, navigation utils
-├── simulator/           # Fake ESP32 robot for testing
-├── ingester/            # Telemetry → SQLite recorder
-├── orchestrator/        # Robot state, task queue, commands
-├── shelf-bridge/        # Shelf sensor node (USB serial) → MQTT
-├── alert-engine/        # Sensor readings out of range → alerts
-├── supabase-bridge/     # MQTT ↔ Supabase: remote commands in, farm data out
-├── dashboard-api/       # Stored data → dashboard (HTTP, read-only)
-├── topology.json        # Farm layout (nodes + edges)
-├── orchestrator-config.json  # Tunable orchestrator settings
-├── shelf-bridge-config.json  # Shelf serial ports and pH calibration
-├── alert-engine-config.json  # Alert ranges, hold time and cooldown
-├── supabase-bridge-config.json  # Sampling, flush and buffer settings
-└── package.json         # Workspace root
-```
-
-### Shared package
-
-`shared/src/` contains everything services share:
-
-- **`types.ts`** — All MQTT message types, state enums, topology types, config types
-- **`topics.ts`** — MQTT topic constants and helper functions
-- **`navigation.ts`** — Graph builder, Dijkstra pathfinding, heading/turn math
-- **`mqtt.ts`** — Typed MQTT client wrapper with auto-reconnect
-
-Every service imports from `@farm/shared`. Read through these files before starting any task.
-
----
-
-## Testing with Mosquitto CLI
-
-Useful commands for debugging:
+## Debugging with the Mosquitto CLI
 
 ```bash
 # Watch all farm MQTT traffic
@@ -378,16 +403,16 @@ mosquitto_sub -t 'farm/robot/+/events'
 mosquitto_sub -t 'farm/alerts'
 
 # Send a fake telemetry message
-mosquitto_pub -t 'farm/robot/robot-1/telemetry' -m '{"robot_id":"robot-1","status":"idle","current_node":"0x1D5E","battery_pct":85,"heading":1,"timestamp":1234567890}'
+mosquitto_pub -t 'farm/robot/robot-1/telemetry' -m '{"robot_id":"robot-1","status":"idle","current_node":"cp-01","battery_pct":85,"heading":1,"timestamp":1234567890}'
 ```
 
 ---
 
 ## Creating a new service
 
-1. Create `farm-controller/<service-name>/` with `src/index.ts` and `package.json`
-2. Use the ingester as a template for the package.json structure
-3. Add `@farm/shared` as a dependency
-4. Connect to MQTT using `createMqttClient()` from the shared package
-5. Add a run script to the root `package.json` if convenient
-6. Rebuild shared if you've added new types: `npm -w @farm/shared run build`
+1. Create `farm-controller/<service-name>/` with `src/index.ts` and `package.json`, using the ingester's `package.json` as a template.
+2. Add `@farm/shared` as a dependency, and connect with `createMqttClient()` from it. Build topic strings with the `TOPICS` helpers.
+3. Put tunable values in a `<service-name>-config.json` next to the others, and validate everything that arrives over MQTT.
+4. Add a run script to the root `package.json`.
+5. Rebuild shared if you've added types: `npm -w @farm/shared run build`.
+6. To run it on the Pi, add a systemd unit and env example: "Adding a service" in [docs/PI-SERVICES.md](../docs/PI-SERVICES.md#adding-a-service).

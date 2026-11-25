@@ -25,6 +25,8 @@ flowchart LR
         Tele["useFarmTelemetry<br/>newest shelf reading"]
         AlertsH["useFarmAlerts"]
         HistH["useShelfHistory"]
+        Thr["useAlertThresholds<br/>chart limit lines"]
+        Lights["useGrowLights<br/>light switches"]
         Conn["useFarmConnection<br/>header pill, banner, overlay"]
         Prefs["PreferencesProvider<br/>theme, units (localStorage)"]
     end
@@ -32,14 +34,14 @@ flowchart LR
     FarmCtx["FarmContext<br/>which farm"]
     DS{{"FarmDataSource<br/>data-source.ts"}}
 
-    Dash --> Tele & AlertsH & Live
+    Dash --> Tele & AlertsH & Live & Lights
     Farm --> Live
     Farm -- "ControlPanel: commands,<br/>history, jog" --> DS
-    Hist --> HistH
+    Hist --> HistH & Thr
     Alerts --> AlertsH & Tele
     Settings --> Prefs
 
-    Live & Tele & AlertsH & HistH & Conn --> DS
+    Live & Tele & AlertsH & HistH & Thr & Lights & Conn --> DS
     FarmCtx -- "selectFarm()" --> DS
 
     DS --> Local["local-source.ts<br/>(FarmNet)"]
@@ -58,8 +60,9 @@ flowchart LR
 - **On FarmNet** the local source reads everything live from the broker:
   `farm/robot/+/telemetry` and `farm/robot/+/state`, `farm/system/topology`,
   `farm/system/alert-thresholds`,
-  `farm/shelf/+/sensors`, `farm/alerts` (and `farm/alerts/clear`), and every
-  command on `farm/commands/+`. The Dashboard API fills in what happened
+  `farm/shelf/+/sensors`, `farm/lights/state`, `farm/alerts` (and
+  `farm/alerts/clear`), and every command on `farm/commands/+`. The Lights
+  card's switches publish `farm/lights/set` for the shelf bridge. The Dashboard API fills in what happened
   before the page opened: recent commands per robot, the latest 500 alerts,
   and 7 days of shelf readings as 5-minute means.
 - **Remotely** the remote source reads what the farm's Supabase bridge

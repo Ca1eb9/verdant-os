@@ -1,19 +1,21 @@
 # Pi WiFi access point setup
 
-The Pi runs its own isolated WiFi network (`FarmNet`) for farm devices. ESP32s and laptops connect over WiFi to reach the Pi's services (MQTT, dashboard, SSH). The farm network has no internet access by design — it's a closed loop. The Pi itself reaches the internet over Ethernet for the Supabase bridge, but it does not forward that connection to FarmNet devices.
+The Pi runs its own isolated WiFi network (`FarmNet`) for farm devices. ESP32s and laptops connect over WiFi to reach the Pi's services (MQTT, dashboard, SSH). The farm network has no internet access by design: it's a closed loop. The Pi itself reaches the internet over an **uplink** (Ethernet, or a [USB WiFi adapter](#no-ethernet-use-a-usb-wifi-adapter)) for `apt`, its clock and the services that need the internet, but it never forwards that connection to FarmNet devices.
+
+Do this first; [PI-SERVICES.md](PI-SERVICES.md) then sets up the farm services.
 
 Written for **Raspberry Pi OS Trixie (Debian 13)**. Networking there is managed by NetworkManager, so the access point is a NetworkManager connection; `dhcpcd` and `hostapd` aren't used.
 
 ## Network layout
 
 ```
-Internet ← [Ethernet] ← Pi (192.168.4.1) → [WiFi AP: FarmNet] → ESP32s, laptops
-                         ↑                   ↑
-                   Supabase bridge only       No internet, farm traffic only
+Internet ← [uplink: eth0 or wlan1] ← Pi (192.168.4.1) → [WiFi AP: FarmNet] → ESP32s, laptops
+                                       ↑                   ↑
+                            The Pi itself only       No internet, farm traffic only
 ```
 
 - `wlan0` — WiFi access point, `192.168.4.1`, managed by NetworkManager
-- `eth0` — wired uplink, used only by the Pi itself (Supabase bridge)
+- `eth0` (Ethernet) or `wlan1` (USB WiFi adapter) — the uplink, used only by the Pi itself
 - dnsmasq — DHCP and DNS on `wlan0` only. Range `192.168.4.10` – `192.168.4.50` (40 devices)
 - DNS on FarmNet: only `farmnet` resolves — no external domains
 - Pi hostname `farmnet`, so `farmnet.local` works through mDNS
@@ -21,7 +23,7 @@ Internet ← [Ethernet] ← Pi (192.168.4.1) → [WiFi AP: FarmNet] → ESP32s, 
 ## Before you start
 
 - **Do this from a keyboard and monitor, or over Ethernet SSH.** Step 2 takes `wlan0` away from any WiFi network the Pi is on, so an SSH session over WiFi drops partway through.
-- Plug in Ethernet so `apt` works, or set up a [USB WiFi adapter](#no-ethernet-use-a-usb-wifi-adapter) first.
+- Connect an uplink so `apt` works: plug in Ethernet, or set up a [USB WiFi adapter](#no-ethernet-use-a-usb-wifi-adapter) first.
 
 ## Install
 
@@ -65,15 +67,15 @@ Create the access point:
 
 ```bash
 sudo nmcli connection add type wifi ifname wlan0 con-name FarmNet autoconnect yes ssid FarmNet \
-  802-11-wireless.mode ap 802-11-wireless.band bg 802-11-wireless.channel 7 \
+  802-11-wireless.mode ap 802-11-wireless.band bg 802-11-wireless.channel 6 \
   ipv4.method manual ipv4.addresses 192.168.4.1/24 ipv6.method disabled \
   wifi-sec.key-mgmt wpa-psk wifi-sec.proto rsn wifi-sec.pairwise ccmp wifi-sec.group ccmp \
   wifi-sec.pmf disable wifi-sec.psk 'CHANGE-THIS-PASSWORD'
 sudo nmcli connection up FarmNet
 ```
 
-- `ipv4.method manual`, **not** `shared` (or `nmcli device wifi hotspot`, which uses `shared`). Shared mode turns on IP forwarding and NAT, which would give FarmNet devices internet through `eth0`.
-- `band bg` is 2.4 GHz, the only band ESP32s support.
+- `ipv4.method manual`, **not** `shared` (or `nmcli device wifi hotspot`, which uses `shared`). Shared mode turns on IP forwarding and NAT, which would give FarmNet devices internet through the uplink.
+- `band bg` is 2.4 GHz, the only band ESP32s support. Channel 6 is a starting point: [FarmNet's channel](#farmnets-channel) covers picking the quietest.
 - `proto rsn` + `ccmp` is WPA2-only. PMF (protected management frames) isn't required by WPA2; it's off to avoid AP-mode problems with some WiFi drivers.
 - The password must be 8–63 characters and can't contain `'`.
 
@@ -107,7 +109,7 @@ address=/farmnet/192.168.4.1
 ```
 
 - `bind-dynamic` — dnsmasq only listens on `wlan0` (and loopback), and still starts if `wlan0` isn't up yet at boot.
-- `no-resolv` — without this dnsmasq forwards unknown names to the Pi's own upstream DNS, and FarmNet devices would resolve external domains. With it, only `farmnet` resolves. The Pi itself is unaffected: it uses the DNS server it gets over Ethernet, not dnsmasq.
+- `no-resolv` — without this dnsmasq forwards unknown names to the Pi's own upstream DNS, and FarmNet devices would resolve external domains. With it, only `farmnet` resolves. The Pi itself is unaffected: it uses the DNS server it gets over the uplink, not dnsmasq.
 - `dhcp-option=3` with no value — don't hand out a default gateway. By default dnsmasq advertises the Pi as the gateway, and a laptop on both Ethernet and FarmNet may then send its internet traffic to the Pi and lose internet.
 
 Check the file for errors, restart dnsmasq, and confirm it loaded the file:
@@ -132,7 +134,7 @@ sudo sysctl --system
 
 Trixie no longer reads `/etc/sysctl.conf`; settings go in `/etc/sysctl.d/`.
 
-Do **not** add any iptables/nftables NAT or MASQUERADE rules. No traffic should route from `wlan0` to `eth0`.
+Do **not** add any iptables/nftables NAT or MASQUERADE rules. No traffic should route from `wlan0` to the uplink.
 
 ### 5. Mosquitto — `/etc/mosquitto/conf.d/farmnet.conf`
 
@@ -177,7 +179,7 @@ On the Pi (keyboard or Ethernet SSH):
 2. `ip addr show wlan0` — has `192.168.4.1/24`
 3. `systemctl status dnsmasq mosquitto` — both active
 4. `cat /proc/sys/net/ipv4/ip_forward` — `0`
-5. `ping google.com` — works (Pi has internet over Ethernet)
+5. `ping google.com` — works (the Pi has internet over the uplink)
 
 From a laptop:
 
@@ -207,15 +209,17 @@ The built-in WiFi can't host FarmNet and join another network at the same time. 
 3. Check: `nmcli device` shows `wlan1` on `HomeWiFi` (and `wlan0` on `FarmNet`, once that exists); `ip route show default` goes out `wlan1`; `ping google.com` works.
 4. Reboot and repeat steps 1 and 3. If `wlan0` and `wlan1` ever swap after a reboot, FarmNet starts on the adapter.
 
-Prefer the adapter on a 5 GHz network if you have one: FarmNet is on 2.4 GHz channel 7, and two 2.4 GHz radios side by side can interfere.
+Prefer the adapter on a 5 GHz network if you have one: FarmNet is on 2.4 GHz, and two 2.4 GHz radios side by side can interfere.
 
 ## ESP32 firmware connection
 
 The firmware reads the WiFi credentials from `firmware/esp32/src/secrets.h` (gitignored). Copy `secrets.example.h` to `secrets.h` and set `WIFI_PASS` to the FarmNet password. The broker defaults to `192.168.4.1:1883` in `config.h`.
 
-Firmware uses the IP, not `farmnet`, for the MQTT broker. DNS adds a failure point for no benefit on microcontrollers.
+The firmware uses the IP, not `farmnet`, for the MQTT broker: DNS adds a failure point for no benefit on a microcontroller.
 
 ## FarmNet's channel
+
+Only channels 1, 6 and 11 don't overlap; any other picks up interference from the networks on both sides of it. Pick the quietest of the three by hand, or have the Pi pick at each boot.
 
 **By hand (pinned):** `sudo nmcli connection modify FarmNet 802-11-wireless.channel 6` (or 1, 11), then `sudo nmcli connection up FarmNet`. It stays there across reboots. A phone WiFi-analyser app, or `nmcli device wifi list` on a laptop, shows which channel is quietest.
 
@@ -246,9 +250,7 @@ journalctl -u farmnet-stations -f      # "dropped aa:bb:...: no answer"
 ## Notes
 
 - **Change the password** in the `FarmNet` connection and every robot's `secrets.h` before Showcase.
-- **Channel.** Only 1, 6 and 11 don't overlap; channel 7 picks up interference from networks on both 6 and 11. Pick the quietest by hand, or have the Pi pick at each boot (below).
 - **Use `farmnet.local` or `192.168.4.1`** from laptops. Bare `farmnet` resolves through dnsmasq, but Windows doesn't always send single-word names to DNS.
 - A laptop only joins FarmNet on its own when no other known network is in range, or when you pick it. FarmNet has no internet, so Windows and macOS rank it below networks that do.
-- If the Pi has no Ethernet connected, the farm still works — local MQTT, local dashboard, SSH over FarmNet, everything except Supabase sync.
+- **Without an uplink the farm still works:** local MQTT, the local dashboard, SSH over FarmNet. Only the Supabase sync, the alert engine's email, `apt` and the clock need it.
 - Laptops connected to FarmNet won't have internet. Developers who need both can use Ethernet for internet and connect to FarmNet over WiFi, or switch networks as needed.
-- The Supabase bridge running on the Pi uses `eth0` (or the USB adapter) for its outbound WebSocket connection. It is the only service that touches the internet.

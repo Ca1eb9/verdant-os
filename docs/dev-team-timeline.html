@@ -94,9 +94,9 @@ pre.mermaid, .mermaid { background: var(--card); border: 1px solid var(--border)
 <div class="system-box">
   <h3>How the system works</h3>
   <p>The farm is a <strong>distributed system</strong> — no single service knows everything or does everything. Each component has one job, and they communicate through <strong>MQTT</strong>, a lightweight publish/subscribe messaging protocol. A broker (Mosquitto) runs on the Raspberry Pi. Any device or service can publish a message to a topic, and any other device or service that has subscribed to that topic will receive it. Services never import or call each other directly — MQTT is the only interface between them. This means each service can be developed, tested, and restarted independently.</p>
-  <p><strong>The robot IS the tray.</strong> Each robot carries a plant and moves it to water stations, light stations, and the charging dock. The ESP32 microcontroller on each robot runs FreeRTOS firmware with four concurrent tasks that handle motors, sensors, navigation decisions, and network communication independently.</p>
-  <p><strong>The Raspberry Pi</strong> runs several independent Node.js services. The <strong>orchestrator</strong> is the brain — it tracks robot state, schedules plant care tasks, and sends navigation commands. The <strong>ingester</strong> (already built) records all telemetry to a local SQLite database. The <strong>alert engine</strong> monitors sensor values and flags threshold violations. The <strong>dashboard API</strong> serves stored data to the web dashboard. The <strong>Supabase bridge</strong> syncs local data to the cloud for remote access.</p>
-  <p><strong>The dashboard</strong> is a React app that works in two environments: on the farm's local WiFi it connects directly to the Pi for real-time data, and on the internet (Vercel) it connects to Supabase instead. It detects which environment it's in automatically.</p>
+  <p><strong>The robot IS the tray.</strong> Each robot carries a plant and moves it to water stations, light stations, and the charging dock. The ESP32 microcontroller on each robot runs FreeRTOS firmware with five concurrent tasks that handle motors, sensors, navigation decisions, network communication and a Bluetooth controller independently (the controller task was added after this plan).</p>
+  <p><strong>The Raspberry Pi</strong> runs several independent Node.js services. The <strong>orchestrator</strong> is the brain — it tracks robot state, schedules plant care tasks, and sends navigation commands. The <strong>ingester</strong> (already built) records all telemetry to a local SQLite database. The <strong>alert engine</strong> monitors sensor values and flags threshold violations. The <strong>dashboard API</strong> serves stored data to the web dashboard. The <strong>Supabase bridge</strong> syncs local data to the cloud for remote access. The <strong>shelf bridge</strong> (added later) reads the shelf sensor node over USB and switches the grow lights.</p>
+  <p><strong>The dashboard</strong> is a Next.js app that works in two environments: on the farm's local WiFi it connects directly to the Pi for real-time data, and on the internet (Vercel) it connects to Supabase instead. It detects which environment it's in automatically.</p>
   <p><strong>Navigation</strong> works through RFID tags placed at fixed positions in the farm. The farm's layout is defined as a graph of nodes and edges in a topology file. BOTH the orchestrator and the robot compute shortest paths; this allows for on-board route planning. The robot reads tags as it drives to know where it is.</p>
 </div>
 
@@ -189,7 +189,7 @@ gantt
 
 <div class="card">
 <p><strong>Sprint 1 (Sep 21 – Oct 4)</strong></p>
-<p><span class="name-tag caleb">Caleb</span> builds the orchestrator — tracking robot state from MQTT, implementing the state machine, and sending commands. In parallel, begins the FreeRTOS firmware architecture: defining the four-task structure, queue interfaces, and the navigation task's state machine.</p>
+<p><span class="name-tag caleb">Caleb</span> builds the orchestrator — tracking robot state from MQTT, implementing the state machine, and sending commands. In parallel, begins the FreeRTOS firmware architecture: defining the task structure (four tasks, now five with the Bluetooth controller), queue interfaces, and the navigation task's state machine.</p>
 <p><span class="name-tag adi">Adi</span> builds the alert engine: a standalone service that monitors sensor telemetry and publishes alerts when values are outside acceptable ranges.</p>
 <p><span class="name-tag jameson">Jameson</span> writes two ESP32 firmware modules: the communications task (network connectivity, message publishing and receiving) and the sensor task (RFID tag reading, battery measurement, obstacle detection). Both modules write to and read from the queues defined by the FreeRTOS skeleton.</p>
 </div>
@@ -252,16 +252,17 @@ gantt
 
 <div class="task">
   <div class="task-header"><h3>FreeRTOS infrastructure + navigation task</h3></div>
-  <p class="what">The ESP32 firmware architecture. Establishes four concurrent tasks with different priorities, defines the queue-based communication between them, and implements the navigation task — the firmware's decision-making brain that manages path following and turn execution.</p>
+  <p class="what">The ESP32 firmware architecture. Establishes concurrent tasks with different priorities, defines the queue-based communication between them, and implements the navigation task — the firmware's decision-making brain that manages path following and turn execution.</p>
   <details>
     <summary>Requirements</summary>
     <ul>
       <li>Four FreeRTOS tasks: motor (highest priority), sensor, navigation, and communications (lowest priority). Motor and timing-critical tasks go on one core; networking goes on the other to avoid WiFi blocking motor control.</li>
+      <li>Now done: a fifth task, <code>pad_task</code>, takes an Xbox controller over Bluetooth LE and shares the network core (<code>firmware/esp32/README.md</code>, "Bluetooth controller").</li>
       <li>Define struct types for each queue's messages — these are the interfaces between tasks. The other team members write their task implementations against these structs.</li>
       <li>Shared volatile flags for safety-critical signals that need to be checked every cycle without queue overhead</li>
       <li>Navigation task: implements the robot's state machine, processes incoming commands from the orchestrator, follows RFID waypoint paths using heading math, and publishes events on state transitions</li>
-      <li>Store the farm's navigation graph in flash memory for autonomous return-to-dock capability. Dock tag ID is a hardcoded constant.</li>
-      <li><code>loop()</code> is empty — all logic runs in tasks</li>
+      <li>Store the farm's navigation graph in flash memory for autonomous return-to-dock capability. Changed since: the graph (<code>src/graph.cpp</code>) is generated from <code>topology.json</code> by <code>tools/gen_graph.mjs</code>, and the dock is its node with <code>type: "dock"</code>.</li>
+      <li><code>loop()</code> deletes itself — all logic runs in tasks</li>
     </ul>
   </details>
   <p class="deps">Depends on: ESP32 hardware, development environment (PlatformIO or Arduino IDE)</p>
@@ -274,10 +275,10 @@ gantt
     <summary>Requirements</summary>
     <ul>
       <li>Match incoming RFID tag UIDs against the on-board graph to determine position</li>
-      <li>At each waypoint: compute the heading to the next node, determine the turn, drive until the next tag is read</li>
+      <li>At each waypoint: compute the heading to the next node, determine the turn, drive until the next tag is read. Changed since: the robot has one drive motor and never turns; it drives forward or backward, and an edge to the side faults.</li>
       <li>Publish events when the robot arrives at its destination and when it begins its action</li>
       <li>Handle missed reads: if no tag appears within a timeout while driving, stop and report the issue</li>
-      <li>Physical tuning: RFID read distance, motor speed, turn calibration</li>
+      <li>Physical tuning: RFID read distance, motor speed</li>
     </ul>
   </details>
   <p class="deps">Depends on: FreeRTOS skeleton, Jameson's sensor and motor tasks, physical RFID tags placed in the farm</p>
@@ -346,7 +347,7 @@ gantt
       <li>Prevent alert spam: if the same metric on the same device is still out of range, don't re-alert within a cooldown window</li>
       <li><strong>Stretch:</strong> For critical-severity alerts, optionally send notifications via SMS or email to a contact list in the config. Research available APIs (Twilio, Resend, etc.) and choose one that fits.</li>
       <li>Now done: email through Resend, optional. Every critical alert on <code>farm/alerts</code> (any service's) is emailed, not this service's repeats. The key and recipients are in <code>/etc/verdant/alert-engine.env</code>, not the config, since the repo is public; without them, or without internet, the service runs the same and sends nothing.</li>
-      <li>Now done: <code>npm run clear-alerts</code> (e.g. before a demo) publishes <code>farm/alerts/clear</code>: the ingester deletes its stored alerts, the alert engine, orchestrator and shelf bridge forget their open ones (a problem still there is raised again), and open dashboards on FarmNet empty their lists. The Supabase bridge and the remote source still need their part (see their tasks).</li>
+      <li>Now done: <code>npm run clear-alerts</code> (e.g. before a demo) publishes <code>farm/alerts/clear</code>: the ingester deletes its stored alerts, the alert engine, orchestrator and shelf bridge forget their open ones (a problem still there is raised again), and open dashboards on FarmNet empty their lists. The Supabase bridge and the remote source now do their part too: the bridge deletes this farm's Supabase alerts, and remote dashboards empty their lists.</li>
       <li>Now done: <strong>resolved alerts.</strong> <code>FarmAlert.resolves</code> names the alert an alert resolves. A reading back in range publishes an info alert resolving the metric's last alert; easing from critical to warning publishes a warning resolving the critical one. The orchestrator's "Robot recovered" alerts resolve its lost and error alerts, and the shelf bridge resolves its silence alert when readings resume. Open alerts are saved in each service's <code>STATE_PATH</code>, so they still resolve after a restart or reboot.</li>
     </ul>
   </details>
@@ -384,6 +385,7 @@ gantt
           <li><code>farm/shelf/+/sensors</code> (from the Pi's shelf bridge, <code>docs/shelf-sensors.md</code>) → insert into <code>sensor_events</code>, the dashboard's environment feed, downsampled the same way: <code>device</code> = <code>shelf_id</code>, <code>source</code> = <code>"supabase-bridge"</code>, <code>ts</code> = the reading's <code>timestamp</code>, <code>air_temp_c</code> = <code>temperature_c</code>, <code>humidity_pct</code>, <code>water_temp_c</code>, <code>water_level_ok</code>, <code>ph</code> and <code>lights</code> (each level's light, jsonb) by name (each may be null). The dashboard derives °F from °C and shows light as lux. This is the only writer of <code>sensor_events</code>; the old laptop serial bridge is retired.</li>
         </ul>
         Accumulate writes in a buffer and flush at a regular interval to stay within Supabase's rate limits.</li>
+      <li>Now done: all of the above runs as the <code>farm-supabase-bridge</code> service (<code>farm-controller/README.md</code>, "Supabase bridge").</li>
       <li><strong>Farm online (presence):</strong> while connected to the local MQTT broker, track presence on the Supabase Realtime channel <code>farm-status</code> (<code>{ config: { private: true, presence: { key: FARM_ID } } }</code>) with <code>{ farm_id, service: "supabase-bridge", online_at }</code>, so every farm's bridge shares the channel under its own key; untrack when the MQTT connection drops. Supabase removes it on its own when the bridge loses its internet connection. The project only allows private channels, and only the secret key can track, so the dashboard can listen but never mark the farm online. The remote dashboard's connection pill follows the selected farm's key.</li>
       <li>Handle internet outages without crashing — buffer outbound data (bounded) and flush when the connection resumes, oldest first. When the buffer is full, drop telemetry and sensor rows before alerts.</li>
     </ul>
@@ -409,7 +411,7 @@ gantt
         <ul>
           <li><code>subscribeRobots</code>: load each robot's latest <code>robot_telemetry</code> row and its <code>robot_state</code>, then follow their changes through Supabase Realtime on the private channel <code>farm-data</code>; map them to <code>RobotView</code> the same way <code>local-source.ts</code> does (<code>lastSeen</code> from the row's <code>created_at</code>, Supabase's clock)</li>
           <li><code>getTopology</code>: the farm's <code>farm_topology</code> row, otherwise <code>null</code> (the default layout)</li>
-          <li><code>sendCommand</code> / <code>listRecentCommands</code>: the existing <code>/api/commands</code> route (operator key required, <code>farm_id</code> in the body and the query), as <code>createDashboardApiSource</code> does today</li>
+          <li><code>sendCommand</code> / <code>listRecentCommands</code>: the existing <code>/api/commands</code> route (operator key required; changed since: the operator's sign-in authorizes it, <code>farm_id</code> in the body and the query), as <code>createDashboardApiSource</code> does today</li>
           <li><code>subscribeConnection</code>: connected while the farm's key (its id) is in the <code>farm-status</code> channel's presence state; otherwise offline, with a short reason in plain words (e.g. "The farm isn't online right now." or "Can't reach the cloud service."); no service names, hosts or settings in it, those go to the console. The header pill and the offline banner already follow this, so no UI work is needed.</li>
         </ul>
       </li>
@@ -438,7 +440,7 @@ gantt
 
 <div class="task">
   <div class="task-header"><h3>ESP32 communications task</h3></div>
-  <p class="what">One of the four FreeRTOS tasks on the ESP32. This task is the robot's link to the outside world — it connects to WiFi, communicates with the MQTT broker on the Pi, publishes the robot's status, and receives commands from the orchestrator. Runs at the lowest priority because network operations can be slow without affecting motor or sensor timing.</p>
+  <p class="what">One of the FreeRTOS tasks on the ESP32. This task is the robot's link to the outside world — it connects to WiFi, communicates with the MQTT broker on the Pi, publishes the robot's status, and receives commands from the orchestrator. Runs at the lowest priority because network operations can be slow without affecting motor or sensor timing.</p>
   <details>
     <summary>Requirements</summary>
     <ul>
@@ -461,14 +463,14 @@ gantt
 
 <div class="task">
   <div class="task-header"><h3>ESP32 sensor task</h3></div>
-  <p class="what">One of the four FreeRTOS tasks. Reads RFID tags to determine position, measures battery voltage, and detects obstacles. Writes data to the sensor queue and sets safety flags that the motor task checks every cycle.</p>
+  <p class="what">One of the FreeRTOS tasks. Reads RFID tags to determine position, measures battery voltage, and detects obstacles. Writes data to the sensor queue and sets safety flags that the motor task checks every cycle.</p>
   <details>
     <summary>Requirements</summary>
     <ul>
       <li>Poll the PN532 RFID reader (I2C or SPI) at a regular interval. When a tag is present, read its UID.</li>
       <li>Read battery voltage through an ADC pin and a voltage divider. Convert the raw reading to a usable percentage.</li>
       <li>Read distance from the obstacle sensor (ultrasonic or IR). When the distance drops below a safety threshold, set the shared obstacle flag so the motor task stops.</li>
-      <li>Now done: two VL53L4CX sensors set a front and a rear flag. The nav task lowers a side's stop distance (<code>g_obstacle_*_stop_cm</code>) while it creeps into the elevator or onto the dock; the sensor task flags against it (see <code>COMMS-SENSOR.md</code>).</li>
+      <li>Now done: two VL53L4CX sensors set a front and a rear flag. The nav task lowers a side's stop distance (<code>g_obstacle_*_stop_cm</code>) while it creeps into the elevator or onto the dock; the sensor task flags against it (see <code>firmware/esp32/README.md</code>, "Sensors").</li>
       <li>Now done: an AHT20 on the rear sensor's I2C bus reports air temperature and humidity in telemetry, for the dashboard only (wiring in <code>docs/wiring/robot.md</code>).</li>
       <li>Write all sensor readings into a struct and push it to the sensor queue for the nav task</li>
     </ul>
@@ -486,7 +488,7 @@ gantt
 
 <div class="task">
   <div class="task-header"><h3>ESP32 motor control task</h3></div>
-  <p class="what">One of the four FreeRTOS tasks. Drives the motor based on commands from the navigation task. Runs at the highest priority — motor timing must not be delayed by anything else. The robot has a single drive motor and no encoder: it never turns, and drives backward to go the other way. The placeholder in <code>tasks/motor_task.cpp</code> only logs commands.</p>
+  <p class="what">One of the FreeRTOS tasks. Drives the motor based on commands from the navigation task. Runs at the highest priority — motor timing must not be delayed by anything else. The robot has a single drive motor and no encoder: it never turns, and drives backward to go the other way. Now done: <code>motor/motor_core</code> and <code>tasks/motor_task</code> implement the requirements below (<code>firmware/esp32/README.md</code>, "Motor driver").</p>
   <details>
     <summary>Requirements</summary>
     <ul>
@@ -521,6 +523,7 @@ gantt
       <li>Read data from the SQLite database that the ingester populates. Open it in read-only mode so the API and ingester don't conflict.</li>
       <li><strong>Command history:</strong> the ingester saves every operator command in the <code>commands</code> table. Serve it as <code>GET /commands?robot_id=</code> (the filter optional), returning <code>{ "commands": [...] }</code>, newest <code>received_at</code> first, at most 10, each <code>{ id, robot_id, command, issued_by, issued_at, status: "sent" }</code> with <code>command</code> parsed from JSON — the same shape as the dashboard's own <code>/api/commands</code> (see <code>farm-controller/README.md</code>). The dashboard reads it from <code>NEXT_PUBLIC_DASHBOARD_API_URL</code>. No command endpoint is needed: on FarmNet the dashboard sends commands straight over MQTT.</li>
       <li>Run as its own systemd unit, <code>farm-dashboard-api</code>, with its port and the database path in <code>/etc/verdant/dashboard-api.env</code> (see "Adding a service" in <code>docs/PI-SERVICES.md</code>). Then set <code>NEXT_PUBLIC_DASHBOARD_API_URL</code> in the dashboard's env file to its address on FarmNet (<code>http://192.168.4.1:&lt;port&gt;</code>) and redeploy.</li>
+      <li>Now done: the API serves <code>/health</code>, <code>/robots</code>, <code>/telemetry</code>, <code>/shelves</code>, <code>/alerts</code> and <code>/commands</code> (<code>farm-controller/README.md</code>, "Dashboard API").</li>
       <li>Enable CORS for the dashboard's origins, listed in its env file (<code>http://farmnet.local</code> and <code>http://192.168.4.1</code> on the Pi, where the dashboard is on port 80, <code>http://localhost:3000</code> in development). The dashboard and the API are on different ports, so the browser treats them as different origins on the Pi too.</li>
     </ul>
   </details>

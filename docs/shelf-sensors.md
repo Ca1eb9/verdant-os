@@ -119,8 +119,8 @@ map count levels from 1 for the operator; the topology's `z`, `levels` and
   its last tag says.
 - **The operator's switch.** On FarmNet the dashboard's **Lights** card
   has an On/Off switch per level. Off keeps that level's lights off whatever
-  the robots do; On lets them follow the robots again. The remote dashboard has no
-  switch, like jog. Switches live in the bridge's memory: a bridge restart or
+  the robots do; On lets them follow the robots again. The remote dashboard
+  has no switch, like jog. Switches live in the bridge's memory: a bridge restart or
   Pi reboot switches every light back on.
 - **Per level (`follow_robots: true`).** With a supply per level (D5 and D6,
   `levels: [0, 1]`), each level is lit only while a robot is on it: the level
@@ -143,8 +143,8 @@ map count levels from 1 for the operator; the topology's `z`, `levels` and
 The bridge sends the node `lights 10` (one `1` on or `0` off per relay) when
 that changes, and again with every reading, so a lost line or a node that
 reset is put right within one report (5 s). It also publishes each light's
-switch and state per level, retained, on `farm/lights/state` for the dashboard. It logs
-each change: `[LIGHTS] lights 0 (robots docked)`, and each switch:
+switch and state per level, retained, on `farm/lights/state` for the
+dashboard. It logs each change: `[LIGHTS] lights 0 (robots docked)`, and each switch:
 `[LIGHTS] level 1 switched off by dashboard`.
 
 **Failures leave the lights on**, never off: the plants keep their light.
@@ -224,8 +224,9 @@ topology's `z`), in proportion up to `FULL_GLOW_LUX` in
 `web/src/lib/farm/map/renderer.ts` (5000 lux), or with
 `NEXT_PUBLIC_MAP_LIGHTS_ON_OFF=true` simply on at `ON_OFF_LUX` (2000 lux) or
 more and off below. Set `FULL_GLOW_LUX` to what a sensor reads under its light
-at full brightness. A level with no current reading
-(none in the last 10 s, the sensor `null`, or no sensor faces it) is drawn as
-off, never as lit; its tooltip says "no reading".
+at full brightness. A level with no current reading (none in the last 10 s,
+the sensor `null`, or no sensor faces it) is drawn as off, never as lit; its
+tooltip says "no reading".
+
 This assumes one shelf node, as on this farm: with several, the card and map
 show whichever reported last.
