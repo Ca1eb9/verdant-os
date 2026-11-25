@@ -21,11 +21,11 @@ In **SQL Editor**, run these files from the repo, in this order (paste each, **R
 | File | Creates |
 |---|---|
 | [`web/supabase/farms.sql`](../web/supabase/farms.sql) | `farms`: one row per farm, the list the dashboard's farm picker shows. Every other table's `farm_id` must name one |
-| [`web/supabase/sensor_events.sql`](../web/supabase/sensor_events.sql) | `sensor_events`: shelf sensor readings, the dashboard's environment feed. The Supabase bridge mirrors them from `farm/shelf/+/sensors` ([shelf-sensors.md](shelf-sensors.md)), and `shelf_history` gives the History page their means per 5 minutes. On an older project, running it again drops the retired columns (`light_ppfd`, `ph_voltage`, …), and replaces `light_lux` with `lights` (each level's light, as jsonb), moving each row's old reading to level 0. Run it right after updating the Pi, not before: an older bridge's rows still name `light_lux`, which it drops, and the bridge then holds every row behind them, so the remote dashboard's robots and alerts freeze (the pill stays green). An updated bridge before the SQL holds its rows the same way and sends them once it runs |
+| [`web/supabase/sensor_events.sql`](../web/supabase/sensor_events.sql) | `sensor_events`: shelf sensor readings, the dashboard's environment feed. The Supabase bridge mirrors them from `farm/shelf/+/sensors` ([shelf-sensors.md](shelf-sensors.md)), and `shelf_history` gives the History page their means per 5 minutes |
 | [`web/supabase/remote_commands.sql`](../web/supabase/remote_commands.sql) | `remote_commands`: commands the dashboard sends from anywhere; the bridge relays them to the farm, through two functions that age commands by Supabase's clock |
-| [`web/supabase/farm_sync.sql`](../web/supabase/farm_sync.sql) | `robot_telemetry`, `robot_state`, `alerts`, `farm_topology`, `alert_thresholds` (what the bridge mirrors), Realtime for them and `sensor_events`, the presence rule, daily cleanup and the `updated_at` trigger. On an older project, running it again adds `alerts.resolves` (the alert an alert resolves) |
+| [`web/supabase/farm_sync.sql`](../web/supabase/farm_sync.sql) | `robot_telemetry`, `robot_state`, `alerts`, `farm_topology`, `alert_thresholds` (what the bridge mirrors), Realtime for them and `sensor_events`, the presence rule, daily cleanup and the `updated_at` trigger |
 
-Then **Table Editor** should list all seven tables, each with RLS enabled.
+Then **Table Editor** should list all eight tables, each with RLS enabled.
 
 **Add each farm** in the SQL editor, one row per farm (one Pi each):
 
@@ -36,6 +36,11 @@ insert into public.farms (id, name) values ('atlas', 'Atlas Farm');
 The id is lowercase letters, digits and dashes, and never changes: it's what that farm's Pi is configured with (step 5). A Pi whose id has no row here can't write anything, so a typo fails loudly instead of creating a second farm. Add a farm the same way later; the dashboard lists it within seconds.
 
 These files are the contract between the bridge and the dashboard. Change the schema by editing them in a PR, never only in the Supabase UI.
+
+**Updating an older project:** run the files again, in the same order. They add what's new and leave existing rows alone, apart from these migrations:
+
+- `sensor_events.sql` drops the retired columns (`light_ppfd`, `ph_voltage`, …) and replaces `light_lux` with `lights` (each level's light, as jsonb), moving each row's old reading to level 0. Run it right after updating the Pi, not before: an older bridge's rows still name `light_lux`, and the bridge then holds every row behind them, so the remote dashboard's robots and alerts freeze while its pill stays green. An updated bridge before the SQL holds its rows the same way and sends them once it runs.
+- `farm_sync.sql` adds `alerts.resolves` (the alert an alert resolves).
 
 ## 4. Realtime (2 min)
 
@@ -57,7 +62,7 @@ On Vercel the dashboard asks operators to sign in (step 6), and their session au
 
 - Never put the secret key in a `NEXT_PUBLIC_*` variable: those are built into the page.
 - The `NEXT_PUBLIC_*` values are fixed at build time: after adding or changing them, redeploy on Vercel.
-- `supabase-bridge.env` comes with the bridge (its example file, and the unit, per "Adding a service" in [PI-SERVICES.md](PI-SERVICES.md)).
+- The Pi's `.env` files are created from `deploy/env/*.env.example` in [PI-SERVICES.md](PI-SERVICES.md) step 4.
 - A leaked secret key: **Project Settings → API Keys → roll** it, then update Vercel and the Pi.
 
 ## 6. Operator sign-in (10 min)

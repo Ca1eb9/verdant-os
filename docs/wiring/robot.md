@@ -273,7 +273,7 @@ the order drawn: go by the names printed on its board.
 
 Flash the bench firmware (sensors and comms, no motor) and watch the serial
 monitor and the broker
-([COMMS-SENSOR.md](../../firmware/esp32/COMMS-SENSOR.md#running-the-bench-test)):
+([firmware/esp32/README.md](../../firmware/esp32/README.md#bench-test)):
 
 ```bash
 cd firmware/esp32

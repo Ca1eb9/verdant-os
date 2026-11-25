@@ -81,13 +81,36 @@ sudo nano /etc/verdant/supabase-bridge.env
 sudo nano /etc/verdant/shelf-bridge-config.json
 ```
 
-In `dashboard.env`, set the Supabase values (the URL and the publishable key, never the secret key: [SUPABASE-SETUP.md](SUPABASE-SETUP.md) step 5). It needs no `OPERATOR_KEY`: on FarmNet the dashboard sends commands straight over MQTT. Opened from the Pi (over http), the dashboard finds the broker on its own: the WebSocket listener on port 9001 of the same host ([WIFI-SETUP.md](WIFI-SETUP.md)), whether you open it by IP or by name. Set `NEXT_PUBLIC_FARM_ID` and `NEXT_PUBLIC_FARM_NAME` to this farm's row in Supabase's `farms` table ([SUPABASE-SETUP.md](SUPABASE-SETUP.md)): the dashboard shows only this farm. That farm id also means no sign-in: a dashboard built with it never asks operators to sign in and never calls Supabase Auth, so it works with no internet (sign-in is for the dashboard on Vercel, [SUPABASE-SETUP.md](SUPABASE-SETUP.md) step 6). Left empty, the dashboard asks for a sign-in it can't do offline. A `NEXT_PUBLIC_MQTT_WS_URL` line left from an older example does nothing now. These are fixed when the dashboard is built, so after changing them run the deploy script, not just a restart. `NEXT_PUBLIC_DASHBOARD_API_URL` is the Dashboard API (its port is `PORT` in `dashboard-api.env`); the example is right unless you change that port. `NEXT_PUBLIC_JOG_WHILE_INITIALIZING=true` lets you take manual control of a robot that hasn't read its first tag yet (`initializing`), e.g. to drive it onto one; leave it `false` to hide manual control until then. Like the other `NEXT_PUBLIC_*` values it's fixed at build time: rerun the deploy script after changing it. The deploy script reads this file with bash, so quote any value with spaces: `NEXT_PUBLIC_FARM_NAME="North Farm"`.
+Then fill in the three files opened above. Every value is also described in its file.
 
-In `supabase-bridge.env`, set the project URL, the **secret** key and `FARM_ID` ([SUPABASE-SETUP.md](SUPABASE-SETUP.md) step 5). `FARM_ID` is this farm's row in Supabase's `farms` table, the same as `NEXT_PUBLIC_FARM_ID` in `dashboard.env`. This is the only file on the Pi with the secret key: it stays `640`, readable by the services only. Without internet the bridge keeps the farm data it can't send (up to `max_buffer_rows` in `farm-controller/supabase-bridge-config.json`) and sends it when the uplink is back.
+**`dashboard.env`**
 
-In `shelf-bridge-config.json`, set each shelf's `port` to its node's stable path (plug the Uno in, then `ls /dev/serial/by-id/`) and its pH calibration ([shelf-sensors.md](shelf-sensors.md#ph-calibration)). For the grow lights, its `lights` block names the shelf whose node has the relays and the level of each relay; a Pi set up before the lights has no `lights` block, so copy it in from the repo's file (the feature is off without it, [shelf-sensors.md](shelf-sensors.md#grow-lights)). This copy belongs to this Pi; the repo's file is only the template, and a deploy never touches this one. The service can open serial ports through the `dialout` group (set in its unit).
+- The Supabase URL and the **publishable** key, never the secret key ([SUPABASE-SETUP.md](SUPABASE-SETUP.md) step 5).
+- `NEXT_PUBLIC_FARM_ID` and `NEXT_PUBLIC_FARM_NAME`: this farm's row in Supabase's `farms` table ([SUPABASE-SETUP.md](SUPABASE-SETUP.md)). The dashboard shows only this farm. A farm id also turns off sign-in, so the dashboard works with no internet (sign-in is only for the dashboard on Vercel). Left empty, the dashboard asks for a sign-in it can't do offline.
+- Quote any value with spaces (`NEXT_PUBLIC_FARM_NAME="North Farm"`): the deploy script reads the file with bash.
+- The rest work as they are. `NEXT_PUBLIC_DASHBOARD_API_URL` matches the Dashboard API's `PORT` in `dashboard-api.env`. The other options (manual control before the first tag, the **Elevator arrived** button, how the map draws the lights) are described in the file and in [web/README.md](../web/README.md#settings).
 
-The orchestrator, ingester, shelf bridge and Dashboard API `.env` files work as they are (if you open the dashboard from another address, add it to `CORS_ORIGINS` in `dashboard-api.env`). So does the alert engine's; to have it email critical alerts, `sudo nano /etc/verdant/alert-engine.env` and set the three Resend values described there (an API key from [resend.com](https://resend.com), the sender and the recipients). Without them it only publishes alerts. On a Pi set up before the shelf bridge and alert engine kept state files, add the `STATE_PATH` line from each one's example to its `.env`; without it they log `Could not write` and forget open alerts on a restart. After updating a Pi to per-level lights, add `"light_levels": [0, 1]` to the shelf in `/etc/verdant/shelf-bridge-config.json` (without it only the bottom light sensor is published) and restart `farm-shelf-bridge`, then run `web/supabase/sensor_events.sql` again in Supabase's SQL editor ([SUPABASE-SETUP.md](SUPABASE-SETUP.md)): until it runs the Supabase bridge holds every row, so the remote dashboard's robots and alerts freeze while its pill stays green. The Pi and the shelf node can be updated in either order. On a Pi set up while the dashboard was on port 3000, change `CORS_ORIGINS` to the example's: the dashboard is now on port 80, and a browser's origin for port 80 has no port, so the old `:3000` entries no longer match and the dashboard shows no command history. The deploy script warns while they're there. Bookmarks to `:3000` stop working too; use `http://farmnet.local`.
+It needs no `OPERATOR_KEY` and no broker address: on FarmNet the dashboard sends commands straight over MQTT, to the WebSocket listener on port 9001 of whatever host it was opened from ([WIFI-SETUP.md](WIFI-SETUP.md)).
+
+**`NEXT_PUBLIC_*` values are fixed when the dashboard is built.** After changing one, rerun the deploy script (step 6); a restart isn't enough.
+
+**`supabase-bridge.env`**
+
+- The project URL, the **secret** key and `FARM_ID` ([SUPABASE-SETUP.md](SUPABASE-SETUP.md) step 5). `FARM_ID` is the same as `NEXT_PUBLIC_FARM_ID` in `dashboard.env`.
+- This is the only file on the Pi with the secret key. Keep it `640`, readable by the services only.
+
+**`shelf-bridge-config.json`**
+
+- Each shelf's `port`: its node's stable path (plug the Uno in, then `ls /dev/serial/by-id/`).
+- Each shelf's pH calibration ([shelf-sensors.md](shelf-sensors.md#ph-calibration)).
+- The `lights` block: which shelf's node has the grow light relays, and the level of each relay ([shelf-sensors.md](shelf-sensors.md#grow-lights)). Without it the lights feature is off.
+
+This copy belongs to this Pi: the repo's file is only the template, and a deploy never touches this one. The service opens serial ports through the `dialout` group (set in its unit).
+
+**The other `.env` files** (orchestrator, ingester, shelf bridge, alert engine, Dashboard API) work as they are.
+
+- If you open the dashboard from an address other than the example's, add it to `CORS_ORIGINS` in `dashboard-api.env`.
+- To have the alert engine email critical alerts, set the three Resend values in `alert-engine.env` (an API key from [resend.com](https://resend.com), the sender and the recipients). Without them it only publishes alerts.
 
 These files are readable by root and the `farm` user only. Never copy them into the repo; it's public.
 
@@ -110,7 +133,7 @@ sudo systemctl restart systemd-journald
 sudo bash /opt/verdant-os/scripts/pi-deploy.sh
 ```
 
-The first run takes several minutes, mostly the dashboard build. It installs the unit files, enables them at boot and starts them. It ends by printing each service's status; all six should be `active (running)`.
+The first run takes several minutes, mostly the dashboard build. It installs the unit files, enables them at boot and starts them. It ends by printing each service's status; all seven should be `active (running)`.
 
 ### 7. Firewall
 
@@ -194,6 +217,19 @@ For each service it lists what it added, or `up to date`. Nothing already in a f
 
 It doesn't touch `shelf-bridge-config.json`, which isn't a `.env` file.
 
+### Upgrading an older Pi
+
+A Pi set up before one of these changes needs a one-time fix that `pi-env-sync.sh` can't make. Each applies only if your Pi predates the change.
+
+| Pi set up before | Do this |
+|---|---|
+| The shelf bridge and alert engine kept state files | Add the `STATE_PATH` line from each one's example to its `.env`. Without it they log `Could not write` and forget open alerts on a restart. `pi-env-sync.sh` adds it |
+| The Dashboard API | Create `/etc/verdant/dashboard-api.env` as in step 4, then deploy. Otherwise `farm-dashboard-api` fails with `Failed to load environment files` |
+| The grow lights | Copy the `lights` block from the repo's `farm-controller/shelf-bridge-config.json` into `/etc/verdant/shelf-bridge-config.json` |
+| Per-level lights | Add `"light_levels": [0, 1]` to the shelf in `/etc/verdant/shelf-bridge-config.json` (without it only the bottom light sensor is published) and restart `farm-shelf-bridge`. Then run `web/supabase/sensor_events.sql` again in Supabase's SQL editor ([SUPABASE-SETUP.md](SUPABASE-SETUP.md)): until it runs, the Supabase bridge holds every row, so the remote dashboard's robots and alerts freeze while its pill stays green. The Pi and the shelf node can be updated in either order |
+| The dashboard found the broker on its own | Delete any `NEXT_PUBLIC_MQTT_WS_URL` line from `dashboard.env`. It does nothing now |
+| The dashboard moved to port 80 | Change `CORS_ORIGINS` in `dashboard-api.env` to the example's. A browser's origin for port 80 has no port, so the old `:3000` entries no longer match and the dashboard shows no command history (the deploy script warns while they're there). Bookmarks to `:3000` stop working too; use `http://farmnet.local` |
+
 ### Running a service by hand
 
 To debug with your own terminal, stop the unit and run the same thing as the `farm` user:
@@ -205,7 +241,7 @@ sudo -u farm -H bash -c 'cd /opt/verdant-os/farm-controller/orchestrator && set 
 
 `Ctrl+C` stops it; `sudo systemctl start farm-orchestrator` puts it back.
 
-### Adding a service (e.g. the Supabase bridge)
+### Adding a service
 
 1. Copy `deploy/systemd/farm-ingester.service` to `farm-<name>.service` and change the description, `WorkingDirectory` and `EnvironmentFile`.
 2. Add `deploy/env/<name>.env.example`, and create `/etc/verdant/<name>.env` from it on the Pi (step 4).

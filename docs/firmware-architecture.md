@@ -1,16 +1,17 @@
 # Firmware Architecture (ESP32)
 
 Specification for the robot firmware in `firmware/esp32`: how it is structured
-and the contract it keeps with the orchestrator on the Pi. Sections marked
-**TBD** are still open.
+and the contract it keeps with the orchestrator on the Pi. Open questions are
+listed under [TBD](#tbd). How the firmware implements it, and how to build and
+test it, is in [firmware/esp32/README.md](../firmware/esp32/README.md).
 
 The simulator (`farm-controller/simulator/src/index.ts`, run with
 `AUTONOMOUS=false`) is the reference implementation of the robot-side state
 machine and command handling described here. When this document and the
 simulator disagree, fix one of them.
 
-State machine diagrams: `firmware/esp32/docs/state-machine.md` (robot) and
-`farm-controller/orchestrator/docs/state-machine.md` (orchestrator).
+State machine diagrams: [robot](../firmware/esp32/docs/state-machine.md) and
+[orchestrator](../farm-controller/orchestrator/docs/state-machine.md).
 
 ## Guiding principle: the robot is the source of truth
 
@@ -25,12 +26,12 @@ where it picks its own targets, is for testing only.)
 
 ## Tasks
 
-Five FreeRTOS tasks. `loop()` is empty.
+Five FreeRTOS tasks. `loop()` deletes itself; all the work happens in tasks.
 
 | Task | Priority | Core | Responsibility |
 |---|---|---|---|
-| Motor | Highest | 1 | Drives motors from the drive queue. Checks safety flags every cycle and stops while one is set. Every stop slows to 0 over `STOP_RAMP_MS` rather than braking at once, and reversing slows to 0 first (`REVERSE_RAMP_MS`). |
-| Sensor | High | 1 | RFID reads, battery voltage, front and rear obstacle distance. Writes the sensor queue and sets safety flags. |
+| Motor | Highest | 1 | Drives the motor from the drive queue. Checks safety flags every cycle and stops while one is set. Every stop slows to 0 over `STOP_RAMP_MS` rather than braking at once, and reversing slows to 0 first (`REVERSE_RAMP_MS`). |
+| Sensor | High | 1 | RFID reads, battery voltage, front and rear obstacle distance, the charge contact and the AHT20. Writes the sensor queue and sets safety flags. |
 | Navigation | Medium | 1 | Robot state machine, survival overrides, path following, turn decisions. Produces telemetry and events. |
 | Comms | Lowest | 0 | WiFi and MQTT. Publishes outbound messages and pushes received commands onto the command queue. |
 | Controller | Lowest | 0 | The Bluetooth controller. Pushes its jogs, stop and resume onto the command queue. |
@@ -42,13 +43,13 @@ Networking runs on its own core so WiFi never blocks motor control.
 | Queue | Producer | Consumer | Contents |
 |---|---|---|---|
 | Sensor | Sensor | Navigation | Latest tag UID, battery %, front and rear obstacle distance |
-| Drive | Navigation | Motor | Speed and direction per motor |
-| Command | Comms | Navigation | Parsed orchestrator command |
+| Drive | Navigation | Motor | Speed and direction for the one motor |
+| Command | Comms, Controller | Navigation | Parsed orchestrator commands and the controller's inputs |
 | Telemetry | Navigation | Comms | Telemetry snapshots |
 | Event | Navigation | Comms | Events (see below) |
 
-Shared `volatile` flags (front obstacle, rear obstacle, battery kill) are used for safety signals that
-must be checked every cycle without queue overhead.
+Shared `volatile` flags (front obstacle, rear obstacle, battery kill) carry safety signals
+that must be checked every cycle without queue overhead.
 
 ### Events before telemetry
 
@@ -418,8 +419,7 @@ purpose, so a stopped robot stays stopped and only the motor cutoff applies.
 The firmware does **not** expect heartbeats from the Pi, and losing the Pi is
 not a reason to return to dock. The robot keeps working on its current task
 until the battery thresholds send it to charge. When the connection returns, it
-reports its real state and the orchestrator adopts it. (This replaces the
-"Pi heartbeat watchdog" item in the development timeline.)
+reports its real state and the orchestrator adopts it.
 
 ## Manual control
 

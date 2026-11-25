@@ -2,7 +2,7 @@
 
 How the orchestrator tracks each robot and its tasks, as implemented in
 `src/state-machine.ts` and `src/index.ts`. The robot's side of the contract is in
-`docs/firmware-architecture.md`.
+[docs/firmware-architecture.md](../../../docs/firmware-architecture.md).
 
 The robot is the source of truth. The orchestrator does not advance a robot's
 status on its own: every status comes from the robot's telemetry, except `lost`,
