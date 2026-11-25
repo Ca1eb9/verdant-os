@@ -50,7 +50,7 @@ optional: it's what stops a short from overheating the pack and wiring.
 | **GPIO 5 / 6** | DRV8871 IN1 / IN2 |
 | **GPIO 4** | Battery divider tap (battery voltage) |
 | **GPIO 1** | Charge contact divider tap |
-| GPIO 38 | The on-board status LED; nothing to wire (GPIO 48 on a DevKitC-1 v1.0 and some clones) |
+| GPIO 38 | The on-board status LED; nothing to wire |
 
 GPIO 4 and 1 are ADC1 pins, the only ones that can still read a voltage while
 WiFi is on. Leave alone: GPIO 0, 3, 45, 46 (they decide how the chip boots),

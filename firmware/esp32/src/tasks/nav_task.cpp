@@ -104,7 +104,7 @@ class QueueOutput : public NavOutput {
 // The status LED (README "Status LED"): colour = status, animation = the
 // detail, short flashes on top = what just happened. Called every nav loop;
 // writes the LED only when the colour changes.
-void show_status_led(const NavCore& core, const QueueOutput& out,
+void show_status_led(Adafruit_NeoPixel& led, const NavCore& core, const QueueOutput& out,
                      const SensorData& s, uint32_t known_tag_ms, uint32_t unknown_tag_ms,
                      uint32_t now) {
   // ColorHSV hues (0-65535 around the wheel)
@@ -123,7 +123,7 @@ void show_status_led(const NavCore& core, const QueueOutput& out,
   uint8_t sat = 255, val = FULL;
 
   switch (status) {
-    case RobotStatus::Initializing: sat = 0; val = breathe(); break;  // white
+    case RobotStatus::Initializing: hue = BLUE; val = breathe(); break;
     case RobotStatus::Idle: hue = GREEN; val = DIM; break;
     case RobotStatus::EnRoute: hue = BLUE; break;
     case RobotStatus::Working: {
@@ -187,12 +187,9 @@ void show_status_led(const NavCore& core, const QueueOutput& out,
   static uint32_t shown = UINT32_MAX;
   uint32_t color = Adafruit_NeoPixel::gamma32(Adafruit_NeoPixel::ColorHSV(hue, sat, val));
   if (color == shown) return;
+  led.setPixelColor(0, color);
+  led.show();
   shown = color;
-  // The core's driver (RMT), not the NeoPixel library's: on the N8R8 boards
-  // the library's timing only gets white through.
-  auto cap = [](uint32_t c) { return (uint8_t)((c & 0xFF) * STATUS_LED_BRIGHTNESS / 255); };
-  rgbLedWriteOrdered(PIN_STATUS_LED, STATUS_LED_RED_FIRST ? LED_COLOR_ORDER_RGB : LED_COLOR_ORDER_GRB,
-                     cap(color >> 16), cap(color >> 8), cap(color));
 }
 
 }  // namespace
@@ -211,6 +208,9 @@ void nav_task(void* /*param*/) {
   uint32_t known_tag_ms = 0;
   uint32_t unknown_tag_ms = 0;
   bool contact_was_closed = false;
+  Adafruit_NeoPixel led(1, PIN_STATUS_LED, NEO_GRB + NEO_KHZ800);
+  led.begin();
+  led.setBrightness(STATUS_LED_BRIGHTNESS);
 
   RobotStatus sent_status = RobotStatus::Initializing;
   NodeIndex sent_node = NO_NODE;
@@ -309,7 +309,7 @@ void nav_task(void* /*param*/) {
       telemetry_sent = true;
     }
 
-    show_status_led(core, out, sensors, known_tag_ms, unknown_tag_ms, now);
+    show_status_led(led, core, out, sensors, known_tag_ms, unknown_tag_ms, now);
     vTaskDelay(pdMS_TO_TICKS(NAV_LOOP_MS));
   }
 }
