@@ -181,7 +181,7 @@ The onboard NeoPixel (GPIO38) shows the robot's state: colour is the status, the
 
 | Status | LED |
 |---|---|
-| `initializing` | Blue, slow breathe |
+| `initializing` | White, slow breathe |
 | `idle` | Green, dim |
 | `en_route` | Blue |
 | `working` | Cyan (water), magenta (grow), yellow (harvest), green (wait); dim to full over the action |

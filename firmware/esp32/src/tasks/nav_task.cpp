@@ -123,7 +123,7 @@ void show_status_led(Adafruit_NeoPixel& led, const NavCore& core, const QueueOut
   uint8_t sat = 255, val = FULL;
 
   switch (status) {
-    case RobotStatus::Initializing: hue = BLUE; val = breathe(); break;
+    case RobotStatus::Initializing: sat = 0; val = breathe(); break;  // white
     case RobotStatus::Idle: hue = GREEN; val = DIM; break;
     case RobotStatus::EnRoute: hue = BLUE; break;
     case RobotStatus::Working: {
