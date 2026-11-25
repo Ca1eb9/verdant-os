@@ -91,10 +91,9 @@ constexpr int PIN_MOTOR_IN2 = 6;
 // charges), under 0.5 V off the dock. ADC1, so it reads with WiFi on.
 constexpr int PIN_CHARGE_SENSE = 1;
 
-// Onboard RGB LED: GPIO48 on the team's ESP32-S3 N8R8 boards (and DevKitC-1
-// v1.0), GPIO38 on DevKitC-1 v1.1. Some clones leave it behind an open "RGB"
-// solder jumper.
-constexpr int PIN_STATUS_LED = 48;
+// Onboard RGB LED: GPIO38 on DevKitC-1 v1.1 boards, GPIO48 on v1.0 and some
+// clones. Some clones leave it behind an open "RGB" solder jumper.
+constexpr int PIN_STATUS_LED = 38;
 
 // ---- RFID (PN532) ---------------------------------------------------------------
 
