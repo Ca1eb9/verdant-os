@@ -208,7 +208,7 @@ void nav_task(void* /*param*/) {
   uint32_t known_tag_ms = 0;
   uint32_t unknown_tag_ms = 0;
   bool contact_was_closed = false;
-  Adafruit_NeoPixel led(1, PIN_STATUS_LED, NEO_GRB + NEO_KHZ800);
+  Adafruit_NeoPixel led(1, PIN_STATUS_LED, NEO_RGB + NEO_KHZ800);
   led.begin();
   led.setBrightness(STATUS_LED_BRIGHTNESS);
 
